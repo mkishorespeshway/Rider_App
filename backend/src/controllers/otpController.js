@@ -125,7 +125,7 @@ async function verify(req, res) {
     console.log(
       `✅ OTP verified for +91${mobile}. User ${user._id} logged in via OTP.`
     );
-
+//cosole
     return res.status(200).json({
       success: true,
       data: { user, token },
