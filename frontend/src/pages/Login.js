@@ -12,6 +12,7 @@ export default function Login() {
   const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // State to manage whether OTP has been sent
 
   const handleSendOtp = async () => {
     if (!/^[6-9]\d{9}$/.test(mobile)) {
