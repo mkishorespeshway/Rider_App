@@ -131,6 +131,8 @@ async function verify(req, res) {
       data: { user, token },
       message: "Login successful (OTP)",
     });
+    //task
+    
   } catch (err) {
     console.error("❌ OTP verify error:", err.message || err);
     return res
