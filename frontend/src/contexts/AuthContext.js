@@ -1,50 +1,31 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import api from "../services/api";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem("user");
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+export const AuthProvider = ({ children }) => {
+  const [user, setUser] = useState(null);
 
+  // Load user from localStorage if token exists
   useEffect(() => {
-    if (user && user.token) {
-      api.setToken(user.token);
-      localStorage.setItem("user", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("user");
-    }
-  }, [user]);
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) setUser(JSON.parse(storedUser));
+  }, []);
 
-  const loginWithOtp = async (phone, otp) => {
-    const res = await api.post("/auth/verify-otp", { phone, otp });
-    // expected: { token, user }
-    const payload = res.data;
-    setUser(payload.user ? { ...payload.user, token: payload.token } : { token: payload.token });
-    return payload;
-  };
-
-  const requestOtp = async (phone) => {
-    await api.post("/auth/request-otp", { phone });
+  const login = (userData) => {
+    setUser(userData);
+    localStorage.setItem("user", JSON.stringify(userData));
   };
 
   const logout = () => {
     setUser(null);
-    api.setToken(null);
+    localStorage.removeItem("user");
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loginWithOtp, requestOtp, logout }}>
+    <AuthContext.Provider value={{ user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
 export const useAuth = () => useContext(AuthContext);
-

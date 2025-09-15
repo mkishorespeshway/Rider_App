@@ -14,22 +14,21 @@ export default function App() {
   const { user } = useAuth();
 
   return (
-    <div>
+    <>
       <Navbar />
       <main style={{ padding: 20 }}>
         <Routes>
           <Route path="/" element={<Navigate to={user ? "/booking" : "/login"} />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/booking" element={<Booking />} />
-          <Route path="/ride/:id" element={<RideTrack />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/booking" element={user ? <Booking /> : <Navigate to="/login" />} />
+          <Route path="/ride/:id" element={user ? <RideTrack /> : <Navigate to="/login" />} />
+          <Route path="/history" element={user ? <History /> : <Navigate to="/login" />} />
+          <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/admin" element={user ? <AdminDashboard /> : <Navigate to="/login" />} />
           <Route path="*" element={<div>404 Not Found</div>} />
         </Routes>
       </main>
-    </div>
+    </>
   );
 }
-

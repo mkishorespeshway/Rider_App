@@ -1,40 +1,55 @@
-require('dotenv').config();
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const connectDB = require('./config/db');
-
-const authRoutes = require('./routes/auth.routes');
-const usersRoutes = require('./routes/users.routes');
-const driversRoutes = require('./routes/drivers.routes');
-const vehiclesRoutes = require('./routes/vehicles.routes');
-const ridesRoutes = require('./routes/rides.routes');
-const paymentsRoutes = require('./routes/payments.routes');
-const parcelsRoutes = require('./routes/parcels.routes');
-
-const errorMiddleware = require('./middlewares/error.middleware');
+// backend/src/server.js
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+const authRoutes = require("./routes/authRoutes");
+const otpRoutes = require("./routes/otpRoutes"); // OTP routes
+const authMiddleware = require("./middleware/authMiddleware");
+require("dotenv").config();
 
 const app = express();
-connectDB();
 
+// Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
 
-app.use('/api/auth', authRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/drivers', driversRoutes);
-app.use('/api/vehicles', vehiclesRoutes);
-app.use('/api/rides', ridesRoutes);
-app.use('/api/payments', paymentsRoutes);
-app.use('/api/parcels', parcelsRoutes);
+// Request logger
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ➡️ ${req.method} ${req.url} | Body:`, req.body);
+  next();
+});
 
-// health
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => {
+    console.error("❌ MongoDB connection error:", err);
+    process.exit(1); // stop server if DB connection fails
+  });
 
-// error handler (last)
-app.use(errorMiddleware);
+// Routes
+app.use("/api/auth", authRoutes); // Auth routes
+app.use("/api/otp", otpRoutes);   // OTP routes
 
+// Protected test route
+app.get("/api/protected", authMiddleware, (req, res) => {
+  res.json({
+    success: true,
+    message: `Hello ${req.user.fullName}!`,
+    role: req.user.role,
+  });
+});
+
+// Root route
+app.get("/", (req, res) => {
+  res.send("🚀 Rider App Backend is running");
+});
+
+// 404 handler for unmatched routes
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: "Route not found" });
+});
+
+// Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`));
-
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
