@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Booking from "./pages/Booking";
@@ -13,14 +13,18 @@ import Navbar from "./components/Navbar";
 
 export default function App() {
   const token = localStorage.getItem("token");
-  const role = localStorage.getItem("role"); // ✅ role comes from login response
+  const role = localStorage.getItem("role");
+  const location = useLocation();
+
+  // 🔹 Pages where Navbar should NOT be shown
+  const hideNavbarRoutes = ["/login", "/register"];
+  const hideNavbar = hideNavbarRoutes.includes(location.pathname);
 
   return (
     <>
-      <Navbar />
+      {!hideNavbar && <Navbar />}
       <main style={{ padding: 20 }}>
         <Routes>
-          {/* Root route redirects based on login + role */}
           <Route
             path="/"
             element={
@@ -35,8 +39,6 @@ export default function App() {
               )
             }
           />
-
-          {/* Auth routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
@@ -54,7 +56,7 @@ export default function App() {
             element={token ? <AdminDashboard /> : <Navigate to="/login" />}
           />
 
-          {/* Protected pages (shared by both roles if logged in) */}
+          {/* Protected routes */}
           <Route path="/booking" element={token ? <Booking /> : <Navigate to="/login" />} />
           <Route path="/ride/:id" element={token ? <RideTrack /> : <Navigate to="/login" />} />
           <Route path="/history" element={token ? <History /> : <Navigate to="/login" />} />
