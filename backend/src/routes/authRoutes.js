@@ -2,12 +2,14 @@
 const express = require("express");
 const router = express.Router();
 const { signup, login } = require("../controllers/authController");
+const otpController = require("../controllers/otpController");
 
 // 🔹 Auth routes
-// POST /api/auth/signup
 router.post("/signup", signup);
-
-// POST /api/auth/login
 router.post("/login", login);
+
+// 🔹 OTP routes
+router.post("/otp/send", otpController.send);
+router.post("/otp/verify", otpController.verify);
 
 module.exports = router;

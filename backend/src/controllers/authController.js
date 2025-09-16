@@ -12,7 +12,10 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
 
-    // ✅ Only check mobile uniqueness
+    if (!["user", "rider"].includes(role)) {
+      return res.status(400).json({ success: false, message: "Invalid role" });
+    }
+
     const existingUser = await User.findOne({ mobile });
     if (existingUser) {
       return res.status(400).json({
@@ -25,17 +28,15 @@ exports.signup = async (req, res) => {
     const newUser = new User({ fullName, email, mobile, role });
     await newUser.save();
 
-    console.log("✅ New user signed up:", newUser.mobile);
+    console.log("✅ New user signed up:", newUser.mobile, newUser.role);
 
     return res.status(201).json({
       success: true,
-      data: newUser,
+      data: { id: newUser._id, role: newUser.role },
       message: "Signup successful",
     });
   } catch (err) {
     console.error("❌ Signup error:", err.message || err);
-
-    // Handle Mongo duplicate key error
     if (err.code === 11000 && err.keyValue?.mobile) {
       return res.status(400).json({
         success: false,
@@ -43,19 +44,14 @@ exports.signup = async (req, res) => {
         message: "Mobile number already registered",
       });
     }
-
-    return res.status(500).json({
-      success: false,
-      message: "Server error. Please try again later.",
-    });
+    return res.status(500).json({ success: false, message: "Server error. Please try again later." });
   }
 };
 
-// 🔹 Login controller (OTP verified earlier)
+// 🔹 Login controller (used only if OTP not required)
 exports.login = async (req, res) => {
   try {
     const { mobile } = req.body;
-
     if (!mobile) {
       return res.status(400).json({ success: false, message: "Mobile number is required" });
     }
@@ -65,25 +61,22 @@ exports.login = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // 🔹 Issue JWT (valid for 7 days)
     const token = jwt.sign(
       { id: user._id, fullName: user.fullName, role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    console.log(`✅ Login successful for ${mobile}`);
+    console.log(`✅ Login successful for ${mobile} (${user.role})`);
 
     return res.status(200).json({
       success: true,
-      data: { user, token },
+      data: { token, role: user.role },
       message: "Login successful",
     });
   } catch (err) {
     console.error("❌ Login error:", err.message || err);
-    return res.status(500).json({
-      success: false,
-      message: "Server error. Please try again later.",
-    });
+    return res.status(500).json({ success: false, message: "Server error. Please try again later." });
   }
 };
+  
