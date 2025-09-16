@@ -7,21 +7,21 @@ import {
   Typography,
   ToggleButton,
   ToggleButtonGroup,
-  Paper,
   Alert,
   CircularProgress,
+  Paper,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { signup } from "../services/api";
 
-export default function Signup() {
+export default function Register() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     mobile: "",
-    role: "user",
+    role: "user", // default role
   });
 
   const [error, setError] = useState("");
@@ -66,38 +66,37 @@ export default function Signup() {
 
     try {
       const res = await signup(formData);
-
       if (res.data?.success) {
-        setSuccess(res.data.message || "Signup successful");
+        setSuccess("Signup successful! Redirecting...");
         setTimeout(() => navigate("/login"), 800);
-      } else if (res.data?.errorField === "mobile") {
-        setError(res.data.message || "Mobile number already exists.");
       } else {
         setError(res.data?.message || "Signup failed. Try again.");
       }
     } catch (err) {
       console.error("Signup error:", err);
-      setError(
-        err.response?.data?.message || "Server error. Please try again later."
-      );
+      setError(err.response?.data?.message || "Server error. Try again later.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="sm">
-      <Paper elevation={3} sx={{ p: 4, mt: 5, borderRadius: 3 }}>
-        <Typography
-          variant="h4"
-          align="center"
-          gutterBottom
-          sx={{ color: "orangered", fontWeight: "bold" }}
-        >
-          Rider App
+    <Container maxWidth="xs">
+      <Paper
+        elevation={0}
+        sx={{
+          mt: 6,
+          p: 3,
+          borderRadius: 3,
+          textAlign: "center",
+          fontFamily: "Uber Move, Helvetica Neue, sans-serif",
+        }}
+      >
+        <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>
+          Create Account
         </Typography>
-        <Typography variant="body1" align="center" sx={{ mb: 3 }}>
-          Create your account to get started
+        <Typography variant="body2" sx={{ mb: 3, color: "gray" }}>
+          Sign up to start using Rider App
         </Typography>
 
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -135,7 +134,7 @@ export default function Signup() {
             required
           />
 
-          <Typography variant="subtitle1" sx={{ mt: 2 }}>
+          <Typography variant="subtitle2" align="left" sx={{ mt: 2 }}>
             Role
           </Typography>
           <ToggleButtonGroup
@@ -147,8 +146,8 @@ export default function Signup() {
             <ToggleButton value="user" sx={{ flex: 1, textTransform: "none" }}>
               User
             </ToggleButton>
-            <ToggleButton value="owner" sx={{ flex: 1, textTransform: "none" }}>
-              Owner
+            <ToggleButton value="rider" sx={{ flex: 1, textTransform: "none" }}>
+              Rider
             </ToggleButton>
           </ToggleButtonGroup>
 
@@ -156,16 +155,30 @@ export default function Signup() {
             type="submit"
             fullWidth
             variant="contained"
-            sx={{ mt: 2, bgcolor: "orangered", "&:hover": { bgcolor: "darkred" } }}
+            sx={{
+              mt: 2,
+              bgcolor: "black",
+              color: "white",
+              fontWeight: "bold",
+              "&:hover": { bgcolor: "#333" },
+            }}
             disabled={loading}
           >
-            {loading ? <CircularProgress size={24} sx={{ color: "white" }} /> : "Register"}
+            {loading ? (
+              <CircularProgress size={24} sx={{ color: "white" }} />
+            ) : (
+              "Sign Up"
+            )}
           </Button>
         </Box>
 
-        <Typography align="center" sx={{ mt: 2 }}>
+        <Typography sx={{ mt: 2 }}>
           Already have an account?{" "}
-          <Button variant="text" onClick={() => navigate("/login")} sx={{ color: "orangered" }}>
+          <Button
+            variant="text"
+            onClick={() => navigate("/login")}
+            sx={{ color: "black", fontWeight: "bold" }}
+          >
             Login
           </Button>
         </Typography>
