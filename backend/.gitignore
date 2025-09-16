@@ -1,2 +1,17 @@
 .env
 node_modules
+# dependencies
+node_modules/
+
+# build
+dist/
+build/
+
+# cache
+*.cache
+.cache/
+frontend/node_modules/.cache/
+
+# env files
+.env
+backend/.env
