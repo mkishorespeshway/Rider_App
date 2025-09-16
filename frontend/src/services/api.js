@@ -8,6 +8,18 @@ const api = axios.create({
   timeout: 10000,
 });
 
+// 🔹 Attach JWT token automatically to every request
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers["Authorization"] = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // 🔹 Auth APIs
 export const signup = (formData) => api.post("/auth/signup", formData);
 export const login = (formData) => api.post("/auth/login", formData);
@@ -16,6 +28,5 @@ export const login = (formData) => api.post("/auth/login", formData);
 export const sendOtp = (mobile) => api.post("/otp/send", { mobile });
 export const verifyOtp = (mobile, otp) => api.post("/otp/verify", { mobile, otp });
 
-// ✅ Default export is now axios instance
-//    (so api.get("/rides/my") works fine)
+// ✅ Default export is axios instance
 export default api;
