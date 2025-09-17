@@ -34,7 +34,12 @@ export default function Register() {
   };
 
   const handleRoleChange = (_, newRole) => {
-    if (newRole) setFormData((p) => ({ ...p, role: newRole }));
+    if (newRole) {
+      const validRoles = ["user", "rider"];
+      if (validRoles.includes(newRole)) {
+        setFormData((p) => ({ ...p, role: newRole }));
+      }
+    }
   };
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -56,6 +61,7 @@ export default function Register() {
     return true;
   };
 
+  // ---------- FIXED handleSubmit ----------
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -65,20 +71,32 @@ export default function Register() {
     setSuccess("");
 
     try {
-      const res = await signup(formData);
-      if (res.data?.success) {
-        setSuccess("Signup successful! Redirecting...");
+      // normalize role to lowercase to avoid "Rider" vs "rider" mismatch
+      const payload = { ...formData, role: formData.role?.toLowerCase() };
+
+      // signup() may return an axios response (res.data) or a plain object.
+      const res = await signup(payload);
+
+      // normalize to the actual response body
+      const data = res && res.data ? res.data : res;
+
+      if (data && data.success) {
+        setSuccess(data.message || "Signup successful! Redirecting...");
+        // optional: clear form if you want: setFormData({ fullName: "", email: "", mobile: "", role: "user" });
         setTimeout(() => navigate("/login"), 800);
       } else {
-        setError(res.data?.message || "Signup failed. Try again.");
+        setError((data && data.message) || "Signup failed. Try again.");
       }
     } catch (err) {
       console.error("Signup error:", err);
-      setError(err.response?.data?.message || "Server error. Try again later.");
+      // axios error: err.response.data.message
+      const msg = err?.response?.data?.message || err?.message || "Server error. Try again later.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
   };
+  // ---------- end fixed handleSubmit ----------
 
   return (
     <Container maxWidth="xs">

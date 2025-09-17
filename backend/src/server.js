@@ -5,7 +5,7 @@ const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const otpRoutes = require("./routes/otpRoutes"); // OTP routes
 const authMiddleware = require("./middleware/authMiddleware");
-require("dotenv").config();
+require("dotenv").config(); // 🔹 Must be first
 
 const app = express();
 
@@ -19,8 +19,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Check MONGO_URI
+if (!process.env.MONGO_URI) {
+  console.error("❌ MONGO_URI is not defined in .env");
+  process.exit(1);
+}
+
 // MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
