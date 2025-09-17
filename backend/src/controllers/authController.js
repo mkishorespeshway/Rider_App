@@ -1,82 +1,42 @@
-// backend/src/controllers/authController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
-// 🔹 Signup controller
-exports.signup = async (req, res) => {
+// 🔹 Signup
+const signup = async (req, res) => {
   try {
-    const { fullName, email, mobile, role } = req.body;
-
-    if (!fullName || !email || !mobile || !role) {
-      return res.status(400).json({ success: false, message: "All fields are required" });
+    const { fullName, mobile, email, role } = req.body;
+    if (!fullName || !mobile) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
-    if (!["user", "rider"].includes(role)) {
-      return res.status(400).json({ success: false, message: "Invalid role" });
-    }
+    const exists = await User.findOne({ mobile });
+    if (exists) return res.status(400).json({ success: false, message: "User already exists" });
 
-    const existingUser = await User.findOne({ mobile });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        errorField: "mobile",
-        message: "Mobile number already registered",
-      });
-    }
-
-    const newUser = new User({ fullName, email, mobile, role });
-    await newUser.save();
-
-    console.log("✅ New user signed up:", newUser.mobile, newUser.role);
-
-    return res.status(201).json({
-      success: true,
-      data: { id: newUser._id, role: newUser.role },
-      message: "Signup successful",
-    });
+    const newUser = await User.create({ fullName, mobile, email, role });
+    return res.status(201).json({ success: true, data: newUser });
   } catch (err) {
-    console.error("❌ Signup error:", err.message || err);
-    if (err.code === 11000 && err.keyValue?.mobile) {
-      return res.status(400).json({
-        success: false,
-        errorField: "mobile",
-        message: "Mobile number already registered",
-      });
-    }
-    return res.status(500).json({ success: false, message: "Server error. Please try again later." });
+    console.error("Signup error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// 🔹 Login controller (used only if OTP not required)
-exports.login = async (req, res) => {
+// 🔹 Login (basic JWT without OTP)
+const login = async (req, res) => {
   try {
     const { mobile } = req.body;
-    if (!mobile) {
-      return res.status(400).json({ success: false, message: "Mobile number is required" });
-    }
+    if (!mobile) return res.status(400).json({ success: false, message: "Mobile required" });
 
     const user = await User.findOne({ mobile });
-    if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
-    }
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    const token = jwt.sign(
-      { id: user._id, fullName: user.fullName, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
-    console.log(`✅ Login successful for ${mobile} (${user.role})`);
-
-    return res.status(200).json({
-      success: true,
-      data: { token, role: user.role },
-      message: "Login successful",
-    });
+    return res.status(200).json({ success: true, data: { token, role: user.role } });
   } catch (err) {
-    console.error("❌ Login error:", err.message || err);
-    return res.status(500).json({ success: false, message: "Server error. Please try again later." });
+    console.error("Login error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
-  
+
+module.exports = { signup, login };
