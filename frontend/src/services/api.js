@@ -1,32 +1,59 @@
-// src/services/api.js
 import axios from "axios";
 
-// 🔹 Create a base axios instance
-const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+const AUTH_API = axios.create({
+  baseURL: "http://localhost:5000/api/auth",
   headers: { "Content-Type": "application/json" },
-  timeout: 10000,
 });
 
-// 🔹 Attach JWT token automatically to every request
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      config.headers["Authorization"] = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+const OTP_API = axios.create({
+  baseURL: "http://localhost:5000/api/otp",
+  headers: { "Content-Type": "application/json" },
+});
 
-// 🔹 Auth APIs
-export const signup = (formData) => api.post("/auth/signup", formData);
-export const login = (formData) => api.post("/auth/login", formData);
+const RIDER_API = axios.create({
+  baseURL: "http://localhost:5000/api/rider",
+});
 
-// 🔹 OTP APIs
-export const sendOtp = (mobile) => api.post("/otp/send", { mobile });
-export const verifyOtp = (mobile, otp) => api.post("/otp/verify", { mobile, otp });
+const ADMIN_API = axios.create({
+  baseURL: "http://localhost:5000/api/admin",
+  headers: { "Content-Type": "application/json" },
+});
 
-// ✅ Default export is axios instance
-export default api;
+// ===== User APIs =====
+export const signupUser = (formData) => AUTH_API.post("/signup-user", formData);
+
+// ===== Rider APIs =====
+export const signupRider = (formData) => AUTH_API.post("/signup-rider", formData);
+
+// ===== OTP APIs =====
+export const sendOtp = (mobile, role) => OTP_API.post("/send", { mobile, role });
+export const verifyOtp = (mobile, otp, role) =>
+  OTP_API.post("/verify", { mobile, otp, role });
+
+// ===== Rider docs/status =====
+export const getRiderStatus = (token) =>
+  RIDER_API.get("/status", { headers: { Authorization: `Bearer ${token}` } });
+
+// 🚨 FIXED: Upload docs by riderId (no JWT needed yet)
+export const uploadRiderDocs = (riderId, docs) =>
+  RIDER_API.post(`/upload-docs/${riderId}`, docs, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+// ===== Admin APIs =====
+export const getAllRiders = () => ADMIN_API.get("/riders");
+export const approveRider = (riderId) => ADMIN_API.post(`/approve/${riderId}`);
+export const rejectRider = (riderId) => ADMIN_API.post(`/reject/${riderId}`);
+
+// ✅ default export
+export default {
+  signupUser,
+  signupRider,
+  sendOtp,
+  verifyOtp,
+  getRiderStatus,
+  uploadRiderDocs,
+  getAllRiders,
+  approveRider,
+  rejectRider,
+};

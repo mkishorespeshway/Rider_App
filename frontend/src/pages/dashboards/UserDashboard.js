@@ -9,6 +9,8 @@ export default function UserDashboard() {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     navigate("/login");
+      window.location.reload();
+
   };
 
   return (
