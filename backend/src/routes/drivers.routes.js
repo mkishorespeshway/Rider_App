@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middlewares/auth.middleware');
-const role = require('../middlewares/role.middleware');
+const auth = require('../middleware/authMiddleware');
+const role = require('../middleware/role.middleware');
 const driversCtrl = require('../controllers/drivers.controller');
 
 // driver-specific routes
