@@ -6,7 +6,7 @@ const path = require("path");
 const authRoutes = require("./routes/authRoutes");
 const otpRoutes = require("./routes/otpRoutes");
 const authMiddleware = require("./middleware/authMiddleware");
-
+const rideRoutes = require("./routes/rides.routes");
 require("dotenv").config();
 
 const app = express();
@@ -77,7 +77,9 @@ mongoose
 // API Routes
 app.use("/api/auth", authRoutes); // Auth routes
 app.use("/api/otp", otpRoutes); // OTP routes
+app.use("/api/rides", rideRoutes); // Ride routes
 app.use("/api/rider", require("./routes/rider.routes"));
+app.use("/api/drivers", require("./routes/drivers.routes")); // ✅ added driver routes
 app.use("/uploads", express.static("uploads"));
 
 // Protected test route
@@ -108,4 +110,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () =>
   console.log(`🚀 Server running on port ${PORT}`)
 );
+
 module.exports = app; // for testing

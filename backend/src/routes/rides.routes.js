@@ -1,21 +1,15 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const auth = require('../middlewares/auth.middleware');
-const role = require('../middlewares/role.middleware');
-const ridesCtrl = require('../controllers/rides.controller');
+const rideController = require("../controllers/rides.controller"); // ✅ check file name carefully
+const authMiddleware = require("../middleware/authMiddleware");
 
-// Rider creates ride
-router.post('/', auth, role(['rider']), ridesCtrl.createRide);
-router.get('/me', auth, role(['rider']), ridesCtrl.listForRider);
+// 🚖 Create a ride
+router.post("/create", authMiddleware, rideController.createRide);
 
-// Driver endpoints
-router.get('/driver', auth, role(['driver']), ridesCtrl.listForDriver);
-router.post('/:id/accept', auth, role(['driver']), ridesCtrl.acceptRide);
-router.post('/:id/start', auth, role(['driver']), ridesCtrl.startRide);
-router.post('/:id/complete', auth, role(['driver']), ridesCtrl.completeRide);
+// 📜 Get ride history for logged-in user
+router.get("/history", authMiddleware, rideController.getRideHistory);
 
-// Shared
-router.get('/:id', auth, ridesCtrl.getRide);
-router.post('/:id/cancel', auth, ridesCtrl.cancelRide);
+// 🔍 Get a single ride by ID
+router.get("/:id", authMiddleware, rideController.getRideById);
 
 module.exports = router;

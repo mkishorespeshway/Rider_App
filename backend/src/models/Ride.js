@@ -1,17 +1,40 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const rideSchema = new mongoose.Schema({
-  riderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  driverId: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver' },
-  status: { type: String, enum: ['requested','accepted','in-progress','completed','cancelled'], default: 'requested' },
-  origin: { lat: Number, lng: Number, address: String },
-  destination: { lat: Number, lng: Number, address: String },
-  fare: Number,
-  distanceKm: Number,
-  etaMinutes: Number,
-  routePolyline: String,
-  paymentStatus: { type: String, enum: ['pending','paid','failed'], default: 'pending' }
-}, { timestamps: true });
+const counterSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
+  seq: { type: Number, default: 0 },
+});
 
-module.exports = mongoose.model('Ride', rideSchema);
-    
+const Counter = mongoose.model("Counter", counterSchema);
+
+const rideSchema = new mongoose.Schema(
+  {
+    _id: { type: Number }, // auto-incremented ride ID
+    riderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // ✅ Fix here
+    pickup: { type: String, required: true },
+    drop: { type: String, required: true },
+    status: {
+      type: String,
+      enum: ["pending", "accepted", "completed", "cancelled"],
+      default: "pending",
+    },
+    etaMinutes: { type: Number, default: null },
+  },
+  { timestamps: true }
+);
+
+
+// Auto-increment rideId
+rideSchema.pre("save", async function (next) {
+  if (this.isNew) {
+    const counter = await Counter.findByIdAndUpdate(
+      { _id: "rideId" },
+      { $inc: { seq: 1 } },
+      { upsert: true, new: true }
+    );
+    this._id = counter.seq;
+  }
+  next();
+});
+
+module.exports = mongoose.model("Ride", rideSchema);

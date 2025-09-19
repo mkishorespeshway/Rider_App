@@ -1,109 +1,76 @@
-const Ride = require('../models/Ride');
-const Driver = require('../models/Driver');
-const User = require('../models/User');
-const { sendPush } = require('../services/notification.service');
+const Ride = require("../models/Ride");
+const Counter = require("../models/Counter");
 
-// Create ride (rider only)
-exports.createRide = async (req, res, next) => {
+// ✅ Create a ride
+exports.createRide = async (req, res) => {
   try {
-    const { origin, destination, etaMinutes } = req.body;
-    const ride = await Ride.create({
-      riderId: req.user._id,
-      origin,
-      destination,
-      etaMinutes,
-      status: 'requested'
-    });
-    // In production: find nearby drivers and notify them
-    res.json({ ok: true, ride });
-  } catch (err) { next(err); }
-};
+    const { pickup, drop } = req.body;
 
-// Driver accepts ride
-exports.acceptRide = async (req, res, next) => {
-  try {
-    const { id } = req.params; // ride id
-    const ride = await Ride.findById(id);
-    if (!ride) return res.status(404).json({ message: 'Ride not found' });
-    if (ride.status !== 'requested') return res.status(400).json({ message: 'Ride not available' });
-
-    const driver = await Driver.findOne({ userId: req.user._id });
-    if(!driver) return res.status(400).json({ message: 'Driver profile not found' });
-
-    ride.driverId = driver._id;
-    ride.status = 'accepted';
-    await ride.save();
-
-    // notify rider
-    const riderUser = await User.findById(ride.riderId);
-    if (riderUser && riderUser.deviceToken) {
-      await sendPush({ deviceToken: riderUser.deviceToken, title: 'Driver accepted', body: 'Your ride was accepted' });
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
-    res.json({ ok: true, ride });
-  } catch (err) { next(err); }
-};
+    // Auto-increment ride ID
+    const counter = await Counter.findByIdAndUpdate(
+      { _id: "rideId" },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
 
-// Start ride
-exports.startRide = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const ride = await Ride.findById(id);
-    if (!ride) return res.status(404).json({ message: 'Ride not found' });
-    ride.status = 'in-progress';
+    const ride = new Ride({
+      _id: counter.seq, // numeric ID
+      riderId: req.user._id, // ✅ use riderId to match schema
+      pickup,
+      drop,
+      status: "pending",
+    });
+
     await ride.save();
-    res.json({ ok: true, ride });
-  } catch (err) { next(err); }
+    res.json({ success: true, ride });
+  } catch (err) {
+    console.error("❌ Error creating ride:", err);
+    res.status(500).json({ error: "Failed to create ride" });
+  }
 };
 
-// Complete ride
-exports.completeRide = async (req, res, next) => {
+// ✅ Get ride history for logged-in user
+exports.getRideHistory = async (req, res) => {
   try {
-    const { id } = req.params;
-    const ride = await Ride.findById(id);
-    if (!ride) return res.status(404).json({ message: 'Ride not found' });
-    ride.status = 'completed';
-    await ride.save();
-    res.json({ ok: true, ride });
-  } catch (err) { next(err); }
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const rides = await Ride.find({ riderId: req.user._id });
+    res.json({ success: true, rides });
+  } catch (err) {
+    console.error("❌ Error fetching history:", err);
+    res.status(500).json({ error: "Failed to fetch ride history" });
+  }
 };
 
-// Cancel ride
-exports.cancelRide = async (req, res, next) => {
+// ✅ Get a single ride by ID
+exports.getRideById = async (req, res) => {
   try {
-    const { id } = req.params;
-    const ride = await Ride.findById(id);
-    if (!ride) return res.status(404).json({ message: 'Ride not found' });
-    ride.status = 'cancelled';
-    await ride.save();
-    res.json({ ok: true, ride });
-  } catch (err) { next(err); }
-};
+    const rideId = parseInt(req.params.id, 10);
 
-// Get ride by id
-exports.getRide = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const ride = await Ride.findById(id).populate('riderId').populate('driverId');
-    if (!ride) return res.status(404).json({ message: 'Ride not found' });
-    res.json({ ok: true, ride });
-  } catch (err) { next(err); }
-};
+    if (isNaN(rideId)) {
+      return res.status(400).json({ success: false, message: "Invalid ride ID" });
+    }
 
-// List rider rides
-exports.listForRider = async (req, res, next) => {
-  try {
-    const rides = await Ride.find({ riderId: req.user._id }).limit(100).sort({ createdAt: -1 });
-    res.json({ ok: true, rides });
-  } catch (err) { next(err); }
-};
+    const ride = await Ride.findOne({ _id: rideId });
 
-// List driver assigned rides
-exports.listForDriver = async (req, res, next) => {
-  try {
-    const driver = await Driver.findOne({ userId: req.user._id });
-    if(!driver) return res.status(404).json({ message: 'Driver not found' });
-    const rides = await Ride.find({ driverId: driver._id }).limit(100).sort({ createdAt: -1 });
-    res.json({ ok: true, rides });
-  } catch (err) { next(err); }
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+
+    // Optional: only allow owner to fetch
+    if (ride.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    res.json({ success: true, ride });
+  } catch (err) {
+    console.error("❌ Error fetching ride:", err);
+    res.status(500).json({ error: "Failed to load ride" });
+  }
 };
