@@ -7,11 +7,7 @@ const userSchema = new mongoose.Schema(
     mobile: { type: String, required: true, unique: true },
     role: {
       type: String,
-<<<<<<< HEAD
       enum: ["user", "rider", "admin"], // ✅ allow rider too
-=======
-      enum: ["user", "rider"], // only user and rider allowed
->>>>>>> aced6b199b083cb320663ecabeb739aba4129a5a
       default: "user",
     },
     otp: { type: String, default: null },        // latest OTP
