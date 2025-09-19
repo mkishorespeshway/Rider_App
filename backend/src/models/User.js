@@ -1,4 +1,3 @@
-// backend/src/models/User.js
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
@@ -8,11 +7,15 @@ const userSchema = new mongoose.Schema(
     mobile: { type: String, required: true, unique: true },
     role: {
       type: String,
+<<<<<<< HEAD
       enum: ["user", "rider", "admin"], // ✅ allow rider too
+=======
+      enum: ["user", "rider"], // only user and rider allowed
+>>>>>>> aced6b199b083cb320663ecabeb739aba4129a5a
       default: "user",
     },
-    otp: { type: String, default: null },
-    otpExpires: { type: Date, default: null },
+    otp: { type: String, default: null },        // latest OTP
+    otpExpires: { type: Date, default: null },   // expiry of latest OTP
     loginCount: { type: Number, default: 0 },
     lastLogin: { type: Date, default: null },
 

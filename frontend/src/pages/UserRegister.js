@@ -19,7 +19,23 @@ export default function UserRegister() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+<<<<<<< HEAD:frontend/src/pages/UserRegister.js
   const handleChange = (e) => setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
+=======
+  const handleChange = (e) => {
+    setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
+    if (error) setError("");
+  };
+
+  const handleRoleChange = (_, newRole) => {
+    if (newRole) {
+      const validRoles = ["user", "rider"];
+      if (validRoles.includes(newRole)) {
+        setFormData((p) => ({ ...p, role: newRole }));
+      }
+    }
+  };
+>>>>>>> aced6b199b083cb320663ecabeb739aba4129a5a:frontend/src/pages/Register.js
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -40,11 +56,13 @@ export default function UserRegister() {
     return true;
   };
 
+  // ---------- FIXED handleSubmit ----------
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
     setLoading(true);
     try {
+<<<<<<< HEAD:frontend/src/pages/UserRegister.js
       const res = await signupUser({ ...formData, role: "user" });
       if (res.data?.success) {
         setSuccess("Signup successful! Redirecting to login...");
@@ -52,10 +70,34 @@ export default function UserRegister() {
       } else setError(res.data?.message || "Signup failed. Try again.");
     } catch {
       setError("Server error. Try again.");
+=======
+      // normalize role to lowercase to avoid "Rider" vs "rider" mismatch
+      const payload = { ...formData, role: formData.role?.toLowerCase() };
+
+      // signup() may return an axios response (res.data) or a plain object.
+      const res = await signup(payload);
+
+      // normalize to the actual response body
+      const data = res && res.data ? res.data : res;
+
+      if (data && data.success) {
+        setSuccess(data.message || "Signup successful! Redirecting...");
+        // optional: clear form if you want: setFormData({ fullName: "", email: "", mobile: "", role: "user" });
+        setTimeout(() => navigate("/login"), 800);
+      } else {
+        setError((data && data.message) || "Signup failed. Try again.");
+      }
+    } catch (err) {
+      console.error("Signup error:", err);
+      // axios error: err.response.data.message
+      const msg = err?.response?.data?.message || err?.message || "Server error. Try again later.";
+      setError(msg);
+>>>>>>> aced6b199b083cb320663ecabeb739aba4129a5a:frontend/src/pages/Register.js
     } finally {
       setLoading(false);
     }
   };
+  // ---------- end fixed handleSubmit ----------
 
   return (
     <Container maxWidth="xs">
