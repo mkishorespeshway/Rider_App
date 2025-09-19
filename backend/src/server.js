@@ -2,6 +2,8 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const path = require("path");
+
 const authRoutes = require("./routes/authRoutes");
 const otpRoutes = require("./routes/otpRoutes"); // OTP routes
 const authMiddleware = require("./middleware/authMiddleware");
@@ -15,21 +17,27 @@ app.use(express.json());
 
 // Request logger
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ➡️ ${req.method} ${req.url} | Body:`, req.body);
+  console.log(
+    `[${new Date().toISOString()}] ➡️ ${req.method} ${req.url} | Body:`,
+    req.body
+  );
   next();
 });
 
 // MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
+mongoose
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
     process.exit(1); // stop server if DB connection fails
   });
 
-// Routes
+// API Routes
 app.use("/api/auth", authRoutes); // Auth routes
-app.use("/api/otp", otpRoutes);   // OTP routes
+app.use("/api/otp", otpRoutes); // OTP routes
+app.use("/api/rider", require("./routes/rider.routes"));
+app.use("/uploads", express.static("uploads"));
 
 // Protected test route
 app.get("/api/protected", authMiddleware, (req, res) => {
@@ -40,14 +48,16 @@ app.get("/api/protected", authMiddleware, (req, res) => {
   });
 });
 
-// Root route
-app.get("/", (req, res) => {
-  res.send("🚀 Rider App Backend is running");
-});
+// === Serve Frontend Build ===
+const frontendPath = path.join(__dirname, "../frontend/build");
+app.use(express.static(frontendPath));
 
-// 404 handler for unmatched routes
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: "Route not found" });
+// Catch-all for React Router (only non-API routes)
+app.get("*", (req, res) => {
+  if (req.url.startsWith("/api")) {
+    return res.status(404).json({ success: false, message: "API route not found" });
+  }
+  res.sendFile(path.join(frontendPath, "index.html"));
 });
 
 // Start server

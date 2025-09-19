@@ -1,6 +1,6 @@
 // backend/src/models/User.js
 const mongoose = require("mongoose");
- 
+
 const userSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
@@ -8,15 +8,34 @@ const userSchema = new mongoose.Schema(
     mobile: { type: String, required: true, unique: true },
     role: {
       type: String,
-      enum: ["user", "owner"], // ✅ only user and owner allowed
+      enum: ["user", "rider", "admin"], // ✅ allow rider too
       default: "user",
     },
     otp: { type: String, default: null },
     otpExpires: { type: Date, default: null },
     loginCount: { type: Number, default: 0 },
     lastLogin: { type: Date, default: null },
+
+    // ✅ New fields for document verification
+    documents: {
+      licenseNumber: String,
+      rcNumber: String,
+      insuranceNumber: String,
+      aadharFrontNumber: String,
+      aadharBackNumber: String,
+      licenseImage: String,
+      rcImage: String,
+      insuranceImage: String,
+      aadharFront: String,
+      aadharBack: String,
+    },
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected", "not_uploaded"],
+      default: "not_uploaded",
+    },
   },
   { timestamps: true }
 );
- 
-module.exports = mongoose.model("User", userSchema);//users
+
+module.exports = mongoose.model("User", userSchema);
