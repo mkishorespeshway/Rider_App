@@ -1,76 +1,63 @@
 import React, { useState } from "react";
-import {
-  Container,
-  Paper,
-  Typography,
-  TextField,
-  Button,
-  Alert,
-} from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { Container, Paper, Box, Typography, TextField, Button, Alert } from "@mui/material";
+
+const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
 export default function AdminLogin() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // ✅ Static credentials (change as needed)
-    const ADMIN_USERNAME = "admin";
-    const ADMIN_PASSWORD = "admin123";
-
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-      // Save role in localStorage so App.js can redirect properly
-      localStorage.setItem("token", "admin-token");
-        localStorage.setItem("role", "admin");
-        navigate("/admin-dashboard", { replace: true });
-        window.location.reload();
-
-      
-    } else {
-      setError("Invalid admin credentials");
+    setError("");
+    try {
+      const res = await axios.post(`${API}/api/admin/login`, form);
+      localStorage.setItem("adminToken", res.data.token);
+      navigate("/admin-dashboard");
+    } catch (err) {
+      setError(err.response?.data?.message || "Login failed");
     }
   };
 
   return (
     <Container maxWidth="xs">
-      <Paper sx={{ mt: 8, p: 4, textAlign: "center" }}>
-        <Typography variant="h4" sx={{ mb: 2, fontWeight: "bold" }}>
+      <Paper elevation={3} sx={{ p: 4, mt: 10 }}>
+        <Typography variant="h5" textAlign="center" fontWeight="bold" gutterBottom>
           Admin Login
         </Typography>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-        <form onSubmit={handleLogin}>
+        <form onSubmit={handleSubmit}>
           <TextField
             fullWidth
+            margin="normal"
             label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            margin="normal"
+            name="username"
+            type="text"
+            value={form.username}
+            onChange={handleChange}
+            required
           />
           <TextField
             fullWidth
-            label="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             margin="normal"
+            label="Password"
+            name="password"
+            type="password"
+            value={form.password}
+            onChange={handleChange}
+            required
           />
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            sx={{
-              mt: 3,
-              bgcolor: "black",
-              fontWeight: "bold",
-              color: "white",
-              "&:hover": { bgcolor: "#333" },
-            }}
-          >
+
+          {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+
+          <Button type="submit" variant="contained" fullWidth sx={{ mt: 3 }}>
             Login
           </Button>
         </form>

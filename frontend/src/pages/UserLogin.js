@@ -1,71 +1,74 @@
 import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { sendOtp, verifyOtp } from "../services/api";
+import { useAuth } from "../contexts/AuthContext"; // ✅ Use auth context
 import {
+  Box,
   Button,
+  Container,
   TextField,
   Typography,
   Alert,
   CircularProgress,
-  Paper,
-  Container,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
-import { sendOtp, verifyOtp } from "../services/api";
 
 export default function UserLogin() {
-  const navigate = useNavigate();
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
+  const [step, setStep] = useState(1); // 1 = enter mobile, 2 = enter OTP
   const [loading, setLoading] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
+  const navigate = useNavigate();
+  const { login } = useAuth(); // ✅ get login function from context
+
+  // Step 1: Send OTP
   const handleSendOtp = async () => {
-    if (!/^[6-9]\d{9}$/.test(mobile)) {
-      setError("Mobile number must start with 6/7/8/9 and be 10 digits long.");
+    setError("");
+    if (!mobile || mobile.length !== 10) {
+      setError("Enter a valid 10-digit mobile number");
       return;
     }
-    setLoading(true);
-    setError("");
-    setSuccess("");
+
     try {
+      setLoading(true);
       const res = await sendOtp(mobile, "user");
-      if (res.data?.success) {
-        setOtpSent(true);
-        setSuccess("OTP sent!");
+      if (res.data.success) {
+        setStep(2);
       } else {
-        setError(res.data?.message || "Failed to send OTP");
+        setError(res.data.message || "Failed to send OTP");
       }
     } catch (err) {
-      console.error("Send OTP error:", err.response?.data || err);
-      setError(err.response?.data?.message || "Server error. Try again later.");
+      console.error(err);
+      setError("Server error while sending OTP");
     } finally {
       setLoading(false);
     }
   };
 
+  // Step 2: Verify OTP
   const handleVerifyOtp = async () => {
-    if (otp.length !== 6) {
-      setError("Enter a valid 6-digit OTP.");
+    setError("");
+    if (!otp || otp.length < 4) {
+      setError("Enter a valid OTP");
       return;
     }
-    setLoading(true);
-    setError("");
-    setSuccess("");
+
     try {
+      setLoading(true);
       const res = await verifyOtp(mobile, otp, "user");
-      if (res.data?.success) {
-        const { token, role } = res.data.data;
-        localStorage.setItem("token", token);
-        localStorage.setItem("role", role);
+      if (res.data.success) {
+        // ✅ Store user auth in context
+        login({ token: res.data.user._id, role: "user" });
+
+        // Navigate to user dashboard
         navigate("/user-dashboard");
-        window.location.reload();
       } else {
-        setError(res.data?.message || "OTP verification failed.");
+        setError(res.data.message || "Invalid OTP");
       }
     } catch (err) {
-      console.error("Verify OTP error:", err.response?.data || err);
-      setError(err.response?.data?.message || "Server error. Try again later.");
+      console.error(err);
+      setError("Server error while verifying OTP");
     } finally {
       setLoading(false);
     }
@@ -73,54 +76,84 @@ export default function UserLogin() {
 
   return (
     <Container maxWidth="xs">
-      <Paper sx={{ mt: 6, p: 3, borderRadius: 3, textAlign: "center" }}>
-        <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>
+      <Box
+        sx={{
+          mt: 8,
+          p: 4,
+          border: "1px solid #ccc",
+          borderRadius: 2,
+          textAlign: "center",
+        }}
+      >
+        <Typography variant="h5" gutterBottom>
           User Login
         </Typography>
 
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-
-        <TextField
-          fullWidth
-          label="Mobile Number"
-          value={mobile}
-          onChange={(e) => setMobile(e.target.value)}
-          margin="normal"
-          inputProps={{ maxLength: 10, pattern: "^[6-9][0-9]{9}$" }}
-          disabled={otpSent}
-        />
-
-        {otpSent && (
-          <TextField
-            fullWidth
-            label="OTP"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
-            margin="normal"
-            inputProps={{ maxLength: 6 }}
-          />
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
         )}
 
-        {!otpSent ? (
-          <Button fullWidth sx={{ mt: 2 }} onClick={handleSendOtp} disabled={loading}>
-            {loading ? <CircularProgress size={24} /> : "Send OTP"}
-          </Button>
-        ) : (
-          <Button fullWidth sx={{ mt: 2 }} onClick={handleVerifyOtp} disabled={loading}>
-            {loading ? <CircularProgress size={24} /> : "Verify OTP"}
-          </Button>
+        {step === 1 && (
+          <>
+            <TextField
+              fullWidth
+              label="Mobile Number"
+              variant="outlined"
+              margin="normal"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              sx={{ mt: 2, bgcolor: "black", "&:hover": { bgcolor: "#333" } }}
+              onClick={handleSendOtp}
+              disabled={loading}
+            >
+              {loading ? <CircularProgress size={24} color="inherit" /> : "Send OTP"}
+            </Button>
+          </>
         )}
 
-        <Typography sx={{ mt: 2 }}>
-          Don’t have an account?{" "}
-          <Button onClick={() => navigate("/register")}>Signup</Button>
-        </Typography>
-        <Typography sx={{ mt: 1 }}>
-          Are you a Rider?{" "}
-          <Button onClick={() => navigate("/rider-login")}>Login as Rider</Button>
-        </Typography>
-      </Paper>
+        {step === 2 && (
+          <>
+            <TextField
+              fullWidth
+              label="Enter OTP"
+              variant="outlined"
+              margin="normal"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              sx={{ mt: 2, bgcolor: "black", "&:hover": { bgcolor: "#333" } }}
+              onClick={handleVerifyOtp}
+              disabled={loading}
+            >
+              {loading ? <CircularProgress size={24} color="inherit" /> : "Verify OTP"}
+            </Button>
+          </>
+        )}
+
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="body2">
+            Don’t have an account?{" "}
+            <Link to="/register" style={{ textDecoration: "none" }}>
+              Sign Up
+            </Link>
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            Are you a Rider?{" "}
+            <Link to="/rider-login" style={{ textDecoration: "none" }}>
+              Login as Rider
+            </Link>
+          </Typography>
+        </Box>
+      </Box>
     </Container>
   );
 }

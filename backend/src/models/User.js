@@ -1,40 +1,23 @@
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema(
-  {
-    fullName: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true },
-    mobile: { type: String, required: true, unique: true },
-    role: {
-      type: String,
-      enum: ["user", "rider", "admin"], // ✅ allow rider too
-      default: "user",
-    },
-    otp: { type: String, default: null },        // latest OTP
-    otpExpires: { type: Date, default: null },   // expiry of latest OTP
-    loginCount: { type: Number, default: 0 },
-    lastLogin: { type: Date, default: null },
+const documentSchema = new mongoose.Schema({
+  filename: String,
+  path: String,
+  mimetype: String,
+  size: Number,
+});
 
-    // ✅ New fields for document verification
-    documents: {
-      licenseNumber: String,
-      rcNumber: String,
-      insuranceNumber: String,
-      aadharFrontNumber: String,
-      aadharBackNumber: String,
-      licenseImage: String,
-      rcImage: String,
-      insuranceImage: String,
-      aadharFront: String,
-      aadharBack: String,
-    },
-    approvalStatus: {
-      type: String,
-      enum: ["pending", "approved", "rejected", "not_uploaded"],
-      default: "not_uploaded",
-    },
-  },
-  { timestamps: true }
-);
+const userSchema = new mongoose.Schema({
+  fullName: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  mobile: { type: String, required: true, unique: true },
+  role: { type: String, default: "user" },
+  otp: { type: String },
+  otpExpires: { type: Date },
+  documents: [documentSchema],
+  loginCount: { type: Number, default: 0 },
+  lastLogin: { type: Date },
+  approvalStatus: { type: String, default: "pending" },
+}, { timestamps: true });
 
 module.exports = mongoose.model("User", userSchema);

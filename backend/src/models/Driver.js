@@ -1,18 +1,25 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const driverSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  licenseNumber: String,
-  vehicleTypes: [String],
-  status: { type: String, enum: ['pending','approved','suspended'], default: 'pending' },
-  documents: [String],
-  currentLocation: {
-    lat: Number,
-    lng: Number,
-    updatedAt: Date
+const driverSchema = new mongoose.Schema(
+  {
+    fullName: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    mobile: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "active"],
+      default: "pending", // new riders are pending by default
+    },
+    documents: [
+      {
+        type: { type: String }, // license, RC, etc.
+        url: { type: String },
+        verified: { type: Boolean, default: false },
+      },
+    ],
   },
-  isOnline: { type: Boolean, default: false }
-}, { timestamps: true });
+  { timestamps: true }
+);
 
-module.exports = mongoose.model('Driver', driverSchema);
-
+module.exports = mongoose.model("Driver", driverSchema);

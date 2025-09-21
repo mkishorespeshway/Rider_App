@@ -1,21 +1,22 @@
 const express = require("express");
 const router = express.Router();
 const {
-  signupUser,
-  signupRider,
+  registerUser,
   loginUser,
+  registerRider,
   loginRider,
+  loginAdmin
 } = require("../controllers/authController");
-const otpController = require("../controllers/otpController");
 
-// 🔹 User & Rider signup/login
-router.post("/signup-user", signupUser);
-router.post("/signup-rider", signupRider);
-router.post("/login-user", loginUser);
-router.post("/login-rider", loginRider);
+// === User routes ===
+router.post("/user/register", registerUser);
+router.post("/user/login", loginUser);
 
-// 🔹 OTP (shared)
-router.post("/otp/send", otpController.send);
-router.post("/otp/verify", otpController.verify);
+// === Rider routes ===
+router.post("/rider/register", registerRider);
+router.post("/rider/login", loginRider);
+
+// === Admin routes ===
+router.post("/admin/login", loginAdmin);
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 
+// Counter schema for auto-increment
 const counterSchema = new mongoose.Schema({
   _id: { type: String, required: true },
   seq: { type: Number, default: 0 },
@@ -7,10 +8,11 @@ const counterSchema = new mongoose.Schema({
 
 const Counter = mongoose.model("Counter", counterSchema);
 
+// Ride schema
 const rideSchema = new mongoose.Schema(
   {
     _id: { type: Number }, // auto-incremented ride ID
-    riderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // ✅ Fix here
+    riderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     pickup: { type: String, required: true },
     drop: { type: String, required: true },
     status: {
@@ -23,18 +25,23 @@ const rideSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-
 // Auto-increment rideId
 rideSchema.pre("save", async function (next) {
   if (this.isNew) {
-    const counter = await Counter.findByIdAndUpdate(
-      { _id: "rideId" },
-      { $inc: { seq: 1 } },
-      { upsert: true, new: true }
-    );
-    this._id = counter.seq;
+    try {
+      const counter = await Counter.findByIdAndUpdate(
+        "rideId",
+        { $inc: { seq: 1 } },
+        { upsert: true, new: true }
+      );
+      this._id = counter.seq;
+      next();
+    } catch (err) {
+      next(err);
+    }
+  } else {
+    next();
   }
-  next();
 });
 
 module.exports = mongoose.model("Ride", rideSchema);
