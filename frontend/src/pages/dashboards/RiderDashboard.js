@@ -1,102 +1,138 @@
 import React, { useEffect, useState } from "react";
-import { Button, Typography, Box, Alert, CircularProgress } from "@mui/material";
-import { useNavigate } from "react-router-dom";
-import { getRiderStatus } from "../../services/api";
+import {
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  Grid,
+  CircularProgress,
+  Snackbar,
+  Alert,
+} from "@mui/material";
+import axios from "axios";
 
-export default function RiderDashboard() {
-  const navigate = useNavigate();
-  const [rider, setRider] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+export default function AdminDashboard() {
+  const [riders, setRiders] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", type: "success" });
 
-  // Load rider status
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      navigate("/rider-login");
-      return;
+  // Fetch all riders
+  const fetchRiders = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get("/api/rider");
+      setRiders(res.data || []);
+    } catch (err) {
+      console.error("❌ Failed to fetch riders:", err);
+      setSnackbar({ open: true, message: "Failed to fetch riders", type: "error" });
+    } finally {
+      setLoading(false);
     }
-
-    getRiderStatus(token)
-      .then((res) => {
-        console.log("✅ Rider status response:", res.data);
-        setRider(res.data.user);
-      })
-      .catch((err) => {
-        console.error("❌ Error loading rider data:", err.response?.data || err);
-        setError(err.response?.data?.message || "Error loading rider data");
-      })
-      .finally(() => setLoading(false));
-  }, [navigate]);
-
-  // Handle approval logic
-  useEffect(() => {
-    if (!rider) return;
-
-    if (rider.approvalStatus === "pending") {
-      return; // stay here
-    }
-
-    if (rider.approvalStatus === "rejected" || rider.approvalStatus === "docs_required") {
-      navigate("/upload-docs");
-    }
-  }, [rider, navigate]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    navigate("/rider-login");
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ p: 4, textAlign: "center" }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  useEffect(() => {
+    fetchRiders();
+  }, []);
 
-  if (error) {
-    return (
-      <Box sx={{ p: 4 }}>
-        <Alert severity="error">{error}</Alert>
-      </Box>
-    );
-  }
+  // Approve Rider
+  const handleApprove = async (id) => {
+    try {
+      await axios.post(`/api/rider/${id}/approve`);
+      setSnackbar({ open: true, message: "Rider approved & OTP sent", type: "success" });
+      fetchRiders();
+    } catch (err) {
+      console.error("❌ Error approving rider:", err);
+      setSnackbar({ open: true, message: err.response?.data?.message || "Error approving rider", type: "error" });
+    }
+  };
 
-  if (rider?.approvalStatus === "pending") {
-    return (
-      <Box sx={{ p: 4 }}>
-        <Typography variant="h5" sx={{ mb: 2 }}>
-          Verification in Progress
-        </Typography>
-        <Typography>
-          Your documents are under review. Please wait for admin approval.
-        </Typography>
-        <Button
-          sx={{ mt: 3 }}
-          variant="contained"
-          color="error"
-          onClick={handleLogout}
-        >
-          Logout
-        </Button>
-      </Box>
-    );
-  }
+  // Reject Rider
+  const handleReject = async (id) => {
+    try {
+      await axios.post(`/api/rider/${id}/reject`);
+      setSnackbar({ open: true, message: "Rider rejected", type: "warning" });
+      fetchRiders();
+    } catch (err) {
+      console.error("❌ Error rejecting rider:", err);
+      setSnackbar({ open: true, message: "Error rejecting rider", type: "error" });
+    }
+  };
 
-  // Approved
   return (
-    <Box sx={{ p: 4 }}>
-      <Typography variant="h4" sx={{ mb: 2 }}>
-        Welcome, {rider.fullName || rider.mobile} 🚖
+    <Box p={4}>
+      <Typography variant="h4" gutterBottom>
+        Rider App - Admin Dashboard
       </Typography>
-      <Typography variant="body1" sx={{ mb: 3 }}>
-        You can now access your rides, track trips, and earnings.
-      </Typography>
-      <Button variant="contained" color="primary" onClick={handleLogout}>
-        Logout
-      </Button>
+
+      {loading ? (
+        <CircularProgress />
+      ) : (
+        <Grid container spacing={2}>
+          {riders.length === 0 ? (
+            <Typography color="error">No riders found</Typography>
+          ) : (
+            riders.map((rider) => (
+              <Grid item xs={12} md={6} key={rider._id}>
+                <Card sx={{ borderRadius: 3, boxShadow: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6">{rider.fullName}</Typography>
+                    <Typography>Email: {rider.email}</Typography>
+                    <Typography>Mobile: {rider.mobile}</Typography>
+                    <Typography>Status: {rider.approvalStatus || "pending"}</Typography>
+
+                    {/* Show docs if uploaded */}
+                    {rider.documents?.length > 0 && (
+                      <Box mt={1}>
+                        <Typography variant="subtitle2">Documents:</Typography>
+                        {rider.documents.map((doc, idx) => (
+                          <div key={idx}>
+                            <a
+                              href={`/uploads/${doc.filename}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {doc.filename}
+                            </a>
+                          </div>
+                        ))}
+                      </Box>
+                    )}
+
+                    <Box mt={2} display="flex" gap={1}>
+                      <Button
+                        variant="contained"
+                        color="success"
+                        onClick={() => handleApprove(rider._id)}
+                        disabled={rider.approvalStatus === "approved"}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="error"
+                        onClick={() => handleReject(rider._id)}
+                        disabled={rider.approvalStatus === "rejected"}
+                      >
+                        Reject
+                      </Button>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))
+          )}
+        </Grid>
+      )}
+
+      {/* Snackbar for alerts */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert severity={snackbar.type}>{snackbar.message}</Alert>
+      </Snackbar>
     </Box>
   );
 }

@@ -5,33 +5,25 @@ require("dotenv").config();
 const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Authorization token missing" });
-    }
+    if (!authHeader || !authHeader.startsWith("Bearer "))
+      return res.status(401).json({ success: false, message: "Authorization token missing" });
 
     const token = authHeader.split(" ")[1];
-
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Find user
-    const user = await User.findById(decoded.id).select("-__v");
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ success: false, message: "Invalid or expired token" });
     }
 
-    // Attach user to request
-    req.user = user;
+    const user = await User.findById(decoded.id).select("-password");
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
+    req.user = user;
     next();
   } catch (err) {
-    console.error("AuthMiddleware error:", err.message);
-    res.status(401).json({ success: false, message: "Unauthorized" });
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 

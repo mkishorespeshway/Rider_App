@@ -1,5 +1,6 @@
 import axios from "axios";
 
+// ===== Base Axios Instances =====
 const AUTH_API = axios.create({
   baseURL: "http://localhost:5000/api/auth",
   headers: { "Content-Type": "application/json" },
@@ -24,14 +25,15 @@ const RIDES_API = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// 🆕 Middleware to attach token
-RIDES_API.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token"); // 👈 ensure you save token at login
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+// ===== Attach Token Middleware =====
+const attachToken = (config) => {
+  const token = localStorage.getItem("token");
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
-});
+};
+
+RIDER_API.interceptors.request.use(attachToken);
+RIDES_API.interceptors.request.use(attachToken);
 
 // ===== User APIs =====
 export const signupUser = (formData) => AUTH_API.post("/signup-user", formData);
@@ -43,8 +45,7 @@ export const verifyOtp = (mobile, otp, role) =>
   OTP_API.post("/verify", { mobile, otp, role });
 
 // ===== Rider docs/status =====
-export const getRiderStatus = (token) =>
-  RIDER_API.get("/status", { headers: { Authorization: `Bearer ${token}` } });
+export const getRiderStatus = () => RIDER_API.get("/status");
 
 // 🚨 Upload docs by riderId
 export const uploadRiderDocs = (riderId, docs) =>
@@ -62,6 +63,10 @@ export const createRide = (data) => RIDES_API.post("/create", data);
 export const findDrivers = () => RIDES_API.get("/drivers");
 export const getRideHistory = () => RIDES_API.get("/history");
 
+// 🆕 Check if rider is approved by admin
+export const checkRiderApproval = (mobile) =>
+  RIDER_API.get(`/check-approval?mobile=${mobile}`);
+
 export default {
   signupUser,
   signupRider,
@@ -75,4 +80,5 @@ export default {
   createRide,
   findDrivers,
   getRideHistory,
+  checkRiderApproval,
 };

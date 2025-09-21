@@ -1,16 +1,15 @@
 import React from "react";
 import { Button, Typography, Box } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext"; // ✅ Corrected path
 
 export default function UserDashboard() {
   const navigate = useNavigate();
+  const { logout } = useAuth(); // ✅ get logout from context
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    navigate("/login");
-      window.location.reload();
-
+    logout();           // clear auth state
+    navigate("/login"); // redirect to login page
   };
 
   return (

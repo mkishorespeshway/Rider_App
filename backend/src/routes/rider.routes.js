@@ -1,41 +1,59 @@
 const express = require("express");
-const multer = require("multer");
-const path = require("path");
-const User = require("../models/User");
-const authMiddleware = require("../middleware/authMiddleware");
-
 const router = express.Router();
+const multer = require("multer");
+const User = require("../models/User");
+const fs = require("fs");
+const path = require("path");
 
-// 📂 Multer storage for docs
+// Ensure uploads folder exists
+const uploadDir = path.join(__dirname, "../uploads");
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+// Multer setup
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, "uploads/"),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.fieldname + path.extname(file.originalname)),
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
-const upload = multer({ storage });
 
-// 🔹 Upload docs (no auth, just riderId)
-router.post("/upload-docs/:riderId", upload.fields([
-  { name: "aadharFront", maxCount: 1 },
-  { name: "aadharBack", maxCount: 1 },
-  { name: "license", maxCount: 1 },
-]), async (req, res) => {
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/png", "image/jpeg", "application/pdf"];
+    if (!allowed.includes(file.mimetype)) return cb(new Error("Only PNG, JPEG, PDF allowed"));
+    cb(null, true);
+  },
+});
+
+// Upload Rider documents
+router.post("/upload-docs/:id", upload.array("documents", 5), async (req, res) => {
   try {
-    const rider = await User.findById(req.params.riderId);
-    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+    const riderId = req.params.id;
+    const files = req.files;
 
-    rider.documents = {
-      aadharFront: req.files["aadharFront"]?.[0]?.filename || null,
-      aadharBack: req.files["aadharBack"]?.[0]?.filename || null,
-      license: req.files["license"]?.[0]?.filename || null,
-    };
-    rider.approvalStatus = "pending";
+    if (!files || files.length === 0)
+      return res.status(400).json({ success: false, message: "No documents uploaded" });
 
-    await rider.save();
-    res.json({ success: true, message: "Documents uploaded, waiting for approval" });
+    const fileData = files.map(f => ({
+      filename: f.filename,
+      path: f.path,
+      mimetype: f.mimetype,
+      size: f.size,
+    }));
+
+    const rider = await User.findByIdAndUpdate(
+      riderId,
+      { $push: { documents: { $each: fileData } } },
+      { new: true }
+    );
+
+    return res.json({ success: true, message: "Documents uploaded successfully", documents: rider.documents });
   } catch (err) {
-    console.error("❌ Upload error:", err);
-    res.status(500).json({ success: false, message: "Error uploading documents" });
+    console.error(err);
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
