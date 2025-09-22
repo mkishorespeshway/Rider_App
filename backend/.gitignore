@@ -14,3 +14,5 @@ frontend/node_modules/.cache/
 # env files
 .env
 backend/.env
+*.log
+
