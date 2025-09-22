@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { sendOtp, verifyOtp } from "../services/api";
+import { sendOtp, verifyOtp, checkRiderApproval } from "../services/api"; 
 import { Box, Button, Container, TextField, Typography, Alert } from "@mui/material";
 
 export default function RiderLogin() {
@@ -13,12 +13,24 @@ export default function RiderLogin() {
 
   const handleSendOtp = async () => {
     setMessage({ type: "", text: "" });
+
     if (!mobile || mobile.length !== 10) {
       setMessage({ type: "error", text: "Enter a valid 10-digit mobile number" });
       return;
     }
+
     try {
       setLoading(true);
+
+      // ✅ Check rider approval first
+      const approvalRes = await checkRiderApproval(mobile);
+      if (!approvalRes.data?.approved) {
+        setMessage({ type: "info", text: "Your account is still waiting for admin approval." });
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Send OTP only if approved
       const res = await sendOtp(mobile, "rider");
       if (res.data.success) {
         setStep(2);
@@ -36,16 +48,17 @@ export default function RiderLogin() {
 
   const handleVerifyOtp = async () => {
     setMessage({ type: "", text: "" });
+
     if (!otp || otp.length !== 6) {
       setMessage({ type: "error", text: "Enter the 6-digit OTP" });
       return;
     }
+
     try {
       setLoading(true);
       const res = await verifyOtp(mobile, otp, "rider");
       if (res.data.success) {
-        // Save auth in localStorage
-        localStorage.setItem("token", "dummy-token"); // replace with real token if exists
+        localStorage.setItem("token", "dummy-token"); // replace with real token
         localStorage.setItem("role", "rider");
         navigate("/rider-dashboard");
       } else {
@@ -78,8 +91,14 @@ export default function RiderLogin() {
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
             />
-            <Button fullWidth variant="contained" sx={{ mt: 2 }} onClick={handleSendOtp} disabled={loading}>
-              {loading ? "Sending..." : "Send OTP"}
+            <Button
+              fullWidth
+              variant="contained"
+              sx={{ mt: 2 }}
+              onClick={handleSendOtp}
+              disabled={loading}
+            >
+              {loading ? "Checking..." : "Send OTP"}
             </Button>
           </>
         )}
@@ -94,7 +113,13 @@ export default function RiderLogin() {
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
             />
-            <Button fullWidth variant="contained" sx={{ mt: 2 }} onClick={handleVerifyOtp} disabled={loading}>
+            <Button
+              fullWidth
+              variant="contained"
+              sx={{ mt: 2 }}
+              onClick={handleVerifyOtp}
+              disabled={loading}
+            >
               {loading ? "Verifying..." : "Verify OTP"}
             </Button>
           </>

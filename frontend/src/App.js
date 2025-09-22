@@ -1,6 +1,6 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./contexts/AuthContext"; // ✅ context-based auth
+import { useAuth } from "./contexts/AuthContext"; 
 
 // Pages
 import UserLogin from "./pages/UserLogin";
@@ -8,8 +8,7 @@ import UserRegister from "./pages/UserRegister";
 import RiderLogin from "./pages/RiderLogin";
 import RiderRegister from "./pages/RiderRegister";
 import RiderOtpLogin from "./pages/RiderOtpLogin";
-import AdminLogin from "./pages/AdminLogin";
-import AdminDashboard from "./pages/AdminDashboard";
+import AdminLogin from "./pages/admin/AdminLogin";
 import RiderDashboard from "./pages/dashboards/RiderDashboard";
 import UserDashboard from "./pages/dashboards/UserDashboard";
 import DocumentUpload from "./pages/DocumentUpload";
@@ -23,8 +22,11 @@ import Navbar from "./components/Navbar";
 import CaptainDetails from "./pages/CaptainDetails";
 import RiderDetails from "./pages/RiderDetails";
 
+// Admin Pages
+import AdminLayout from "./pages/admin/AdminLayout";
+
 export default function App() {
-  const { auth } = useAuth(); // ✅ get auth state from context
+  const { auth } = useAuth(); 
   const { token, role } = auth || {};
   const isAuth = Boolean(token);
 
@@ -87,9 +89,10 @@ export default function App() {
             path="/admin"
             element={isAuth && role === "admin" ? <Navigate to="/admin-dashboard" /> : <AdminLogin />}
           />
+          {/* AdminLayout handles sidebar + dashboard */}
           <Route
-            path="/admin-dashboard"
-            element={isAuth && role === "admin" ? <AdminDashboard /> : <Navigate to="/admin" />}
+            path="/admin-dashboard/*"
+            element={isAuth && role === "admin" ? <AdminLayout /> : <Navigate to="/admin" />}
           />
           <Route
             path="/admin/captain/:id"
