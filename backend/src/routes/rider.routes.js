@@ -1,7 +1,8 @@
+// routes/riderRoutes.js
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const User = require("../models/User");
+const User = require("../models/User"); // your Rider/User model
 const fs = require("fs");
 const path = require("path");
 
@@ -25,35 +26,75 @@ const upload = multer({
   },
 });
 
-// Upload Rider documents
-router.post("/upload-docs/:id", upload.array("documents", 5), async (req, res) => {
+// ================= Rider Signup + Upload Documents =================
+router.post(
+  "/signup",
+  upload.fields([
+    { name: "aadharFront", maxCount: 1 },
+    { name: "aadharBack", maxCount: 1 },
+    { name: "license", maxCount: 1 },
+    { name: "panCard", maxCount: 1 },
+    { name: "rc", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    try {
+      const { fullName, email, mobile, role } = req.body;
+
+      // Check if rider already exists
+      const existing = await User.findOne({ email });
+      if (existing)
+        return res.status(400).json({ success: false, message: "Rider already exists" });
+
+      const files = req.files;
+
+      // Map files to MongoDB documents array
+      const documents = Object.keys(files || {}).map(key => ({
+        type: key,
+        filename: files[key][0].filename,
+        path: files[key][0].path,
+        mimetype: files[key][0].mimetype,
+        size: files[key][0].size,
+      }));
+
+      const rider = new User({
+        fullName,
+        email,
+        mobile,
+        role: role || "rider",
+        loginCount: 0,
+        approvalStatus: "pending",
+        documents,
+      });
+
+      await rider.save();
+
+      res.json({
+        success: true,
+        message: "Rider registered successfully. Please wait for admin approval.",
+        rider,
+      });
+    } catch (err) {
+      console.error(err);
+      if (err instanceof multer.MulterError)
+        return res.status(400).json({ success: false, message: err.message });
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  }
+);
+
+// ================= Check Rider Approval =================
+router.get("/check-approval", async (req, res) => {
   try {
-    const riderId = req.params.id;
-    const files = req.files;
+    const { mobile } = req.query;
+    if (!mobile) return res.status(400).json({ approved: false, message: "Mobile number required" });
 
-    if (!files || files.length === 0)
-      return res.status(400).json({ success: false, message: "No documents uploaded" });
+    const rider = await User.findOne({ mobile, role: "rider" });
+    if (!rider) return res.status(404).json({ approved: false, message: "Rider not found" });
 
-    const fileData = files.map(f => ({
-      filename: f.filename,
-      path: f.path,
-      mimetype: f.mimetype,
-      size: f.size,
-    }));
-
-    const rider = await User.findByIdAndUpdate(
-      riderId,
-      { $push: { documents: { $each: fileData } } },
-      { new: true }
-    );
-
-    return res.json({ success: true, message: "Documents uploaded successfully", documents: rider.documents });
+    return res.json({ approved: rider.approvalStatus === "approved" });
   } catch (err) {
     console.error(err);
-    if (err instanceof multer.MulterError) {
-      return res.status(400).json({ success: false, message: err.message });
-    }
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ approved: false, message: "Server error" });
   }
 });
 

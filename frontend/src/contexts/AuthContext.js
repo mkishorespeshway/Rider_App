@@ -1,4 +1,3 @@
-// src/contexts/AuthContext.js
 import React, { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext();
@@ -17,6 +16,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setAuth({});
     localStorage.removeItem("auth");
+    window.location.href = "/admin"; // redirect to login after logout
   };
 
   return (

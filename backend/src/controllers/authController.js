@@ -7,13 +7,19 @@ exports.registerUser = async (req, res) => {
   try {
     const { fullName, email, mobile } = req.body;
 
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ success: false, message: "Email already registered" });
+    if (!fullName || !email || !mobile) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
 
-    const user = new User({ fullName, email, mobile, role: "user" });
+    const existing = await User.findOne({ $or: [{ email }, { mobile }] });
+    if (existing) {
+      return res.status(400).json({ success: false, message: "Email or mobile already registered" });
+    }
+
+    const user = new User({ fullName, email, mobile, role: "user", approvalStatus: "approved" });
     await user.save();
 
-    res.json({ success: true, message: "Registration successful! Please wait for admin approval." });
+    res.json({ success: true, message: "User registered successfully!" });
   } catch (err) {
     console.error("User register error:", err);
     res.status(500).json({ success: false, message: "Server error" });
@@ -39,8 +45,12 @@ exports.registerRider = async (req, res) => {
   try {
     const { fullName, email, mobile } = req.body;
 
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ success: false, message: "Email already registered" });
+    if (!fullName || !email || !mobile) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+
+    const existing = await User.findOne({ $or: [{ email }, { mobile }] });
+    if (existing) return res.status(400).json({ success: false, message: "Email or mobile already registered" });
 
     const rider = new User({ fullName, email, mobile, role: "rider", approvalStatus: "pending" });
     await rider.save();
@@ -55,8 +65,12 @@ exports.registerRider = async (req, res) => {
 exports.loginRider = async (req, res) => {
   try {
     const { email, mobile } = req.body;
-    const rider = await User.findOne({ email, mobile, role: "rider", approvalStatus: "approved" });
-    if (!rider) return res.status(401).json({ success: false, message: "Invalid credentials or not approved yet" });
+    const rider = await User.findOne({ email, mobile, role: "rider" });
+
+    if (!rider) return res.status(401).json({ success: false, message: "Invalid credentials" });
+    if (rider.approvalStatus !== "approved") {
+      return res.status(403).json({ success: false, message: "Account not approved yet" });
+    }
 
     const token = jwt.sign({ id: rider._id, role: "rider" }, process.env.JWT_SECRET, { expiresIn: "12h" });
     res.json({ success: true, token });
