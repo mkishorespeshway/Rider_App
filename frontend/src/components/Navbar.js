@@ -20,6 +20,7 @@ export default function Navbar() {
   return (
     <AppBar position="static" sx={{ backgroundColor: "black", px: 2 }}>
       <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
+        {/* App Title Click → Role-based Dashboard */}
         <Typography
           variant="h6"
           sx={{ fontWeight: "bold", cursor: "pointer" }}
@@ -33,6 +34,7 @@ export default function Navbar() {
           Rider App
         </Typography>
 
+        {/* Right Side Avatar & Menu */}
         {token && (
           <>
             <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
@@ -47,21 +49,39 @@ export default function Navbar() {
               onClose={handleMenuClose}
               PaperProps={{ elevation: 3, sx: { mt: 1.5, borderRadius: 2 } }}
             >
-              {role === "admin" ? (
+              {/* ================= ADMIN MENU ================= */}
+              {role === "admin" && (
                 <>
-                  <MenuItem onClick={() => { navigate("/admin-dashboard"); handleMenuClose(); }}>
+                  <MenuItem
+                    onClick={() => {
+                      navigate("/admin-dashboard");
+                      handleMenuClose();
+                    }}
+                  >
                     Dashboard
                   </MenuItem>
                   <MenuItem onClick={handleLogout} sx={{ color: "red" }}>
                     Logout
                   </MenuItem>
                 </>
-              ) : (
+              )}
+
+              {/* ================= USER MENU ================= */}
+              {role === "user" && (
                 <>
                   <MenuItem onClick={() => { navigate("/booking"); handleMenuClose(); }}>Booking</MenuItem>
                   <MenuItem onClick={() => { navigate("/history"); handleMenuClose(); }}>History</MenuItem>
                   <MenuItem onClick={() => { navigate("/profile"); handleMenuClose(); }}>Profile</MenuItem>
                   <MenuItem onClick={() => { navigate("/parcel"); handleMenuClose(); }}>Parcel</MenuItem>
+                  <MenuItem onClick={handleLogout} sx={{ color: "red" }}>Logout</MenuItem>
+                </>
+              )}
+
+              {/* ================= RIDER MENU ================= */}
+              {role === "rider" && (
+                <>
+                  <MenuItem onClick={() => { navigate("/history"); handleMenuClose(); }}>History</MenuItem>
+                  <MenuItem onClick={() => { navigate("/profile"); handleMenuClose(); }}>Profile</MenuItem>
                   <MenuItem onClick={handleLogout} sx={{ color: "red" }}>Logout</MenuItem>
                 </>
               )}
