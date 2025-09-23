@@ -2,21 +2,21 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppBar, Toolbar, Typography, IconButton, Menu, MenuItem, Avatar } from "@mui/material";
 import { useAuth } from "../contexts/AuthContext";
-
+ 
 export default function Navbar() {
   const navigate = useNavigate();
   const { auth, logout } = useAuth();
   const { token, role } = auth || {};
   const [anchorEl, setAnchorEl] = useState(null);
-
+ 
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
-
+ 
   const handleLogout = () => {
     logout(); // ✅ uses AuthContext logout
     handleMenuClose();
   };
-
+ 
   return (
     <AppBar position="static" sx={{ backgroundColor: "black", px: 2 }}>
       <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -33,7 +33,7 @@ export default function Navbar() {
         >
           Rider App
         </Typography>
-
+ 
         {/* Right Side Avatar & Menu */}
         {token && (
           <>
@@ -42,7 +42,7 @@ export default function Navbar() {
                 {role === "rider" ? "R" : role === "user" ? "U" : "A"}
               </Avatar>
             </IconButton>
-
+ 
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
@@ -65,7 +65,7 @@ export default function Navbar() {
                   </MenuItem>
                 </>
               )}
-
+ 
               {/* ================= USER MENU ================= */}
               {role === "user" && (
                 <>
@@ -76,7 +76,7 @@ export default function Navbar() {
                   <MenuItem onClick={handleLogout} sx={{ color: "red" }}>Logout</MenuItem>
                 </>
               )}
-
+ 
               {/* ================= RIDER MENU ================= */}
               {role === "rider" && (
                 <>
@@ -92,3 +92,5 @@ export default function Navbar() {
     </AppBar>
   );
 }
+ 
+ 
