@@ -19,13 +19,11 @@ import Profile from "./pages/Profile";
 import Navbar from "./components/Navbar";
 import Parcel from "./pages/Parcel";
 import Activity from "./pages/Activity";
+import AdminDashboard from "./pages/admin/AdminDashboard"; // ✅ fixed import
 
 // Detail Pages
 import CaptainDetails from "./pages/CaptainDetails";
 import RiderDetails from "./pages/RiderDetails";
-
-// Admin Pages
-import AdminLayout from "./pages/admin/AdminLayout";
 
 export default function App() {
   const { auth } = useAuth();
@@ -53,11 +51,15 @@ export default function App() {
           {/* ================= USER ROUTES ================= */}
           <Route
             path="/login"
-            element={isAuth ? <Navigate to={redirectByRole()} /> : <UserLogin />}
+            element={
+              isAuth ? <Navigate to={redirectByRole()} /> : <UserLogin />
+            }
           />
           <Route
             path="/register"
-            element={isAuth ? <Navigate to={redirectByRole()} /> : <UserRegister />}
+            element={
+              isAuth ? <Navigate to={redirectByRole()} /> : <UserRegister />
+            }
           />
           <Route
             path="/user-dashboard"
@@ -75,11 +77,15 @@ export default function App() {
           {/* ================= RIDER ROUTES ================= */}
           <Route
             path="/rider-login"
-            element={isAuth ? <Navigate to={redirectByRole()} /> : <RiderLogin />}
+            element={
+              isAuth ? <Navigate to={redirectByRole()} /> : <RiderLogin />
+            }
           />
           <Route
             path="/rider-register"
-            element={isAuth ? <Navigate to={redirectByRole()} /> : <RiderRegister />}
+            element={
+              isAuth ? <Navigate to={redirectByRole()} /> : <RiderRegister />
+            }
           />
           <Route
             path="/rider-dashboard"
@@ -97,7 +103,13 @@ export default function App() {
           />
           <Route
             path="/admin-dashboard/*"
-            element={isAuth && role === "admin" ? <AdminLayout /> : <Navigate to="/admin" />}
+            element={
+              isAuth && role === "admin" ? (
+                <AdminDashboard /> // ✅ replaced AdminLayout with AdminDashboard
+              ) : (
+                <Navigate to="/admin" />
+              )
+            }
           />
           <Route
             path="/admin/captain/:id"
@@ -108,7 +120,21 @@ export default function App() {
             element={isAuth && role === "admin" ? <RiderDetails /> : <Navigate to="/admin" />}
           />
 
-          {/* ================= SHARED ROUTES ================= */}
+          {/* ================= COMMON ROUTES ================= */}
+          
+          <Route
+            path="/booking"
+            element={
+              isAuth && role === "user" ? <Booking /> : <Navigate to={redirectByRole()} />
+           }
+            />
+          
+          <Route
+           path="/parcel"
+        element={
+          isAuth && role === "user" ? <Parcel /> : <Navigate to={redirectByRole()} />
+          }
+           />
           <Route
             path="/ride/:id"
             element={isAuth ? <RideTrack /> : <Navigate to="/login" />}
@@ -119,8 +145,10 @@ export default function App() {
           />
           <Route
             path="/profile"
-            element={isAuth ? <Profile /> : <Navigate to="/login" />}
-          />
+            element={
+            isAuth ? <Profile /> : <Navigate to="/login" />
+               }
+              />
           <Route
             path="/activity"
             element={isAuth ? <Activity /> : <Navigate to="/login" />}
@@ -133,3 +161,4 @@ export default function App() {
     </>
   );
 }
+// end
