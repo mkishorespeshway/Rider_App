@@ -1,6 +1,8 @@
+// frontend/src/pages/RiderLogin.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { sendOtp, verifyOtp, checkRiderApproval } from "../services/api"; 
+import { sendOtp, verifyOtp, checkRiderApproval } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 import { Box, Button, Container, TextField, Typography, Alert } from "@mui/material";
 
 export default function RiderLogin() {
@@ -10,28 +12,22 @@ export default function RiderLogin() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  // 🔹 Step 1: Send OTP
   const handleSendOtp = async () => {
     setMessage({ type: "", text: "" });
-
     if (!mobile || mobile.length !== 10) {
       setMessage({ type: "error", text: "Enter a valid 10-digit mobile number" });
       return;
     }
-
     try {
       setLoading(true);
-
-      // Check admin approval
       const approvalRes = await checkRiderApproval(mobile);
       if (!approvalRes.data?.approved) {
         setMessage({ type: "info", text: "Your account is still waiting for admin approval." });
         setLoading(false);
         return;
       }
-
-      // Send OTP
       const res = await sendOtp(mobile, "rider");
       if (res.data.success) {
         setStep(2);
@@ -47,26 +43,20 @@ export default function RiderLogin() {
     }
   };
 
-  // 🔹 Step 2: Verify OTP
   const handleVerifyOtp = async () => {
     setMessage({ type: "", text: "" });
-
     if (!otp || otp.length !== 6) {
       setMessage({ type: "error", text: "Enter the 6-digit OTP" });
       return;
     }
-
     try {
       setLoading(true);
       const res = await verifyOtp(mobile, otp, "rider");
-
       if (res.data.success) {
-        // Save token & role
-        localStorage.setItem("token", res.data.token);
-        localStorage.setItem("role", res.data.user.role);
-
+        // Update AuthContext (this persists to localStorage "auth" and also 'token'/'role')
+        login({ token: res.data.token, role: res.data.user.role, user: res.data.user });
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
-        setTimeout(() => navigate("/rider-dashboard"), 1000);
+        setTimeout(() => navigate("/rider-dashboard"), 700);
       } else {
         setMessage({ type: "error", text: res.data.message });
       }
@@ -80,42 +70,14 @@ export default function RiderLogin() {
 
   return (
     <Container maxWidth="xs">
-      <Box
-        sx={{
-          mt: 8,
-          p: 4,
-          border: "1px solid #ccc",
-          borderRadius: 2,
-          textAlign: "center",
-        }}
-      >
-        <Typography variant="h5" gutterBottom>
-          Rider Login
-        </Typography>
-
-        {message.text && (
-          <Alert severity={message.type} sx={{ mb: 2 }}>
-            {message.text}
-          </Alert>
-        )}
+      <Box sx={{ mt: 8, p: 4, border: "1px solid #ccc", borderRadius: 2, textAlign: "center" }}>
+        <Typography variant="h5" gutterBottom>Rider Login</Typography>
+        {message.text && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
 
         {step === 1 && (
           <>
-            <TextField
-              fullWidth
-              label="Mobile Number"
-              variant="outlined"
-              margin="normal"
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value)}
-            />
-            <Button
-              fullWidth
-              variant="contained"
-              sx={{ mt: 2 }}
-              onClick={handleSendOtp}
-              disabled={loading}
-            >
+            <TextField fullWidth label="Mobile Number" value={mobile} onChange={(e) => setMobile(e.target.value)} margin="normal"/>
+            <Button fullWidth variant="contained" sx={{ mt: 2 }} onClick={handleSendOtp} disabled={loading}>
               {loading ? "Checking..." : "Send OTP"}
             </Button>
           </>
@@ -123,32 +85,16 @@ export default function RiderLogin() {
 
         {step === 2 && (
           <>
-            <TextField
-              fullWidth
-              label="Enter OTP"
-              variant="outlined"
-              margin="normal"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-            />
-            <Button
-              fullWidth
-              variant="contained"
-              sx={{ mt: 2 }}
-              onClick={handleVerifyOtp}
-              disabled={loading}
-            >
+            <TextField fullWidth label="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} margin="normal" />
+            <Button fullWidth variant="contained" sx={{ mt: 2 }} onClick={handleVerifyOtp} disabled={loading}>
               {loading ? "Verifying..." : "Verify OTP"}
             </Button>
           </>
         )}
 
         <Typography sx={{ mt: 2 }}>
-          Don’t have an account?{" "}
-          <Button onClick={() => navigate("/rider-register")}>Sign Up</Button>
-          <br />
-          Are you a User?{" "}
-          <Button onClick={() => navigate("/login")}>Login as User</Button>
+          Don’t have an account? <Button onClick={() => navigate("/rider-register")}>Sign Up</Button><br/>
+          Are you a User? <Button onClick={() => navigate("/login")}>Login as User</Button>
         </Typography>
       </Box>
     </Container>

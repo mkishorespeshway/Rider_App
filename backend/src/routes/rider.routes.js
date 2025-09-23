@@ -1,12 +1,13 @@
-// routes/riderRoutes.js
+// backend/src/routes/rider.routes.js
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const User = require("../models/User"); // your Rider/User model
-const fs = require("fs");
+const User = require("../models/User");
 const path = require("path");
+const fs = require("fs");
+const authMiddleware = require("../middleware/authMiddleware");
 
-// Ensure uploads folder exists
+// Uploads folder
 const uploadDir = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -18,7 +19,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ["image/png", "image/jpeg", "application/pdf"];
     if (!allowed.includes(file.mimetype)) return cb(new Error("Only PNG, JPEG, PDF allowed"));
@@ -26,7 +27,7 @@ const upload = multer({
   },
 });
 
-// ================= Rider Signup + Upload Documents =================
+// Signup (rider)
 router.post(
   "/signup",
   upload.fields([
@@ -40,15 +41,11 @@ router.post(
     try {
       const { fullName, email, mobile, role } = req.body;
 
-      // Check if rider already exists
       const existing = await User.findOne({ email });
-      if (existing)
-        return res.status(400).json({ success: false, message: "Rider already exists" });
+      if (existing) return res.status(400).json({ success: false, message: "Rider already exists" });
 
-      const files = req.files;
-
-      // Map files to MongoDB documents array
-      const documents = Object.keys(files || {}).map(key => ({
+      const files = req.files || {};
+      const documents = Object.keys(files).map(key => ({
         type: key,
         filename: files[key][0].filename,
         path: files[key][0].path,
@@ -68,21 +65,15 @@ router.post(
 
       await rider.save();
 
-      res.json({
-        success: true,
-        message: "Rider registered successfully. Please wait for admin approval.",
-        rider,
-      });
+      res.json({ success: true, message: "Rider registered successfully. Please wait for admin approval.", rider });
     } catch (err) {
-      console.error(err);
-      if (err instanceof multer.MulterError)
-        return res.status(400).json({ success: false, message: err.message });
+      console.error("❌ Rider signup error:", err);
       res.status(500).json({ success: false, message: "Server error" });
     }
   }
 );
 
-// ================= Check Rider Approval =================
+// Check approval (public)
 router.get("/check-approval", async (req, res) => {
   try {
     const { mobile } = req.query;
@@ -93,8 +84,21 @@ router.get("/check-approval", async (req, res) => {
 
     return res.json({ approved: rider.approvalStatus === "approved" });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Check approval error:", err);
     res.status(500).json({ approved: false, message: "Server error" });
+  }
+});
+
+// Protected status (Dashboard)
+router.get("/status", authMiddleware, async (req, res) => {
+  try {
+    // req.user was attached by authMiddleware
+    const rider = await User.findById(req.user._id).select("-password");
+    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+    res.json({ success: true, user: rider });
+  } catch (err) {
+    console.error("❌ Rider status error:", err);
+    res.status(500).json({ success: false, message: "Server error fetching rider status" });
   }
 });
 
