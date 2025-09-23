@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { sendOtp, verifyOtp } from "../services/api";
-import { useAuth } from "../contexts/AuthContext"; // ✅ Use auth context
+import { useAuth } from "../contexts/AuthContext"; // ✅ context for auth
 import {
   Box,
   Button,
@@ -17,16 +17,17 @@ export default function UserLogin() {
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState(1); // 1 = enter mobile, 2 = enter OTP
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [message, setMessage] = useState({ type: "", text: "" });
 
   const navigate = useNavigate();
-  const { login } = useAuth(); // ✅ get login function from context
+  const { login } = useAuth(); // ✅ auth context
 
   // Step 1: Send OTP
   const handleSendOtp = async () => {
-    setError("");
+    setMessage({ type: "", text: "" });
+
     if (!mobile || mobile.length !== 10) {
-      setError("Enter a valid 10-digit mobile number");
+      setMessage({ type: "error", text: "Enter a valid 10-digit mobile number" });
       return;
     }
 
@@ -35,12 +36,13 @@ export default function UserLogin() {
       const res = await sendOtp(mobile, "user");
       if (res.data.success) {
         setStep(2);
+        setMessage({ type: "success", text: "OTP sent! Check your mobile." });
       } else {
-        setError(res.data.message || "Failed to send OTP");
+        setMessage({ type: "error", text: res.data.message || "Failed to send OTP" });
       }
     } catch (err) {
       console.error(err);
-      setError("Server error while sending OTP");
+      setMessage({ type: "error", text: "Server error while sending OTP" });
     } finally {
       setLoading(false);
     }
@@ -48,27 +50,33 @@ export default function UserLogin() {
 
   // Step 2: Verify OTP
   const handleVerifyOtp = async () => {
-    setError("");
+    setMessage({ type: "", text: "" });
+
     if (!otp || otp.length < 4) {
-      setError("Enter a valid OTP");
+      setMessage({ type: "error", text: "Enter a valid OTP" });
       return;
     }
 
     try {
       setLoading(true);
       const res = await verifyOtp(mobile, otp, "user");
-      if (res.data.success) {
-        // ✅ Store user auth in context
-        login({ token: res.data.user._id, role: "user" });
 
-        // Navigate to user dashboard
-        navigate("/user-dashboard");
+      if (res.data.success) {
+        // ✅ Save token & role
+        const token = res.data.token || res.data.user?._id || "dummy-user-token";
+        login({ token, role: "user" });
+
+        setMessage({ type: "success", text: "Login successful! Redirecting..." });
+        setTimeout(() => navigate("/user-dashboard"), 1000);
       } else {
-        setError(res.data.message || "Invalid OTP");
+        setMessage({ type: "error", text: res.data.message || "Invalid OTP" });
       }
     } catch (err) {
       console.error(err);
-      setError("Server error while verifying OTP");
+      setMessage({
+        type: "error",
+        text: err.response?.data?.message || "Server error while verifying OTP",
+      });
     } finally {
       setLoading(false);
     }
@@ -89,9 +97,9 @@ export default function UserLogin() {
           User Login
         </Typography>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
+        {message.text && (
+          <Alert severity={message.type} sx={{ mb: 2 }}>
+            {message.text}
           </Alert>
         )}
 

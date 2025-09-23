@@ -5,7 +5,7 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [auth, setAuth] = useState(() => {
     const saved = localStorage.getItem("auth");
-    return saved ? JSON.parse(saved) : {};
+    return saved ? JSON.parse(saved) : { token: null, role: null };
   });
 
   const login = (data) => {
@@ -14,13 +14,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    setAuth({});
+    setAuth({ token: null, role: null });
     localStorage.removeItem("auth");
-    window.location.href = "/admin"; // redirect to login after logout
+    window.location.href = "/login"; // ✅ always redirect to login
   };
 
   return (
-    <AuthContext.Provider value={{ auth, login, logout }}>
+    <AuthContext.Provider value={{ auth, setAuth, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

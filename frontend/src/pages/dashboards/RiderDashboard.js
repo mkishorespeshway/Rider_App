@@ -10,120 +10,123 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
-import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { getRiderStatus, getRideHistory } from "../../services/api"; // ✅ single import
 
-export default function AdminDashboard() {
-  const [riders, setRiders] = useState([]);
+export default function RiderDashboard() {
+  const [rider, setRider] = useState(null);
+  const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: "", type: "success" });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    type: "success",
+  });
+  const navigate = useNavigate();
 
-  // Fetch all riders
-  const fetchRiders = async () => {
+  // ✅ Fetch rider profile/status
+  const fetchRiderData = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/api/rider");
-      setRiders(res.data || []);
+      const res = await getRiderStatus(); // GET /api/rider/status
+      setRider(res.data || null);
     } catch (err) {
-      console.error("❌ Failed to fetch riders:", err);
-      setSnackbar({ open: true, message: "Failed to fetch riders", type: "error" });
+      console.error("❌ Failed to fetch rider status:", err);
+      setSnackbar({
+        open: true,
+        message: "Failed to load rider profile",
+        type: "error",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchRiders();
-  }, []);
-
-  // Approve Rider
-  const handleApprove = async (id) => {
+  // ✅ Fetch ride history
+  const fetchRideHistory = async () => {
     try {
-      await axios.post(`/api/rider/${id}/approve`);
-      setSnackbar({ open: true, message: "Rider approved & OTP sent", type: "success" });
-      fetchRiders();
+      const res = await getRideHistory(); // GET /api/rides/history
+      setRides(res.data || []);
     } catch (err) {
-      console.error("❌ Error approving rider:", err);
-      setSnackbar({ open: true, message: err.response?.data?.message || "Error approving rider", type: "error" });
+      console.error("❌ Failed to fetch ride history:", err);
+      setSnackbar({
+        open: true,
+        message: "Failed to load ride history",
+        type: "error",
+      });
     }
   };
 
-  // Reject Rider
-  const handleReject = async (id) => {
-    try {
-      await axios.post(`/api/rider/${id}/reject`);
-      setSnackbar({ open: true, message: "Rider rejected", type: "warning" });
-      fetchRiders();
-    } catch (err) {
-      console.error("❌ Error rejecting rider:", err);
-      setSnackbar({ open: true, message: "Error rejecting rider", type: "error" });
-    }
+  useEffect(() => {
+    fetchRiderData();
+    fetchRideHistory();
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    navigate("/rider-login");
   };
 
   return (
     <Box p={4}>
       <Typography variant="h4" gutterBottom>
-        Rider App - Admin Dashboard
+        Rider Dashboard
       </Typography>
 
       {loading ? (
         <CircularProgress />
+      ) : rider ? (
+        <Card sx={{ mb: 3, borderRadius: 3, boxShadow: 3 }}>
+          <CardContent>
+            <Typography variant="h6">{rider.fullName}</Typography>
+            <Typography>Email: {rider.email}</Typography>
+            <Typography>Mobile: {rider.mobile}</Typography>
+            <Typography>
+              Approval Status:{" "}
+              <b
+                style={{
+                  color:
+                    rider.approvalStatus === "approved" ? "green" : "orange",
+                }}
+              >
+                {rider.approvalStatus || "pending"}
+              </b>
+            </Typography>
+            <Box mt={2}>
+              <Button variant="contained" color="error" onClick={handleLogout}>
+                Logout
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
       ) : (
-        <Grid container spacing={2}>
-          {riders.length === 0 ? (
-            <Typography color="error">No riders found</Typography>
-          ) : (
-            riders.map((rider) => (
-              <Grid item xs={12} md={6} key={rider._id}>
-                <Card sx={{ borderRadius: 3, boxShadow: 3 }}>
-                  <CardContent>
-                    <Typography variant="h6">{rider.fullName}</Typography>
-                    <Typography>Email: {rider.email}</Typography>
-                    <Typography>Mobile: {rider.mobile}</Typography>
-                    <Typography>Status: {rider.approvalStatus || "pending"}</Typography>
-
-                    {/* Show docs if uploaded */}
-                    {rider.documents?.length > 0 && (
-                      <Box mt={1}>
-                        <Typography variant="subtitle2">Documents:</Typography>
-                        {rider.documents.map((doc, idx) => (
-                          <div key={idx}>
-                            <a
-                              href={`/uploads/${doc.filename}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {doc.filename}
-                            </a>
-                          </div>
-                        ))}
-                      </Box>
-                    )}
-
-                    <Box mt={2} display="flex" gap={1}>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        onClick={() => handleApprove(rider._id)}
-                        disabled={rider.approvalStatus === "approved"}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="error"
-                        onClick={() => handleReject(rider._id)}
-                        disabled={rider.approvalStatus === "rejected"}
-                      >
-                        Reject
-                      </Button>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))
-          )}
-        </Grid>
+        <Typography color="error">No rider data available</Typography>
       )}
+
+      <Typography variant="h5" gutterBottom>
+        Ride History
+      </Typography>
+      <Grid container spacing={2}>
+        {rides.length === 0 ? (
+          <Typography>No rides found</Typography>
+        ) : (
+          rides.map((ride) => (
+            <Grid item xs={12} md={6} key={ride._id}>
+              <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+                <CardContent>
+                  <Typography>From: {ride.pickupLocation}</Typography>
+                  <Typography>To: {ride.dropLocation}</Typography>
+                  <Typography>
+                    Date: {new Date(ride.date).toLocaleString()}
+                  </Typography>
+                  <Typography>Status: {ride.status}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))
+        )}
+      </Grid>
 
       {/* Snackbar for alerts */}
       <Snackbar

@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
@@ -77,6 +76,7 @@ app.use("/api/rides", require("./routes/rides.routes"));
 app.use("/api/rider", require("./routes/rider.routes"));
 app.use("/api/drivers", require("./routes/drivers.routes"));
 app.use("/api/admin", require("./routes/adminRoutes")); // ✅ Admin Dashboard API
+app.use("/api/parcels", require("./routes/parcelRoutes")); // ✅ NEW Parcel API
 
 // Uploads folder
 app.use("/uploads", express.static("uploads"));

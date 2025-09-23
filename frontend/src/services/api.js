@@ -13,6 +13,7 @@ const OTP_API = axios.create({
 
 const RIDER_API = axios.create({
   baseURL: "http://localhost:5000/api/rider",
+  headers: { "Content-Type": "application/json" },
 });
 
 const ADMIN_API = axios.create({
@@ -41,14 +42,18 @@ export const signupUser = (formData) => AUTH_API.post("/signup-user", formData);
 export const signupRider = (formData) => AUTH_API.post("/signup-rider", formData);
 
 // ===== OTP APIs =====
-export const sendOtp = (mobile, role) => OTP_API.post("/send", { mobile, role });
+export const sendOtp = (mobile, role) =>
+  OTP_API.post("/send", { mobile, role });
+
 export const verifyOtp = (mobile, otp, role) =>
   OTP_API.post("/verify", { mobile, otp, role });
 
-// ===== Rider docs/status =====
+// ===== Rider APIs =====
+export const checkRiderApproval = (mobile) =>
+  RIDER_API.get(`/check-approval?mobile=${mobile}`);
+
 export const getRiderStatus = () => RIDER_API.get("/status");
 
-// 🚨 Upload docs by riderId
 export const uploadRiderDocs = (riderId, docs) =>
   RIDER_API.post(`/upload-docs/${riderId}`, docs, {
     headers: { "Content-Type": "multipart/form-data" },
@@ -69,16 +74,13 @@ export const createRide = (data) => RIDES_API.post("/create", data);
 export const findDrivers = () => RIDES_API.get("/drivers");
 export const getRideHistory = () => RIDES_API.get("/history");
 
-// ✅ Check if rider is approved by admin (query param)
-export const checkRiderApproval = (mobile) =>
-  RIDER_API.get(`/check-approval?mobile=${mobile}`);
-
 // ===== Export all =====
 export default {
   signupUser,
   signupRider,
   sendOtp,
   verifyOtp,
+  checkRiderApproval,
   getRiderStatus,
   uploadRiderDocs,
   loginAdmin,
@@ -92,5 +94,4 @@ export default {
   createRide,
   findDrivers,
   getRideHistory,
-  checkRiderApproval,
 };
