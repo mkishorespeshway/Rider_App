@@ -7,7 +7,7 @@ import UserLogin from "./pages/UserLogin";
 import UserRegister from "./pages/UserRegister";
 import RiderLogin from "./pages/RiderLogin";
 import RiderRegister from "./pages/RiderRegister";
-import RiderOtpLogin from "./pages/RiderOtpLogin";
+
 import AdminLogin from "./pages/admin/AdminLogin";
 import RiderDashboard from "./pages/dashboards/RiderDashboard";
 import UserDashboard from "./pages/dashboards/UserDashboard";
@@ -17,6 +17,10 @@ import RideTrack from "./pages/RideTrack";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
 import Navbar from "./components/Navbar";
+import Parcel from "./pages/Parcel";   // ✅ Import Parcel page
+import Activity from "./pages/Activity";
+
+
 
 // Detail Pages
 import CaptainDetails from "./pages/CaptainDetails";
@@ -71,10 +75,7 @@ export default function App() {
             path="/rider-register"
             element={!isAuth ? <RiderRegister /> : <Navigate to={redirectByRole()} />}
           />
-          <Route
-            path="/rider-otp-login"
-            element={!isAuth ? <RiderOtpLogin /> : <Navigate to={redirectByRole()} />}
-          />
+          
           <Route
             path="/rider-dashboard"
             element={isAuth && role === "rider" ? <RiderDashboard /> : <Navigate to="/rider-login" />}
@@ -102,12 +103,16 @@ export default function App() {
             path="/admin/rider/:id"
             element={isAuth && role === "admin" ? <RiderDetails /> : <Navigate to="/admin" />}
           />
+          <Route path="/parcel" element={isAuth ? <Parcel /> : <Navigate to="/login" />} />
+
 
           {/* Common Routes */}
           <Route path="/booking" element={isAuth ? <Booking /> : <Navigate to="/login" />} />
           <Route path="/ride/:id" element={isAuth ? <RideTrack /> : <Navigate to="/login" />} />
           <Route path="/history" element={isAuth ? <History /> : <Navigate to="/login" />} />
           <Route path="/profile" element={isAuth ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/activity" element={isAuth ? <Activity /> : <Navigate to="/login" />} />
+
 
           {/* 404 */}
           <Route path="*" element={<div>404 Not Found</div>} />

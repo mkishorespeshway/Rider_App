@@ -11,6 +11,7 @@ export default function RiderLogin() {
   const [message, setMessage] = useState({ type: "", text: "" });
   const navigate = useNavigate();
 
+  // 🔹 Step 1: Send OTP
   const handleSendOtp = async () => {
     setMessage({ type: "", text: "" });
 
@@ -22,7 +23,7 @@ export default function RiderLogin() {
     try {
       setLoading(true);
 
-      // ✅ Check rider approval first
+      // Check admin approval
       const approvalRes = await checkRiderApproval(mobile);
       if (!approvalRes.data?.approved) {
         setMessage({ type: "info", text: "Your account is still waiting for admin approval." });
@@ -30,7 +31,7 @@ export default function RiderLogin() {
         return;
       }
 
-      // ✅ Send OTP only if approved
+      // Send OTP
       const res = await sendOtp(mobile, "rider");
       if (res.data.success) {
         setStep(2);
@@ -46,6 +47,7 @@ export default function RiderLogin() {
     }
   };
 
+  // 🔹 Step 2: Verify OTP
   const handleVerifyOtp = async () => {
     setMessage({ type: "", text: "" });
 
@@ -57,10 +59,14 @@ export default function RiderLogin() {
     try {
       setLoading(true);
       const res = await verifyOtp(mobile, otp, "rider");
+
       if (res.data.success) {
-        localStorage.setItem("token", "dummy-token"); // replace with real token
-        localStorage.setItem("role", "rider");
-        navigate("/rider-dashboard");
+        // Save token & role
+        localStorage.setItem("token", res.data.token);
+        localStorage.setItem("role", res.data.user.role);
+
+        setMessage({ type: "success", text: "Login successful! Redirecting..." });
+        setTimeout(() => navigate("/rider-dashboard"), 1000);
       } else {
         setMessage({ type: "error", text: res.data.message });
       }
@@ -74,12 +80,24 @@ export default function RiderLogin() {
 
   return (
     <Container maxWidth="xs">
-      <Box sx={{ mt: 8, p: 4, border: "1px solid #ccc", borderRadius: 2, textAlign: "center" }}>
+      <Box
+        sx={{
+          mt: 8,
+          p: 4,
+          border: "1px solid #ccc",
+          borderRadius: 2,
+          textAlign: "center",
+        }}
+      >
         <Typography variant="h5" gutterBottom>
           Rider Login
         </Typography>
 
-        {message.text && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
+        {message.text && (
+          <Alert severity={message.type} sx={{ mb: 2 }}>
+            {message.text}
+          </Alert>
+        )}
 
         {step === 1 && (
           <>
@@ -126,9 +144,11 @@ export default function RiderLogin() {
         )}
 
         <Typography sx={{ mt: 2 }}>
-          Don’t have an account? <Button onClick={() => navigate("/rider-register")}>Sign Up</Button>
+          Don’t have an account?{" "}
+          <Button onClick={() => navigate("/rider-register")}>Sign Up</Button>
           <br />
-          Are you a User? <Button onClick={() => navigate("/login")}>Login as User</Button>
+          Are you a User?{" "}
+          <Button onClick={() => navigate("/login")}>Login as User</Button>
         </Typography>
       </Box>
     </Container>

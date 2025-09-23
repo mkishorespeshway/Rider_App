@@ -1,16 +1,25 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const parcelSchema = new mongoose.Schema({
-  senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  receiverName: String,
-  receiverPhone: String,
-  pickup: { lat: Number, lng: Number, address: String },
-  dropoff: { lat: Number, lng: Number, address: String },
-  weightKg: Number,
-  dimensions: String,
-  status: { type: String, enum: ['requested','assigned','in-transit','delivered','cancelled'], default: 'requested' },
-  assignedDriver: { type: mongoose.Schema.Types.ObjectId, ref: 'Driver' }
-}, { timestamps: true });
+const parcelSchema = new mongoose.Schema(
+  {
+    senderName: { type: String, required: true },
+    senderMobile: { type: String, required: true },
+    receiverName: { type: String, required: true },
+    receiverMobile: { type: String, required: true },
+    parcelCategory: { type: String, required: true },
+    parcelDetails: String,
+    pickupAddress: String,
+    dropAddress: String,
+    pickup: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+    },
+    drop: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null },
+    },
+  },
+  { timestamps: true }
+);
 
-module.exports = mongoose.model('Parcel', parcelSchema);
-
+module.exports = mongoose.model("Parcel", parcelSchema);

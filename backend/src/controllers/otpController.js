@@ -1,65 +1,86 @@
-// backend/src/controllers/otpController.js
 const User = require("../models/User");
+const jwt = require("jsonwebtoken");
 
-// Send OTP
+// 🔹 Send OTP
 exports.send = async (req, res) => {
-  const { mobile, role } = req.body;
-
   try {
-    const user = await User.findOne({ mobile, role });
-    if (!user)
-      return res.status(404).json({ success: false, message: "User not found" });
+    const { mobile, role } = req.body;
 
-    // Rider must be approved by admin
-    if (role === "rider" && user.approvalStatus !== "approved") {
-      return res.status(403).json({
-        success: false,
-        message: "Account pending admin approval. Please wait.",
-      });
+    if (!mobile || !role) {
+      return res.status(400).json({ success: false, message: "Mobile and role are required" });
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const user = await User.findOne({ mobile, role });
+    if (!user) {
+      return res.status(404).json({ success: false, message: `No ${role} account found for this mobile` });
+    }
 
-    // Save OTP and expiration in DB
+    // Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = otp;
-    user.otpExpires = otpExpires;
+    user.otpExpires = Date.now() + 5 * 60 * 1000; // valid for 5 minutes
     await user.save();
 
     console.log(`📲 OTP for ${mobile} (${role}): ${otp}`);
 
-    res.json({ success: true, message: "OTP sent successfully", otp });
+    return res.json({ success: true, message: "OTP sent successfully" });
   } catch (err) {
-    console.error("❌ Error sending OTP:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ OTP Send Error:", err);
+    res.status(500).json({ success: false, message: "Server error while sending OTP" });
   }
 };
 
-// Verify OTP
+// 🔹 Verify OTP
 exports.verify = async (req, res) => {
-  const { mobile, otp, role } = req.body;
-
   try {
-    const user = await User.findOne({ mobile, role });
-    if (!user)
-      return res.status(404).json({ success: false, message: "User not found" });
+    const { mobile, otp, role } = req.body;
 
-    if (!user.otp || user.otp !== otp || new Date() > user.otpExpires) {
-      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    if (!mobile || !otp || !role) {
+      return res.status(400).json({ success: false, message: "Mobile, OTP, and role are required" });
     }
 
-    // Clear OTP and update login info
+    const user = await User.findOne({ mobile, role });
+    if (!user) {
+      return res.status(404).json({ success: false, message: `No ${role} account found` });
+    }
+
+    // Check OTP validity
+    if (user.otp !== otp) {
+      return res.status(400).json({ success: false, message: "Invalid OTP" });
+    }
+    if (user.otpExpires < Date.now()) {
+      return res.status(400).json({ success: false, message: "OTP expired" });
+    }
+
+    // Rider-specific approval check
+    if (role === "rider" && user.approvalStatus === "pending") {
+      return res.status(403).json({ success: false, message: "Rider account pending admin approval" });
+    }
+    if (role === "rider" && user.approvalStatus === "rejected") {
+      return res.status(403).json({ success: false, message: "Rider account has been rejected" });
+    }
+
+    // ✅ Generate JWT
+    const token = jwt.sign(
+      { id: user._id, fullName: user.fullName, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // Clear OTP after successful login
     user.otp = null;
     user.otpExpires = null;
-    user.loginCount = (user.loginCount || 0) + 1;
-    user.lastLogin = new Date();
     await user.save();
 
-    const { otp: _, otpExpires: __, ...userSafe } = user.toObject(); // Remove OTP fields
-    res.json({ success: true, message: "OTP verified successfully", user: userSafe });
+    console.log(`✅ ${role} login successful: ${mobile}`);
+
+    return res.json({
+      success: true,
+      token, // ✅ send token to frontend
+      user: { id: user._id, fullName: user.fullName, role: user.role }
+    });
   } catch (err) {
-    console.error("❌ Error verifying OTP:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ OTP Verify Error:", err);
+    res.status(500).json({ success: false, message: "Server error while verifying OTP" });
   }
 };
