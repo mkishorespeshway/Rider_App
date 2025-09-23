@@ -53,128 +53,62 @@ export default function App() {
           {/* ================= USER ROUTES ================= */}
           <Route
             path="/login"
-            element={
-              isAuth ? (
-                <Navigate to={redirectByRole()} />
-              ) : (
-                <UserLogin />
-              )
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <UserLogin />}
           />
           <Route
             path="/register"
-            element={
-              isAuth ? (
-                <Navigate to={redirectByRole()} />
-              ) : (
-                <UserRegister />
-              )
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <UserRegister />}
           />
           <Route
             path="/user-dashboard"
-            element={
-              isAuth && role === "user" ? (
-                <UserDashboard />
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
+            element={isAuth && role === "user" ? <UserDashboard /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/booking"
+            element={isAuth && role === "user" ? <Booking /> : <Navigate to={redirectByRole()} />}
+          />
+          <Route
+            path="/parcel"
+            element={isAuth && role === "user" ? <Parcel /> : <Navigate to={redirectByRole()} />}
           />
 
           {/* ================= RIDER ROUTES ================= */}
           <Route
             path="/rider-login"
-            element={
-              isAuth ? (
-                <Navigate to={redirectByRole()} />
-              ) : (
-                <RiderLogin />
-              )
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <RiderLogin />}
           />
           <Route
             path="/rider-register"
-            element={
-              isAuth ? (
-                <Navigate to={redirectByRole()} />
-              ) : (
-                <RiderRegister />
-              )
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <RiderRegister />}
           />
           <Route
             path="/rider-dashboard"
-            element={
-              isAuth && role === "rider" ? (
-                <RiderDashboard />
-              ) : (
-                <Navigate to="/rider-login" />
-              )
-            }
+            element={isAuth && role === "rider" ? <RiderDashboard /> : <Navigate to="/rider-login" />}
           />
           <Route
             path="/upload-docs"
-            element={
-              isAuth && role === "rider" ? (
-                <DocumentUpload />
-              ) : (
-                <Navigate to="/rider-login" />
-              )
-            }
+            element={isAuth && role === "rider" ? <DocumentUpload /> : <Navigate to="/rider-login" />}
           />
 
           {/* ================= ADMIN ROUTES ================= */}
           <Route
             path="/admin"
-            element={
-              isAuth ? (
-                <Navigate to={redirectByRole()} />
-              ) : (
-                <AdminLogin />
-              )
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <AdminLogin />}
           />
           <Route
             path="/admin-dashboard/*"
-            element={
-              isAuth && role === "admin" ? (
-                <AdminLayout />
-              ) : (
-                <Navigate to="/admin" />
-              )
-            }
+            element={isAuth && role === "admin" ? <AdminLayout /> : <Navigate to="/admin" />}
           />
           <Route
             path="/admin/captain/:id"
-            element={
-              isAuth && role === "admin" ? (
-                <CaptainDetails />
-              ) : (
-                <Navigate to="/admin" />
-              )
-            }
+            element={isAuth && role === "admin" ? <CaptainDetails /> : <Navigate to="/admin" />}
           />
           <Route
             path="/admin/rider/:id"
-            element={
-              isAuth && role === "admin" ? (
-                <RiderDetails />
-              ) : (
-                <Navigate to="/admin" />
-              )
-            }
+            element={isAuth && role === "admin" ? <RiderDetails /> : <Navigate to="/admin" />}
           />
 
-          {/* ================= COMMON ROUTES ================= */}
-          <Route
-            path="/parcel"
-            element={isAuth ? <Parcel /> : <Navigate to="/login" />}
-          />
-          <Route
-            path="/booking"
-            element={isAuth ? <Booking /> : <Navigate to="/login" />}
-          />
+          {/* ================= SHARED ROUTES ================= */}
           <Route
             path="/ride/:id"
             element={isAuth ? <RideTrack /> : <Navigate to="/login" />}
