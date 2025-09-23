@@ -1,17 +1,12 @@
+// backend/src/models/Otp.js
 const mongoose = require("mongoose");
 
-const otpSchema = new mongoose.Schema(
-  {
-    riderId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Driver", // link to Rider/Driver model
-      required: true,
-    },
-    mobile: { type: String, required: true }, // Rider’s mobile
-    otp: { type: String, required: true },    // OTP code
-    otpExpires: { type: Date, required: true }, // Expiry time
-  },
-  { timestamps: true }
-);
+const otpSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  mobile: { type: String, required: true },
+  role: { type: String, required: true },
+  otp: { type: String, required: true },
+  otpExpires: { type: Date, required: true },
+}, { timestamps: true });
 
 module.exports = mongoose.model("Otp", otpSchema);

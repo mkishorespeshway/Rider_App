@@ -1,22 +1,38 @@
+// frontend/src/contexts/AuthContext.js
 import React, { createContext, useContext, useState } from "react";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [auth, setAuth] = useState(() => {
-    const saved = localStorage.getItem("auth");
-    return saved ? JSON.parse(saved) : { token: null, role: null };
+    try {
+      const saved = localStorage.getItem("auth");
+      return saved ? JSON.parse(saved) : { token: null, role: null, user: null };
+    } catch (e) {
+      return { token: null, role: null, user: null };
+    }
   });
 
   const login = (data) => {
-    setAuth(data);
-    localStorage.setItem("auth", JSON.stringify(data));
+    // data: { token, role, user }
+    const normalized = {
+      token: data.token || null,
+      role: data.role || (data.user && data.user.role) || null,
+      user: data.user || null,
+    };
+    setAuth(normalized);
+    localStorage.setItem("auth", JSON.stringify(normalized));
+    // convenience keys for older code / axios
+    if (normalized.token) localStorage.setItem("token", normalized.token);
+    if (normalized.role) localStorage.setItem("role", normalized.role);
   };
 
   const logout = () => {
-    setAuth({ token: null, role: null });
+    setAuth({ token: null, role: null, user: null });
     localStorage.removeItem("auth");
-    window.location.href = "/login"; // ✅ always redirect to login
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    window.location.href = "/rider-login";
   };
 
   return (

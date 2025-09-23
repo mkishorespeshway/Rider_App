@@ -11,7 +11,8 @@ import {
   Alert,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { getRiderStatus, getRideHistory } from "../../services/api"; // ✅ single import
+import { getRiderStatus, getRideHistory } from "../../services/api";
+import { useAuth } from "../../contexts/AuthContext"; // ✅ import AuthContext
 
 export default function RiderDashboard() {
   const [rider, setRider] = useState(null);
@@ -22,33 +23,29 @@ export default function RiderDashboard() {
     message: "",
     type: "success",
   });
+
+  const { logout } = useAuth(); // ✅ use logout from context
   const navigate = useNavigate();
 
-  // ✅ Fetch rider profile/status
   const fetchRiderData = async () => {
     try {
       setLoading(true);
-      const res = await getRiderStatus(); // GET /api/rider/status
-      setRider(res.data || null);
+      const res = await getRiderStatus();
+      setRider(res.data.user || null); // API returns { success, user }
     } catch (err) {
-      console.error("❌ Failed to fetch rider status:", err);
-      setSnackbar({
-        open: true,
-        message: "Failed to load rider profile",
-        type: "error",
-      });
+      console.error("❌ Rider status error:", err);
+      navigate("/rider-login"); // redirect on 401
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Fetch ride history
   const fetchRideHistory = async () => {
     try {
-      const res = await getRideHistory(); // GET /api/rides/history
-      setRides(res.data || []);
+      const res = await getRideHistory();
+      setRides(res.data.rides || []);
     } catch (err) {
-      console.error("❌ Failed to fetch ride history:", err);
+      console.error("❌ Ride history error:", err);
       setSnackbar({
         open: true,
         message: "Failed to load ride history",
@@ -63,8 +60,7 @@ export default function RiderDashboard() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
+    logout(); // ✅ this clears auth + localStorage
     navigate("/rider-login");
   };
 
@@ -86,8 +82,7 @@ export default function RiderDashboard() {
               Approval Status:{" "}
               <b
                 style={{
-                  color:
-                    rider.approvalStatus === "approved" ? "green" : "orange",
+                  color: rider.approvalStatus === "approved" ? "green" : "orange",
                 }}
               >
                 {rider.approvalStatus || "pending"}
@@ -115,10 +110,10 @@ export default function RiderDashboard() {
             <Grid item xs={12} md={6} key={ride._id}>
               <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
                 <CardContent>
-                  <Typography>From: {ride.pickupLocation}</Typography>
-                  <Typography>To: {ride.dropLocation}</Typography>
+                  <Typography>From: {ride.pickup}</Typography>
+                  <Typography>To: {ride.drop}</Typography>
                   <Typography>
-                    Date: {new Date(ride.date).toLocaleString()}
+                    Date: {new Date(ride.createdAt).toLocaleString()}
                   </Typography>
                   <Typography>Status: {ride.status}</Typography>
                 </CardContent>
@@ -128,7 +123,6 @@ export default function RiderDashboard() {
         )}
       </Grid>
 
-      {/* Snackbar for alerts */}
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}
