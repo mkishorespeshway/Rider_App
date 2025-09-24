@@ -1,10 +1,10 @@
-// backend/routes/adminRoutes.js
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const adminAuth = require("../middleware/adminAuth");
 const User = require("../models/User");
 const Ride = require("../models/Ride");
+const SOS = require("../models/SOS"); // 🚨 SOS model
 
 // 🔹 Static admin credentials
 const ADMIN_USER = {
@@ -155,6 +155,40 @@ router.get("/rides", adminAuth, async (req, res) => {
     res.json({ success: true, data: rides });
   } catch (err) {
     console.error("Get rides error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+
+// ===================== 🚨 SOS ROUTES =====================
+
+// 🔹 Get all SOS alerts
+router.get("/sos-alerts", adminAuth, async (req, res) => {
+  try {
+    const alerts = await SOS.find()
+      .populate("userId", "fullName email mobile")
+      .sort({ createdAt: -1 });
+    res.json({ success: true, data: alerts });
+  } catch (err) {
+    console.error("Get SOS alerts error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// 🔹 Resolve SOS alert
+router.put("/sos/:id/resolve", adminAuth, async (req, res) => {
+  try {
+    const sos = await SOS.findByIdAndUpdate(
+      req.params.id,
+      { status: "resolved" },
+      { new: true }
+    );
+    if (!sos) {
+      return res.status(404).json({ success: false, message: "SOS not found" });
+    }
+    res.json({ success: true, message: "SOS resolved", data: sos });
+  } catch (err) {
+    console.error("Resolve SOS error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });

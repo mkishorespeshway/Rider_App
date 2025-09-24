@@ -1,40 +1,29 @@
 import React, { useEffect, useState } from "react";
 import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Button,
-  Grid,
-  CircularProgress,
-  Snackbar,
-  Alert,
+  Box, Card, CardContent, Typography, Button, Grid,
+  CircularProgress, Snackbar, Alert
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { getRiderStatus, getRideHistory } from "../../services/api";
-import { useAuth } from "../../contexts/AuthContext"; // ✅ import AuthContext
+import { useAuth } from "../../contexts/AuthContext";
+import SOSButton from "../../components/SOSButton";
 
 export default function RiderDashboard() {
   const [rider, setRider] = useState(null);
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: "",
-    type: "success",
-  });
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", type: "success" });
 
-  const { logout } = useAuth(); // ✅ use logout from context
+  const { logout } = useAuth();
   const navigate = useNavigate();
 
   const fetchRiderData = async () => {
     try {
       setLoading(true);
       const res = await getRiderStatus();
-      setRider(res.data.user || null); // API returns { success, user }
+      setRider(res.data.user || null);
     } catch (err) {
-      console.error("❌ Rider status error:", err);
-      navigate("/rider-login"); // redirect on 401
+      navigate("/rider-login");
     } finally {
       setLoading(false);
     }
@@ -44,13 +33,8 @@ export default function RiderDashboard() {
     try {
       const res = await getRideHistory();
       setRides(res.data.rides || []);
-    } catch (err) {
-      console.error("❌ Ride history error:", err);
-      setSnackbar({
-        open: true,
-        message: "Failed to load ride history",
-        type: "error",
-      });
+    } catch {
+      setSnackbar({ open: true, message: "Failed to load ride history", type: "error" });
     }
   };
 
@@ -60,7 +44,7 @@ export default function RiderDashboard() {
   }, []);
 
   const handleLogout = () => {
-    logout(); // ✅ this clears auth + localStorage
+    logout();
     navigate("/rider-login");
   };
 
@@ -80,11 +64,7 @@ export default function RiderDashboard() {
             <Typography>Mobile: {rider.mobile}</Typography>
             <Typography>
               Approval Status:{" "}
-              <b
-                style={{
-                  color: rider.approvalStatus === "approved" ? "green" : "orange",
-                }}
-              >
+              <b style={{ color: rider.approvalStatus === "approved" ? "green" : "orange" }}>
                 {rider.approvalStatus || "pending"}
               </b>
             </Typography>
@@ -112,9 +92,7 @@ export default function RiderDashboard() {
                 <CardContent>
                   <Typography>From: {ride.pickup}</Typography>
                   <Typography>To: {ride.drop}</Typography>
-                  <Typography>
-                    Date: {new Date(ride.createdAt).toLocaleString()}
-                  </Typography>
+                  <Typography>Date: {new Date(ride.createdAt).toLocaleString()}</Typography>
                   <Typography>Status: {ride.status}</Typography>
                 </CardContent>
               </Card>
@@ -130,6 +108,9 @@ export default function RiderDashboard() {
       >
         <Alert severity={snackbar.type}>{snackbar.message}</Alert>
       </Snackbar>
+
+      {/* 🚨 SOS Button */}
+      <SOSButton role="rider" />
     </Box>
   );
 }

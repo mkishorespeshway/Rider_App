@@ -1,15 +1,15 @@
-// src/pages/admin/AdminDashboard.js
 import React, { useEffect, useState } from "react";
 import {
   getOverview,
-  getUsers,
-  getApprovedCaptains,
+  getAllRiders,
+  getCaptains,
   getPendingCaptains,
-  getRides,
-  approveCaptain,
-  rejectCaptain,
-  getRiders,
-} from "../../services/adminApi";
+  getAllRides,
+  approveRider,
+  rejectRider,
+  getSOSAlerts,
+  resolveSOS,
+} from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   AppBar,
@@ -24,7 +24,6 @@ import {
   TableRow,
   TableCell,
   Card,
-  CardContent,
   Grid,
   Paper,
   Tabs,
@@ -39,6 +38,7 @@ import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import HourglassTopIcon from "@mui/icons-material/HourglassTop";
 import CommuteIcon from "@mui/icons-material/Commute";
 import PersonIcon from "@mui/icons-material/Person";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber"; // 🚨 SOS Icon
 
 export default function AdminDashboard() {
   const { logout } = useAuth();
@@ -49,6 +49,7 @@ export default function AdminDashboard() {
     pendingCaptains: 0,
     rides: 0,
     riders: 0,
+    sos: 0, // 🚨 new field
   });
 
   const [activeTab, setActiveTab] = useState("overview");
@@ -60,6 +61,13 @@ export default function AdminDashboard() {
     try {
       const res = await getOverview();
       setOverview(res.data.data);
+
+      // 🚨 fetch SOS count
+      const sosRes = await getSOSAlerts();
+      setOverview((prev) => ({
+        ...prev,
+        sos: sosRes.data?.data?.filter((s) => s.status === "active").length || 0,
+      }));
     } catch (err) {
       console.error(err);
       setError("Failed to load overview");
@@ -74,19 +82,22 @@ export default function AdminDashboard() {
       let res;
       switch (type) {
         case "users":
-          res = await getUsers();
+          res = await getAllRiders(); // ⚠️ replace with getAllUsers if available
+          break;
+        case "riders":
+          res = await getAllRiders();
           break;
         case "captains":
-          res = await getApprovedCaptains();
+          res = await getCaptains();
           break;
         case "pending":
           res = await getPendingCaptains();
           break;
         case "rides":
-          res = await getRides();
+          res = await getAllRides();
           break;
-        case "riders":
-          res = await getRiders();
+        case "sos":
+          res = await getSOSAlerts();
           break;
         default:
           res = { data: { data: [] } };
@@ -103,23 +114,34 @@ export default function AdminDashboard() {
 
   const handleApprove = async (id) => {
     try {
-      await approveCaptain(id);
+      await approveRider(id);
       fetchData("pending");
       fetchOverview();
     } catch (err) {
       console.error(err);
-      setError("Failed to approve captain");
+      setError("Failed to approve rider");
     }
   };
 
   const handleReject = async (id) => {
     try {
-      await rejectCaptain(id);
+      await rejectRider(id);
       fetchData("pending");
       fetchOverview();
     } catch (err) {
       console.error(err);
-      setError("Failed to reject captain");
+      setError("Failed to reject rider");
+    }
+  };
+
+  const handleResolveSOS = async (id) => {
+    try {
+      await resolveSOS(id);
+      fetchData("sos");
+      fetchOverview(); // update SOS count after resolving
+    } catch (err) {
+      console.error(err);
+      setError("Failed to resolve SOS");
     }
   };
 
@@ -127,13 +149,13 @@ export default function AdminDashboard() {
     fetchOverview();
   }, []);
 
-  // Dashboard cards with unique colors
   const cards = [
     { label: "Users", value: overview.users, icon: <GroupsIcon />, type: "users", color: "#3498db" },
     { label: "Riders", value: overview.riders, icon: <PersonIcon />, type: "riders", color: "#1abc9c" },
     { label: "Approved Captains", value: overview.captains, icon: <VerifiedUserIcon />, type: "captains", color: "#2ecc71" },
     { label: "Pending Captains", value: overview.pendingCaptains, icon: <HourglassTopIcon />, type: "pending", color: "#e67e22" },
     { label: "Rides", value: overview.rides, icon: <CommuteIcon />, type: "rides", color: "#9b59b6" },
+    { label: "SOS Alerts", value: overview.sos, icon: <WarningAmberIcon />, type: "sos", color: "#e74c3c" }, // 🚨 SOS card
   ];
 
   return (
@@ -150,7 +172,6 @@ export default function AdminDashboard() {
         </Toolbar>
       </AppBar>
 
-      {/* Content */}
       <Box maxWidth="1300px" mx="auto" px={3} pb={5}>
         {/* Tabs */}
         <Paper elevation={3} sx={{ borderRadius: 3, mb: 4 }}>
@@ -173,6 +194,7 @@ export default function AdminDashboard() {
             <Tab label="Approved Captains" value="captains" />
             <Tab label="Pending Captains" value="pending" />
             <Tab label="Rides" value="rides" />
+            <Tab label="SOS Alerts" value="sos" />
           </Tabs>
         </Paper>
 
@@ -191,6 +213,10 @@ export default function AdminDashboard() {
                     boxShadow: 3,
                     transition: "0.3s",
                     "&:hover": { boxShadow: 6, transform: "translateY(-5px)" },
+                  }}
+                  onClick={() => {
+                    if (card.type !== "overview") fetchData(card.type);
+                    setActiveTab(card.type);
                   }}
                 >
                   <Box>
@@ -221,7 +247,7 @@ export default function AdminDashboard() {
         )}
 
         {/* Data Tables */}
-        {!loading && data.length > 0 && activeTab !== "overview" && (
+        {!loading && data.length > 0 && activeTab !== "overview" && activeTab !== "sos" && (
           <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 3, mt: 4, overflowX: "auto" }}>
             <Typography variant="h6" mb={2} fontWeight="bold">
               {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Details
@@ -253,7 +279,6 @@ export default function AdminDashboard() {
                     <TableCell>{item.email || "-"}</TableCell>
                     <TableCell>{item.mobile || "-"}</TableCell>
                     <TableCell>{item.role || "-"}</TableCell>
-
                     {(activeTab === "captains" || activeTab === "pending") && (
                       <TableCell>
                         {item.documents?.length > 0 ? (
@@ -269,7 +294,6 @@ export default function AdminDashboard() {
                         )}
                       </TableCell>
                     )}
-
                     {activeTab === "pending" && (
                       <TableCell align="center">
                         <Stack direction="row" spacing={1} justifyContent="center">
@@ -282,7 +306,6 @@ export default function AdminDashboard() {
                         </Stack>
                       </TableCell>
                     )}
-
                     {activeTab === "rides" && (
                       <>
                         <TableCell>{item.riderId?.fullName || "-"}</TableCell>
@@ -292,6 +315,48 @@ export default function AdminDashboard() {
                         <TableCell>{item.status || "-"}</TableCell>
                       </>
                     )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Paper>
+        )}
+
+        {/* 🚨 SOS Alerts Table */}
+        {activeTab === "sos" && !loading && (
+          <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 3, mt: 4, overflowX: "auto" }}>
+            <Typography variant="h6" mb={2} fontWeight="bold">
+              SOS Alerts
+            </Typography>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: "#ecf0f1" }}>
+                  <TableCell>User/Rider</TableCell>
+                  <TableCell>Role</TableCell>
+                  <TableCell>Time</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.map((sos) => (
+                  <TableRow key={sos._id} hover>
+                    <TableCell>{sos.userId?.fullName || "-"}</TableCell>
+                    <TableCell>{sos.role}</TableCell>
+                    <TableCell>{new Date(sos.createdAt).toLocaleString()}</TableCell>
+                    <TableCell>{sos.status}</TableCell>
+                    <TableCell>
+                      {sos.status === "active" && (
+                        <Button
+                          size="small"
+                          color="success"
+                          variant="outlined"
+                          onClick={() => handleResolveSOS(sos._id)}
+                        >
+                          Resolve
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
