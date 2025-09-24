@@ -1,15 +1,16 @@
 import React from "react";
 import { Button, Typography, Box } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext"; // ✅ Corrected path
+import { useAuth } from "../../contexts/AuthContext";
+import SOSButton from "../../components/SOSButton";
 
 export default function UserDashboard() {
   const navigate = useNavigate();
-  const { logout } = useAuth(); // ✅ get logout from context
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    logout();           // clear auth state
-    navigate("/login"); // redirect to login page
+    logout();
+    navigate("/login");
   };
 
   return (
@@ -18,8 +19,7 @@ export default function UserDashboard() {
         User Dashboard
       </Typography>
       <Typography variant="body1" sx={{ mb: 3 }}>
-        Welcome to the user dashboard! 🚗  
-        Here you can book rides, view ride history, and manage your profile.
+        Welcome to the user dashboard! 🚗
       </Typography>
 
       <Button
@@ -29,6 +29,9 @@ export default function UserDashboard() {
       >
         Logout
       </Button>
+
+      {/* 🚨 SOS Button */}
+      <SOSButton role="user" />
     </Box>
   );
 }

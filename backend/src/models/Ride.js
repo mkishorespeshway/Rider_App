@@ -12,14 +12,28 @@ const Counter = mongoose.model("Counter", counterSchema);
 const rideSchema = new mongoose.Schema(
   {
     _id: { type: Number }, // auto-incremented ride ID
-    riderId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+    riderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    captainId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User", // ✅ new field to track the captain/driver
+      required: false,
+    },
+
     pickup: { type: String, required: true },
     drop: { type: String, required: true },
+
     status: {
       type: String,
       enum: ["pending", "accepted", "completed", "cancelled"],
       default: "pending",
     },
+
     etaMinutes: { type: Number, default: null },
   },
   { timestamps: true }

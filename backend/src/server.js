@@ -5,6 +5,9 @@ const path = require("path");
 require("dotenv").config();
 
 const app = express();
+const sosRoutes = require("./routes/sosRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+
 
 // === Middleware ===
 app.use(cors());
@@ -77,6 +80,8 @@ app.use("/api/rider", require("./routes/rider.routes"));
 app.use("/api/drivers", require("./routes/drivers.routes"));
 app.use("/api/admin", require("./routes/adminRoutes")); // ✅ Admin Dashboard API
 app.use("/api/parcels", require("./routes/parcelRoutes")); // ✅ NEW Parcel API
+app.use("/api/sos", sosRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Uploads folder
 app.use("/uploads", express.static("uploads"));

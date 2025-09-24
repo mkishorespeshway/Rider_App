@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { sendOtp, verifyOtp } from "../services/api";
-import { useAuth } from "../contexts/AuthContext"; // ✅ context for auth
+import { useAuth } from "../contexts/AuthContext"; 
 import {
   Box,
   Button,
@@ -15,12 +15,12 @@ import {
 export default function UserLogin() {
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
-  const [step, setStep] = useState(1); // 1 = enter mobile, 2 = enter OTP
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
 
   const navigate = useNavigate();
-  const { login } = useAuth(); // ✅ auth context
+  const { login } = useAuth(); 
 
   // Step 1: Send OTP
   const handleSendOtp = async () => {
@@ -62,9 +62,12 @@ export default function UserLogin() {
       const res = await verifyOtp(mobile, otp, "user");
 
       if (res.data.success) {
-        // ✅ Save token & role
-        const token = res.data.token || res.data.user?._id || "dummy-user-token";
-        login({ token, role: "user" });
+        // ✅ Save the full auth object into context
+        login({
+          token: res.data.token,
+          role: res.data.role || res.data.user?.role || "user",
+          user: res.data.user,
+        });
 
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
         setTimeout(() => navigate("/user-dashboard"), 1000);
@@ -84,24 +87,10 @@ export default function UserLogin() {
 
   return (
     <Container maxWidth="xs">
-      <Box
-        sx={{
-          mt: 8,
-          p: 4,
-          border: "1px solid #ccc",
-          borderRadius: 2,
-          textAlign: "center",
-        }}
-      >
-        <Typography variant="h5" gutterBottom>
-          User Login
-        </Typography>
+      <Box sx={{ mt: 8, p: 4, border: "1px solid #ccc", borderRadius: 2, textAlign: "center" }}>
+        <Typography variant="h5" gutterBottom>User Login</Typography>
 
-        {message.text && (
-          <Alert severity={message.type} sx={{ mb: 2 }}>
-            {message.text}
-          </Alert>
-        )}
+        {message.text && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
 
         {step === 1 && (
           <>

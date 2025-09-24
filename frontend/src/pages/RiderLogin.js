@@ -1,4 +1,3 @@
-// frontend/src/pages/RiderLogin.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { sendOtp, verifyOtp, checkRiderApproval } from "../services/api";
@@ -53,8 +52,13 @@ export default function RiderLogin() {
       setLoading(true);
       const res = await verifyOtp(mobile, otp, "rider");
       if (res.data.success) {
-        // Update AuthContext (this persists to localStorage "auth" and also 'token'/'role')
-        login({ token: res.data.token, role: res.data.user.role, user: res.data.user });
+        // ✅ Save the full auth object into context
+        login({
+          token: res.data.token,
+          role: res.data.role || res.data.user?.role || "rider",
+          user: res.data.user,
+        });
+
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
         setTimeout(() => navigate("/rider-dashboard"), 700);
       } else {
