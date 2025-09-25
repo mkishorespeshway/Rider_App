@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   getOverview,
+  getAllUsers,
   getAllRiders,
   getCaptains,
   getPendingCaptains,
@@ -30,15 +31,17 @@ import {
   Tab,
   Stack,
   Link,
+  Dialog,
+  DialogTitle,
+  DialogContent,
 } from "@mui/material";
 
-// Icons
 import GroupsIcon from "@mui/icons-material/Groups";
 import VerifiedUserIcon from "@mui/icons-material/VerifiedUser";
 import HourglassTopIcon from "@mui/icons-material/HourglassTop";
 import CommuteIcon from "@mui/icons-material/Commute";
 import PersonIcon from "@mui/icons-material/Person";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber"; // 🚨 SOS Icon
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
 export default function AdminDashboard() {
   const { logout } = useAuth();
@@ -49,7 +52,7 @@ export default function AdminDashboard() {
     pendingCaptains: 0,
     rides: 0,
     riders: 0,
-    sos: 0, // 🚨 new field
+    sos: 0,
   });
 
   const [activeTab, setActiveTab] = useState("overview");
@@ -57,12 +60,15 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [openDocsModal, setOpenDocsModal] = useState(false);
+  const [selectedDocuments, setSelectedDocuments] = useState({});
+  const [selectedRiderName, setSelectedRiderName] = useState("");
+
   const fetchOverview = async () => {
     try {
       const res = await getOverview();
       setOverview(res.data.data);
 
-      // 🚨 fetch SOS count
       const sosRes = await getSOSAlerts();
       setOverview((prev) => ({
         ...prev,
@@ -82,7 +88,7 @@ export default function AdminDashboard() {
       let res;
       switch (type) {
         case "users":
-          res = await getAllRiders(); // ⚠️ replace with getAllUsers if available
+          res = await getAllUsers();
           break;
         case "riders":
           res = await getAllRiders();
@@ -138,11 +144,23 @@ export default function AdminDashboard() {
     try {
       await resolveSOS(id);
       fetchData("sos");
-      fetchOverview(); // update SOS count after resolving
+      fetchOverview();
     } catch (err) {
       console.error(err);
       setError("Failed to resolve SOS");
     }
+  };
+
+  const handleViewDocuments = (item) => {
+    setSelectedDocuments(item.documents || {});
+    setSelectedRiderName(item.fullName || "");
+    setOpenDocsModal(true);
+  };
+
+  const handleCloseDocuments = () => {
+    setOpenDocsModal(false);
+    setSelectedDocuments({});
+    setSelectedRiderName("");
   };
 
   useEffect(() => {
@@ -155,20 +173,36 @@ export default function AdminDashboard() {
     { label: "Approved Captains", value: overview.captains, icon: <VerifiedUserIcon />, type: "captains", color: "#2ecc71" },
     { label: "Pending Captains", value: overview.pendingCaptains, icon: <HourglassTopIcon />, type: "pending", color: "#e67e22" },
     { label: "Rides", value: overview.rides, icon: <CommuteIcon />, type: "rides", color: "#9b59b6" },
-    { label: "SOS Alerts", value: overview.sos, icon: <WarningAmberIcon />, type: "sos", color: "#e74c3c" }, // 🚨 SOS card
+    { label: "SOS Alerts", value: overview.sos, icon: <WarningAmberIcon />, type: "sos", color: "#e74c3c" },
   ];
+
+  const renderDocumentsCell = (documents) => {
+    if (!documents || Object.keys(documents).length === 0) return "-";
+    return (
+      <Button variant="outlined" size="small" onClick={() => handleViewDocuments({ documents })}>
+        View Documents
+      </Button>
+    );
+  };
+
+  const renderActionsCell = (item) => (
+    <Stack direction="row" spacing={1} justifyContent="center">
+      <Button size="small" color="success" variant="outlined" onClick={() => handleApprove(item._id)}>
+        Approve
+      </Button>
+      <Button size="small" color="error" variant="outlined" onClick={() => handleReject(item._id)}>
+        Reject
+      </Button>
+    </Stack>
+  );
 
   return (
     <Box sx={{ flexGrow: 1, bgcolor: "#f4f6f8", minHeight: "100vh" }}>
       {/* Header */}
       <AppBar position="static" sx={{ bgcolor: "#34495e", mb: 4 }}>
         <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
-          <Typography variant="h6" fontWeight="bold">
-            Admin Dashboard
-          </Typography>
-          <Button variant="contained" color="error" onClick={logout}>
-            Logout
-          </Button>
+          <Typography variant="h6" fontWeight="bold">Admin Dashboard</Typography>
+          <Button variant="contained" color="error" onClick={logout}>Logout</Button>
         </Toolbar>
       </AppBar>
 
@@ -179,8 +213,7 @@ export default function AdminDashboard() {
             value={activeTab}
             onChange={(e, val) => {
               setData([]);
-              if (val === "overview") fetchOverview();
-              else fetchData(val);
+              val === "overview" ? fetchOverview() : fetchData(val);
               setActiveTab(val);
             }}
             indicatorColor="primary"
@@ -214,18 +247,11 @@ export default function AdminDashboard() {
                     transition: "0.3s",
                     "&:hover": { boxShadow: 6, transform: "translateY(-5px)" },
                   }}
-                  onClick={() => {
-                    if (card.type !== "overview") fetchData(card.type);
-                    setActiveTab(card.type);
-                  }}
+                  onClick={() => card.type !== "overview" && fetchData(card.type)}
                 >
                   <Box>
-                    <Typography variant="subtitle1" fontWeight="bold" color={card.color}>
-                      {card.label}
-                    </Typography>
-                    <Typography variant="h4" fontWeight="bold" color={card.color}>
-                      {card.value}
-                    </Typography>
+                    <Typography variant="subtitle1" fontWeight="bold" color={card.color}>{card.label}</Typography>
+                    <Typography variant="h4" fontWeight="bold" color={card.color}>{card.value}</Typography>
                   </Box>
                   <Box sx={{ fontSize: 50, color: card.color }}>{card.icon}</Box>
                 </Card>
@@ -235,23 +261,13 @@ export default function AdminDashboard() {
         )}
 
         {/* Loading/Error */}
-        {loading && (
-          <Box display="flex" justifyContent="center" mt={4}>
-            <CircularProgress />
-          </Box>
-        )}
-        {error && (
-          <Typography color="error" textAlign="center" mt={2}>
-            {error}
-          </Typography>
-        )}
+        {loading && <Box display="flex" justifyContent="center" mt={4}><CircularProgress /></Box>}
+        {error && <Typography color="error" textAlign="center" mt={2}>{error}</Typography>}
 
         {/* Data Tables */}
         {!loading && data.length > 0 && activeTab !== "overview" && activeTab !== "sos" && (
           <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 3, mt: 4, overflowX: "auto" }}>
-            <Typography variant="h6" mb={2} fontWeight="bold">
-              {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Details
-            </Typography>
+            <Typography variant="h6" mb={2} fontWeight="bold">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Details</Typography>
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: "#ecf0f1" }}>
@@ -261,15 +277,13 @@ export default function AdminDashboard() {
                   <TableCell sx={{ fontWeight: 600 }}>Role</TableCell>
                   {(activeTab === "captains" || activeTab === "pending") && <TableCell sx={{ fontWeight: 600 }}>Documents</TableCell>}
                   {activeTab === "pending" && <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>Actions</TableCell>}
-                  {activeTab === "rides" && (
-                    <>
-                      <TableCell sx={{ fontWeight: 600 }}>Rider</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Captain</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Pickup</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Drop</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                    </>
-                  )}
+                  {activeTab === "rides" && <>
+                    <TableCell sx={{ fontWeight: 600 }}>Rider</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Captain</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Pickup</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Drop</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                  </>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -279,42 +293,20 @@ export default function AdminDashboard() {
                     <TableCell>{item.email || "-"}</TableCell>
                     <TableCell>{item.mobile || "-"}</TableCell>
                     <TableCell>{item.role || "-"}</TableCell>
+
                     {(activeTab === "captains" || activeTab === "pending") && (
-                      <TableCell>
-                        {item.documents?.length > 0 ? (
-                          item.documents.map((doc, idx) => (
-                            <Box key={idx}>
-                              <Link href={doc.url} target="_blank" rel="noopener">
-                                {doc.name || `Document ${idx + 1}`}
-                              </Link>
-                            </Box>
-                          ))
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
+                      <TableCell>{renderDocumentsCell(item)}</TableCell>
                     )}
-                    {activeTab === "pending" && (
-                      <TableCell align="center">
-                        <Stack direction="row" spacing={1} justifyContent="center">
-                          <Button size="small" color="success" variant="outlined" onClick={() => handleApprove(item._id)}>
-                            Approve
-                          </Button>
-                          <Button size="small" color="error" variant="outlined" onClick={() => handleReject(item._id)}>
-                            Reject
-                          </Button>
-                        </Stack>
-                      </TableCell>
-                    )}
-                    {activeTab === "rides" && (
-                      <>
-                        <TableCell>{item.riderId?.fullName || "-"}</TableCell>
-                        <TableCell>{item.captainId?.fullName || "-"}</TableCell>
-                        <TableCell>{item.pickup || "-"}</TableCell>
-                        <TableCell>{item.drop || "-"}</TableCell>
-                        <TableCell>{item.status || "-"}</TableCell>
-                      </>
-                    )}
+
+                    {activeTab === "pending" && <TableCell align="center">{renderActionsCell(item)}</TableCell>}
+
+                    {activeTab === "rides" && <>
+                      <TableCell>{item.riderId?.fullName || "-"}</TableCell>
+                      <TableCell>{item.captainId?.fullName || "-"}</TableCell>
+                      <TableCell>{item.pickup || "-"}</TableCell>
+                      <TableCell>{item.drop || "-"}</TableCell>
+                      <TableCell>{item.status || "-"}</TableCell>
+                    </>}
                   </TableRow>
                 ))}
               </TableBody>
@@ -322,12 +314,32 @@ export default function AdminDashboard() {
           </Paper>
         )}
 
-        {/* 🚨 SOS Alerts Table */}
+        {/* Documents Modal */}
+        <Dialog open={openDocsModal} onClose={handleCloseDocuments} maxWidth="sm" fullWidth>
+          <DialogTitle>Documents - {selectedRiderName}</DialogTitle>
+          <DialogContent>
+            {selectedDocuments && Object.keys(selectedDocuments).length > 0 ? (
+              <Stack spacing={1}>
+                {Object.keys(selectedDocuments).map((key) => {
+                  const doc = selectedDocuments[key];
+                  const fileType = doc?.mimetype ? doc.mimetype.split("/")[1] : "file";
+                  return (
+                    <Link key={key} href={doc.url} target="_blank" rel="noopener noreferrer">
+                      {key} ({fileType})
+                    </Link>
+                  );
+                })}
+              </Stack>
+            ) : (
+              <Typography>No documents uploaded.</Typography>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* SOS Alerts Table */}
         {activeTab === "sos" && !loading && (
           <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 3, mt: 4, overflowX: "auto" }}>
-            <Typography variant="h6" mb={2} fontWeight="bold">
-              SOS Alerts
-            </Typography>
+            <Typography variant="h6" mb={2} fontWeight="bold">SOS Alerts</Typography>
             <Table>
               <TableHead>
                 <TableRow sx={{ bgcolor: "#ecf0f1" }}>
@@ -347,14 +359,7 @@ export default function AdminDashboard() {
                     <TableCell>{sos.status}</TableCell>
                     <TableCell>
                       {sos.status === "active" && (
-                        <Button
-                          size="small"
-                          color="success"
-                          variant="outlined"
-                          onClick={() => handleResolveSOS(sos._id)}
-                        >
-                          Resolve
-                        </Button>
+                        <Button size="small" color="success" variant="outlined" onClick={() => handleResolveSOS(sos._id)}>Resolve</Button>
                       )}
                     </TableCell>
                   </TableRow>
@@ -365,9 +370,7 @@ export default function AdminDashboard() {
         )}
 
         {!loading && data.length === 0 && activeTab !== "overview" && (
-          <Typography textAlign="center" mt={3}>
-            No data found
-          </Typography>
+          <Typography textAlign="center" mt={3}>No data found</Typography>
         )}
       </Box>
     </Box>

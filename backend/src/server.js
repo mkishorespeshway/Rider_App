@@ -5,9 +5,20 @@ const path = require("path");
 require("dotenv").config();
 
 const app = express();
+//const sosRoutes = require("./routes/sosRoutes");
+//const adminRoutes = require("./routes/adminRoutes");
+
+
 const sosRoutes = require("./routes/sosRoutes");
 const adminRoutes = require("./routes/adminRoutes");
-
+const authRoutes = require("./routes/authRoutes");
+const otpRoutes = require("./routes/otpRoutes");
+const ridesRoutes = require("./routes/rides.routes");
+const riderRoutes = require("./routes/rider.routes");
+const driversRoutes = require("./routes/drivers.routes");
+const parcelRoutes = require("./routes/parcelRoutes");
+//const captainRoutes = require("./routes/captainRoutes");
+ 
 
 // === Middleware ===
 app.use(cors());

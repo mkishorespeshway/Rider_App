@@ -45,8 +45,11 @@ export const uploadRiderDocs = (riderId, docs) =>
 // --- ADMIN APIs ---
 export const loginAdmin = (data) => ADMIN_API.post("/login", data);
 export const getAllRiders = () => ADMIN_API.get("/riders");
-export const approveRider = (riderId) => ADMIN_API.post(`/approve/${riderId}`);
-export const rejectRider = (riderId) => ADMIN_API.post(`/reject/${riderId}`);
+export const getAllUsers = () => ADMIN_API.get("/users"); // ✅
+
+export const approveRider = (id) => ADMIN_API.post(`/captain/${id}/approve`);
+export const rejectRider = (id) => ADMIN_API.post(`/captain/${id}/reject`);
+
 export const getPendingCaptains = () => ADMIN_API.get("/pending-captains");
 export const getCaptains = () => ADMIN_API.get("/captains");
 export const getOverview = () => ADMIN_API.get("/overview");
@@ -77,5 +80,5 @@ export default {
   signupUser, signupRider, sendOtp, verifyOtp, checkRiderApproval,
   getRiderStatus, uploadRiderDocs, loginAdmin, getAllRiders, approveRider, rejectRider,
   getPendingCaptains, getCaptains, getOverview, getAllRides, createRide, findDrivers,
-  getRideHistory, sendSOS, getSOSAlerts, resolveSOS
+  getRideHistory, sendSOS, getSOSAlerts, resolveSOS,getAllUsers
 };

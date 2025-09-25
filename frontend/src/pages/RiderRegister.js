@@ -30,10 +30,19 @@ export default function RiderRegister() {
   const [loading, setLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
 
+  // Document fields mapping
+  const documentFields = [
+    { key: "aadharFront", name: "Aadhar Front" },
+    { key: "aadharBack", name: "Aadhar Back" },
+    { key: "license", name: "License" },
+    { key: "panCard", name: "PAN Card" },
+    { key: "rc", name: "RC" },
+  ];
+
   const validateFile = (file) => {
     if (!file) return false;
     const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
-    const maxSize = 5 * 1024 * 1024;
+    const maxSize = 5 * 1024 * 1024; // 5MB
     if (!allowedTypes.includes(file.type)) {
       setMessage({ type: "error", text: "Only JPG/PNG/PDF allowed" });
       return false;
@@ -65,8 +74,9 @@ export default function RiderRegister() {
       form.append("mobile", formData.mobile);
       form.append("role", "rider");
 
-      Object.entries(docs).forEach(([key, file]) => {
-        if (file) form.append(key, file);
+      // Append files dynamically
+      documentFields.forEach(({ key }) => {
+        if (docs[key]) form.append(key, docs[key]);
       });
 
       await signupRider(form, {
@@ -130,13 +140,7 @@ export default function RiderRegister() {
             Upload Documents
           </Typography>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, textAlign: "left" }}>
-            {[
-              { label: "Aadhar Front", key: "aadharFront" },
-              { label: "Aadhar Back", key: "aadharBack" },
-              { label: "License", key: "license" },
-              { label: "PAN Card", key: "panCard" },
-              { label: "RC", key: "rc" }
-            ].map(({ label, key }) => (
+            {documentFields.map(({ key, name }) => (
               <Button
                 key={key}
                 variant="outlined"
@@ -144,7 +148,7 @@ export default function RiderRegister() {
                 fullWidth
                 sx={{ textTransform: "none", justifyContent: "flex-start" }}
               >
-                {label}: {docs[key] ? docs[key].name : "Choose File"}
+                {name}: {docs[key] ? docs[key].name : "Choose File"}
                 <input type="file" name={key} onChange={handleFileChange} hidden required />
               </Button>
             ))}
