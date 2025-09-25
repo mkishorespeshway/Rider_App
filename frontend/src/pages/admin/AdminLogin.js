@@ -1,6 +1,6 @@
 // src/pages/admin/AdminLogin.js
 import React, { useState } from "react";
-import { loginAdmin } from "../../services/adminApi";
+import { loginAdmin } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { Button, TextField, Container, Typography, Box } from "@mui/material";
 

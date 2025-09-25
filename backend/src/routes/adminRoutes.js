@@ -17,9 +17,7 @@ router.post("/login", (req, res) => {
   const { username, password } = req.body;
 
   if (username !== ADMIN_USER.username || password !== ADMIN_USER.password) {
-    return res
-      .status(401)
-      .json({ success: false, message: "Invalid credentials" });
+    return res.status(401).json({ success: false, message: "Invalid credentials" });
   }
 
   const token = jwt.sign(
@@ -62,6 +60,7 @@ router.get("/overview", adminAuth, async (req, res) => {
 router.get("/users", adminAuth, async (req, res) => {
   try {
     const users = await User.find({ role: "user" }).select("-otp -otpExpires");
+    if (!users) return res.status(404).json({ success: false, message: "No users found" });
     res.json({ success: true, data: users });
   } catch (err) {
     console.error("Get users error:", err);
@@ -73,6 +72,7 @@ router.get("/users", adminAuth, async (req, res) => {
 router.get("/riders", adminAuth, async (req, res) => {
   try {
     const riders = await User.find({ role: "rider" }).select("-otp -otpExpires");
+    if (!riders) return res.status(404).json({ success: false, message: "No riders found" });
     res.json({ success: true, data: riders });
   } catch (err) {
     console.error("Get riders error:", err);
@@ -83,10 +83,7 @@ router.get("/riders", adminAuth, async (req, res) => {
 // 🔹 Approved captains
 router.get("/captains", adminAuth, async (req, res) => {
   try {
-    const captains = await User.find({
-      role: "rider",
-      approvalStatus: "approved",
-    }).select("-otp -otpExpires");
+    const captains = await User.find({ role: "rider", approvalStatus: "approved" }).select("-otp -otpExpires");
     res.json({ success: true, data: captains });
   } catch (err) {
     console.error("Get captains error:", err);
@@ -97,10 +94,7 @@ router.get("/captains", adminAuth, async (req, res) => {
 // 🔹 Pending captains
 router.get("/pending-captains", adminAuth, async (req, res) => {
   try {
-    const pending = await User.find({
-      role: "rider",
-      approvalStatus: "pending",
-    }).select("-otp -otpExpires");
+    const pending = await User.find({ role: "rider", approvalStatus: "pending" }).select("-otp -otpExpires");
     res.json({ success: true, data: pending });
   } catch (err) {
     console.error("Get pending captains error:", err);
@@ -112,11 +106,7 @@ router.get("/pending-captains", adminAuth, async (req, res) => {
 router.post("/captain/:id/approve", adminAuth, async (req, res) => {
   try {
     const captain = await User.findById(req.params.id);
-    if (!captain)
-      return res
-        .status(404)
-        .json({ success: false, message: "Captain not found" });
-
+    if (!captain) return res.status(404).json({ success: false, message: "Captain not found" });
     captain.approvalStatus = "approved";
     await captain.save();
     res.json({ success: true, message: "Captain approved", data: captain });
@@ -130,11 +120,7 @@ router.post("/captain/:id/approve", adminAuth, async (req, res) => {
 router.post("/captain/:id/reject", adminAuth, async (req, res) => {
   try {
     const captain = await User.findById(req.params.id);
-    if (!captain)
-      return res
-        .status(404)
-        .json({ success: false, message: "Captain not found" });
-
+    if (!captain) return res.status(404).json({ success: false, message: "Captain not found" });
     captain.approvalStatus = "rejected";
     await captain.save();
     res.json({ success: true, message: "Captain rejected", data: captain });
@@ -151,14 +137,12 @@ router.get("/rides", adminAuth, async (req, res) => {
       .populate("riderId", "fullName email mobile documents")
       .populate("captainId", "fullName email mobile documents")
       .sort({ createdAt: -1 });
-
     res.json({ success: true, data: rides });
   } catch (err) {
     console.error("Get rides error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
 
 // ===================== 🚨 SOS ROUTES =====================
 
@@ -178,14 +162,8 @@ router.get("/sos-alerts", adminAuth, async (req, res) => {
 // 🔹 Resolve SOS alert
 router.put("/sos/:id/resolve", adminAuth, async (req, res) => {
   try {
-    const sos = await SOS.findByIdAndUpdate(
-      req.params.id,
-      { status: "resolved" },
-      { new: true }
-    );
-    if (!sos) {
-      return res.status(404).json({ success: false, message: "SOS not found" });
-    }
+    const sos = await SOS.findByIdAndUpdate(req.params.id, { status: "resolved" }, { new: true });
+    if (!sos) return res.status(404).json({ success: false, message: "SOS not found" });
     res.json({ success: true, message: "SOS resolved", data: sos });
   } catch (err) {
     console.error("Resolve SOS error:", err);

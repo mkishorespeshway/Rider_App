@@ -11,21 +11,19 @@ const authMiddleware = require("../middleware/authMiddleware");
 const uploadDir = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
-// Multer setup
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
-});
+// Multer setup - memory storage for Cloudinary upload
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max
   fileFilter: (req, file, cb) => {
     const allowed = ["image/png", "image/jpeg", "application/pdf"];
     if (!allowed.includes(file.mimetype)) return cb(new Error("Only PNG, JPEG, PDF allowed"));
     cb(null, true);
   },
 });
+
 
 // Signup (rider)
 router.post(
@@ -45,13 +43,17 @@ router.post(
       if (existing) return res.status(400).json({ success: false, message: "Rider already exists" });
 
       const files = req.files || {};
-      const documents = Object.keys(files).map(key => ({
-        type: key,
-        filename: files[key][0].filename,
-        path: files[key][0].path,
-        mimetype: files[key][0].mimetype,
-        size: files[key][0].size,
-      }));
+     const documents = {};
+
+      Object.keys(files).forEach((key) => {
+      documents[key] = {
+      url: `/uploads/${files[key][0].filename}`, // relative path to serve later
+      mimetype: files[key][0].mimetype,
+      size: files[key][0].size,
+      filename: files[key][0].filename,
+      };
+      });
+
 
       const rider = new User({
         fullName,
