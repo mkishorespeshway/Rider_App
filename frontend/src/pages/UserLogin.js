@@ -22,11 +22,14 @@ export default function UserLogin() {
   const navigate = useNavigate();
   const { login } = useAuth(); 
 
+  // ✅ Mobile number validator
+  const isValidMobile = (num) => /^[0-9]{10}$/.test(num);
+
   // Step 1: Send OTP
   const handleSendOtp = async () => {
     setMessage({ type: "", text: "" });
 
-    if (!mobile || mobile.length !== 10) {
+    if (!mobile || !isValidMobile(mobile)) {
       setMessage({ type: "error", text: "Enter a valid 10-digit mobile number" });
       return;
     }
@@ -62,7 +65,6 @@ export default function UserLogin() {
       const res = await verifyOtp(mobile, otp, "user");
 
       if (res.data.success) {
-        // ✅ Save the full auth object into context
         login({
           token: res.data.token,
           role: res.data.role || res.data.user?.role || "user",
@@ -101,6 +103,7 @@ export default function UserLogin() {
               margin="normal"
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
+              inputProps={{ maxLength: 10 }} // ✅ restrict to 10 digits
             />
             <Button
               fullWidth
@@ -154,3 +157,8 @@ export default function UserLogin() {
     </Container>
   );
 }
+
+
+
+
+

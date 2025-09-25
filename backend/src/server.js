@@ -92,7 +92,8 @@ app.use("/api/drivers", require("./routes/drivers.routes"));
 app.use("/api/admin", require("./routes/adminRoutes")); // ✅ Admin Dashboard API
 app.use("/api/parcels", require("./routes/parcelRoutes")); // ✅ NEW Parcel API
 app.use("/api/sos", sosRoutes);
-app.use("/api/admin", adminRoutes);
+app.use("/api/otp", otpRoutes); // ✅ must exist
+
 
 // Uploads folder
 app.use("/uploads", express.static("uploads"));
