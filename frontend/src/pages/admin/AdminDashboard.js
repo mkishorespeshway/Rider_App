@@ -30,7 +30,6 @@ import {
   Tabs,
   Tab,
   Stack,
-  Link,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -63,6 +62,15 @@ export default function AdminDashboard() {
   const [openDocsModal, setOpenDocsModal] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState({});
   const [selectedRiderName, setSelectedRiderName] = useState("");
+  const [docTab, setDocTab] = useState(0); // ✅ added state for tab
+
+  const documentLabels = {
+    aadharFront: "Aadhar Front",
+    aadharBack: "Aadhar Back",
+    license: "License",
+    panCard: "PAN Card",
+    rc: "RC",
+  };
 
   const fetchOverview = async () => {
     try {
@@ -154,6 +162,7 @@ export default function AdminDashboard() {
   const handleViewDocuments = (item) => {
     setSelectedDocuments(item.documents || {});
     setSelectedRiderName(item.fullName || "");
+    setDocTab(0); // ✅ reset to first tab on open
     setOpenDocsModal(true);
   };
 
@@ -176,10 +185,11 @@ export default function AdminDashboard() {
     { label: "SOS Alerts", value: overview.sos, icon: <WarningAmberIcon />, type: "sos", color: "#e74c3c" },
   ];
 
-  const renderDocumentsCell = (documents) => {
+  const renderDocumentsCell = (item) => {
+    const documents = item?.documents || {};
     if (!documents || Object.keys(documents).length === 0) return "-";
     return (
-      <Button variant="outlined" size="small" onClick={() => handleViewDocuments({ documents })}>
+      <Button variant="outlined" size="small" onClick={() => handleViewDocuments(item)}>
         View Documents
       </Button>
     );
@@ -314,22 +324,67 @@ export default function AdminDashboard() {
           </Paper>
         )}
 
-        {/* Documents Modal */}
-        <Dialog open={openDocsModal} onClose={handleCloseDocuments} maxWidth="sm" fullWidth>
+        {/* Documents Modal with Tabs */}
+        <Dialog open={openDocsModal} onClose={handleCloseDocuments} maxWidth="md" fullWidth>
           <DialogTitle>Documents - {selectedRiderName}</DialogTitle>
           <DialogContent>
             {selectedDocuments && Object.keys(selectedDocuments).length > 0 ? (
-              <Stack spacing={1}>
-                {Object.keys(selectedDocuments).map((key) => {
+              <>
+                {/* Tabs */}
+                <Tabs
+                  value={docTab}
+                  onChange={(e, val) => setDocTab(val)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
+                >
+                  {Object.keys(selectedDocuments).map((key, idx) => (
+                    <Tab key={key} label={documentLabels[key] || key} />
+                  ))}
+                </Tabs>
+
+                {/* Document Viewer */}
+                {Object.keys(selectedDocuments).map((key, idx) => {
                   const doc = selectedDocuments[key];
-                  const fileType = doc?.mimetype ? doc.mimetype.split("/")[1] : "file";
+                  if (idx !== docTab) return null;
+                  if (!doc?.url) return <Typography>No {documentLabels[key] || key} uploaded.</Typography>;
+
+                  const isImage = doc.mimetype?.startsWith("image/");
+                  const isPdf = doc.mimetype === "application/pdf";
+
                   return (
-                    <Link key={key} href={doc.url} target="_blank" rel="noopener noreferrer">
-                      {key} ({fileType})
-                    </Link>
+                    <Box key={key} sx={{ textAlign: "center" }}>
+                      <Typography fontWeight="bold" sx={{ mb: 1 }}>
+                        {documentLabels[key] || key}
+                      </Typography>
+
+                      {isImage && (
+                        <img
+                          src={doc.url}
+                          alt={key}
+                          style={{ maxWidth: "100%", maxHeight: "500px", borderRadius: "8px" }}
+                        />
+                      )}
+
+                      {isPdf && (
+                        <iframe
+                          src={doc.url}
+                          title={key}
+                          width="100%"
+                          height="500px"
+                          style={{ border: "1px solid #ccc", borderRadius: "8px" }}
+                        />
+                      )}
+
+                      {!isImage && !isPdf && (
+                        <Button href={doc.url} target="_blank" rel="noopener noreferrer" variant="outlined">
+                          Download {documentLabels[key] || key}
+                        </Button>
+                      )}
+                    </Box>
                   );
                 })}
-              </Stack>
+              </>
             ) : (
               <Typography>No documents uploaded.</Typography>
             )}
