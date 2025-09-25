@@ -11,26 +11,29 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { signupRider } from "../services/api";
 
 export default function RiderRegister() {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ fullName: "", email: "", mobile: "" });
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    mobile: "",
+  });
   const [docs, setDocs] = useState({
     aadharFront: null,
     aadharBack: null,
     license: null,
     panCard: null,
-    rc: null
+    rc: null,
   });
   const [message, setMessage] = useState({ type: "", text: "" });
   const [loading, setLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
 
-  // Document fields mapping
   const documentFields = [
     { key: "aadharFront", name: "Aadhar Front" },
     { key: "aadharBack", name: "Aadhar Back" },
@@ -41,7 +44,12 @@ export default function RiderRegister() {
 
   const validateFile = (file) => {
     if (!file) return false;
-    const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/jpg",
+      "application/pdf",
+    ];
     const maxSize = 5 * 1024 * 1024; // 5MB
     if (!allowedTypes.includes(file.type)) {
       setMessage({ type: "error", text: "Only JPG/PNG/PDF allowed" });
@@ -59,7 +67,8 @@ export default function RiderRegister() {
 
   const handleFileChange = (e) => {
     const { name, files } = e.target;
-    if (validateFile(files[0])) setDocs((prev) => ({ ...prev, [name]: files[0] }));
+    if (validateFile(files[0]))
+      setDocs((prev) => ({ ...prev, [name]: files[0] }));
   };
 
   const handleSubmit = async (e) => {
@@ -74,19 +83,25 @@ export default function RiderRegister() {
       form.append("mobile", formData.mobile);
       form.append("role", "rider");
 
-      // Append files dynamically
       documentFields.forEach(({ key }) => {
         if (docs[key]) form.append(key, docs[key]);
       });
 
-      await signupRider(form, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      // 🔎 Debug: show what’s inside FormData before sending
+      console.log("FormData being sent:");
+      for (let [key, value] of form.entries()) {
+        console.log(key, value instanceof File ? value.name : value);
+      }
+
+      await signupRider(form); // ✅ sends multipart/form-data
 
       setOpenModal(true);
     } catch (err) {
-      console.error(err);
-      setMessage({ type: "error", text: err.response?.data?.message || err.message });
+      console.error("❌ Signup error:", err);
+      setMessage({
+        type: "error",
+        text: err.response?.data?.message || err.message,
+      });
     } finally {
       setLoading(false);
     }
@@ -94,7 +109,15 @@ export default function RiderRegister() {
 
   return (
     <Container maxWidth="xs">
-      <Paper sx={{ mt: 6, p: 4, borderRadius: 3, textAlign: "center", boxShadow: 5 }}>
+      <Paper
+        sx={{
+          mt: 6,
+          p: 4,
+          borderRadius: 3,
+          textAlign: "center",
+          boxShadow: 5,
+        }}
+      >
         <Typography variant="h4" sx={{ mb: 2, fontWeight: "bold" }}>
           Rider Signup
         </Typography>
@@ -102,7 +125,11 @@ export default function RiderRegister() {
           Create your account and upload documents.
         </Typography>
 
-        {message.text && <Alert severity={message.type} sx={{ mb: 2 }}>{message.text}</Alert>}
+        {message.text && (
+          <Alert severity={message.type} sx={{ mb: 2 }}>
+            {message.text}
+          </Alert>
+        )}
 
         <form onSubmit={handleSubmit}>
           <TextField
@@ -139,7 +166,14 @@ export default function RiderRegister() {
           <Typography variant="h6" sx={{ mt: 3, mb: 1 }}>
             Upload Documents
           </Typography>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, textAlign: "left" }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              textAlign: "left",
+            }}
+          >
             {documentFields.map(({ key, name }) => (
               <Button
                 key={key}
@@ -149,7 +183,12 @@ export default function RiderRegister() {
                 sx={{ textTransform: "none", justifyContent: "flex-start" }}
               >
                 {name}: {docs[key] ? docs[key].name : "Choose File"}
-                <input type="file" name={key} onChange={handleFileChange} hidden required />
+                <input
+                  type="file"
+                  name={key}
+                  onChange={handleFileChange}
+                  hidden
+                />
               </Button>
             ))}
           </Box>
@@ -161,7 +200,11 @@ export default function RiderRegister() {
             sx={{ mt: 3, bgcolor: "black", fontWeight: "bold" }}
             disabled={loading}
           >
-            {loading ? <CircularProgress size={24} color="inherit" /> : "Sign Up"}
+            {loading ? (
+              <CircularProgress size={24} color="inherit" />
+            ) : (
+              "Sign Up"
+            )}
           </Button>
         </form>
 
@@ -182,7 +225,8 @@ export default function RiderRegister() {
         <DialogTitle>Registration Successful!</DialogTitle>
         <DialogContent>
           <Typography>
-            Your account is created successfully. Please wait for admin approval.
+            Your account is created successfully. Please wait for admin
+            approval.
           </Typography>
         </DialogContent>
         <DialogActions>
