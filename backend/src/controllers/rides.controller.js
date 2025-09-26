@@ -1,16 +1,15 @@
+// backend/src/controllers/rides.controller.js
 const Ride = require("../models/Ride");
 const Counter = require("../models/Counter");
+const Driver = require("../models/Driver");
 
-// ✅ Create a ride
+// 🚖 Create Ride
 exports.createRide = async (req, res) => {
   try {
-    const { pickup, drop } = req.body;
+    const { pickup, drop, pickupCoords, dropCoords } = req.body;
 
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
+    if (!req.user) return res.status(401).json({ success: false, message: "Unauthorized" });
 
-    // Auto-increment ride ID
     const counter = await Counter.findByIdAndUpdate(
       { _id: "rideId" },
       { $inc: { seq: 1 } },
@@ -18,14 +17,21 @@ exports.createRide = async (req, res) => {
     );
 
     const ride = new Ride({
-      _id: counter.seq, // numeric ID
-      riderId: req.user._id, // ✅ use riderId to match schema
+      _id: counter.seq,
+      riderId: req.user._id,
       pickup,
       drop,
+      pickupCoords,
+      dropCoords,
       status: "pending",
     });
 
     await ride.save();
+
+    // 🔥 notify all drivers
+    const io = req.app.get("io");
+    io.emit("rideRequest", ride);
+
     res.json({ success: true, ride });
   } catch (err) {
     console.error("❌ Error creating ride:", err);
@@ -33,44 +39,85 @@ exports.createRide = async (req, res) => {
   }
 };
 
-// ✅ Get ride history for logged-in user
-exports.getRideHistory = async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    const rides = await Ride.find({ riderId: req.user._id });
-    res.json({ success: true, rides });
-  } catch (err) {
-    console.error("❌ Error fetching history:", err);
-    res.status(500).json({ error: "Failed to fetch ride history" });
-  }
-};
-
-// ✅ Get a single ride by ID
-exports.getRideById = async (req, res) => {
+// 🚖 Accept Ride
+exports.acceptRide = async (req, res) => {
   try {
     const rideId = parseInt(req.params.id, 10);
+    const ride = await Ride.findOne({ _id: rideId, status: "pending" });
+    if (!ride) return res.status(404).json({ success: false, message: "Ride not found or already taken" });
 
-    if (isNaN(rideId)) {
-      return res.status(400).json({ success: false, message: "Invalid ride ID" });
-    }
+    ride.status = "accepted";
+    ride.captainId = req.user._id;
+    await ride.save();
 
-    const ride = await Ride.findOne({ _id: rideId });
+    // fetch driver details
+    const driver = await Driver.findById(req.user._id).lean();
 
-    if (!ride) {
-      return res.status(404).json({ success: false, message: "Ride not found" });
-    }
-
-    // Optional: only allow owner to fetch
-    if (ride.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ success: false, message: "Forbidden" });
-    }
+    // 🔥 Notify that specific user only
+    const io = req.app.get("io");
+    io.to(ride.riderId.toString()).emit("rideAccepted", {
+      ...ride.toObject(),
+      driver: {
+        _id: driver._id,
+        fullName: driver.fullName,
+        mobile: driver.mobile,
+        vehicle: driver.vehicle || {},
+      },
+    });
 
     res.json({ success: true, ride });
   } catch (err) {
-    console.error("❌ Error fetching ride:", err);
-    res.status(500).json({ error: "Failed to load ride" });
+    console.error("❌ Accept ride error:", err);
+    res.status(500).json({ error: "Failed to accept ride" });
+  }
+};
+
+// 🚖 Reject Ride
+exports.rejectRide = async (req, res) => {
+  try {
+    const rideId = parseInt(req.params.id, 10);
+    const ride = await Ride.findOne({ _id: rideId, status: "pending" });
+    if (!ride) return res.status(404).json({ success: false, message: "Ride not found or already handled" });
+
+    ride.status = "cancelled";
+    await ride.save();
+
+    const io = req.app.get("io");
+    io.to(ride.riderId.toString()).emit("rideRejected", ride);
+
+    res.json({ success: true, ride });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to reject ride" });
+  }
+};
+
+// 🚖 Get all pending rides (for drivers)
+exports.getPendingRides = async (req, res) => {
+  try {
+    const rides = await Ride.find({ status: "pending" }).populate("riderId", "fullName mobile");
+    res.json({ success: true, rides });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch rides" });
+  }
+};
+
+// 📜 Get ride history
+exports.getRideHistory = async (req, res) => {
+  try {
+    const rides = await Ride.find({ riderId: req.user._id });
+    res.json({ success: true, rides });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch history" });
+  }
+};
+
+// 🔍 Get ride by ID
+exports.getRideById = async (req, res) => {
+  try {
+    const rideId = parseInt(req.params.id, 10);
+    const ride = await Ride.findById(rideId);
+    res.json({ success: true, ride });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch ride" });
   }
 };
