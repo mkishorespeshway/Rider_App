@@ -26,6 +26,7 @@ const authMiddleware = async (req, res, next) => {
 
     // attach safe user object to req
     req.user = {
+        id: user._id,   // <-- ADD THIS
       _id: user._id,
       fullName: user.fullName,
       email: user.email,
