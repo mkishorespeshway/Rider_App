@@ -59,7 +59,8 @@ export const signupRider = (formData) =>
 export const sendOtp = (mobile, role) => OTP_API.post("/send", { mobile, role });
 export const verifyOtp = (mobile, otp, role) => OTP_API.post("/verify", { mobile, otp, role });
 export const checkRiderApproval = (mobile) =>
-  RIDER_API.get(`/check-approval?mobile=${mobile}`);
+  RIDER_API.get(`/check-approval/${mobile}`);
+
 export const getRiderStatus = () => RIDER_API.get("/status");
 export const uploadRiderDocs = (riderId, docs) =>
   RIDER_API.post(`/upload-docs/${riderId}`, docs, {

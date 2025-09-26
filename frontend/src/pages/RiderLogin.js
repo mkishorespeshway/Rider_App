@@ -24,12 +24,15 @@ export default function RiderLogin() {
     }
     try {
       setLoading(true);
+
+      // ✅ pass plain string, not object
       const approvalRes = await checkRiderApproval(mobile);
       if (!approvalRes.data?.approved) {
         setMessage({ type: "info", text: "Your account is still waiting for admin approval." });
         setLoading(false);
         return;
       }
+
       const res = await sendOtp(mobile, "rider");
       if (res.data.success) {
         setStep(2);
@@ -82,13 +85,13 @@ export default function RiderLogin() {
 
         {step === 1 && (
           <>
-            <TextField 
-              fullWidth 
-              label="Mobile Number" 
-              value={mobile} 
-              onChange={(e) => setMobile(e.target.value)} 
+            <TextField
+              fullWidth
+              label="Mobile Number"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
               margin="normal"
-              inputProps={{ maxLength: 10 }} // limit input to 10 digits
+              inputProps={{ maxLength: 10 }}
             />
             <Button fullWidth variant="contained" sx={{ mt: 2 }} onClick={handleSendOtp} disabled={loading}>
               {loading ? "Checking..." : "Send OTP"}
@@ -98,7 +101,13 @@ export default function RiderLogin() {
 
         {step === 2 && (
           <>
-            <TextField fullWidth label="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} margin="normal" />
+            <TextField
+              fullWidth
+              label="Enter OTP"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              margin="normal"
+            />
             <Button fullWidth variant="contained" sx={{ mt: 2 }} onClick={handleVerifyOtp} disabled={loading}>
               {loading ? "Verifying..." : "Verify OTP"}
             </Button>
@@ -106,7 +115,7 @@ export default function RiderLogin() {
         )}
 
         <Typography sx={{ mt: 2 }}>
-          Don’t have an account? <Button onClick={() => navigate("/rider-register")}>Sign Up</Button><br/>
+          Don’t have an account? <Button onClick={() => navigate("/rider-register")}>Sign Up</Button><br />
           Are you a User? <Button onClick={() => navigate("/login")}>Login as User</Button>
         </Typography>
       </Box>

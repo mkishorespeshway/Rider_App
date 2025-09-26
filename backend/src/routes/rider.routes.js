@@ -95,5 +95,33 @@ router.post(
     }
   }
 );
+// ✅ Check rider approval by mobile number (no auth needed)
+router.get("/check-approval/:mobile", async (req, res) => {
+  try {
+    const { mobile } = req.params; // get mobile from route param
+    const rider = await User.findOne({ mobile, role: "rider" });
+
+    if (!rider) {
+      return res.status(404).json({ approved: false, message: "Rider not found" });
+    }
+
+    res.json({ approved: rider.approvalStatus === "approved" });
+  } catch (err) {
+    console.error("Check rider approval error:", err);
+    res.status(500).json({ approved: false, message: "Server error" });
+  }
+});
+
+// ✅ Added Rider Status Route
+router.get("/status", authMiddleware, async (req, res) => {
+  try {
+    const rider = await User.findOne({ _id: req.user.id, role: "rider" });
+    if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
+    res.json({ success: true, rider });
+  } catch (err) {
+    console.error("❌ Fetch rider status error:", err);
+    res.status(500).json({ success: false, message: "Server error fetching rider status" });
+  }
+});
 
 module.exports = router;
