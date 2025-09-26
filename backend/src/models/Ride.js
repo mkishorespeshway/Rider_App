@@ -21,12 +21,20 @@ const rideSchema = new mongoose.Schema(
 
     captainId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", // ✅ new field to track the captain/driver
-      required: false,
+      ref: "User",
     },
 
     pickup: { type: String, required: true },
     drop: { type: String, required: true },
+
+    pickupCoords: {
+      lat: { type: Number, required: true },
+      lng: { type: Number, required: true },
+    },
+    dropCoords: {
+      lat: { type: Number, required: true },
+      lng: { type: Number, required: true },
+    },
 
     status: {
       type: String,
