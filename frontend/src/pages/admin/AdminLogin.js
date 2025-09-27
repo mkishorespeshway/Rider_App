@@ -3,9 +3,11 @@ import React, { useState } from "react";
 import { loginAdmin } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 import { Button, TextField, Container, Typography, Box } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 
 export default function AdminLogin() {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -16,14 +18,12 @@ export default function AdminLogin() {
     try {
       const res = await loginAdmin({ username, password });
       if (res.data.success) {
-        // ✅ Store token in localStorage for authenticated requests
-        localStorage.setItem("token", res.data.token);
-
-        // ✅ Update auth context
-        login(res.data); 
-
-        // ✅ Redirect to admin dashboard
-        window.location.href = "/admin-dashboard"; 
+        login({
+          token: res.data.token,
+          user: { username },
+          roles: ["admin"], // ✅ FIX
+        });
+        navigate("/admin-dashboard");
       } else {
         setError("Invalid credentials");
       }

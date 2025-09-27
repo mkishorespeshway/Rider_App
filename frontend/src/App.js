@@ -3,12 +3,12 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 
 // Pages
+import ForceLogout from "./pages/ForceLogout";  // ✅ add at top
+
 import UserLogin from "./pages/UserLogin";
 import UserRegister from "./pages/UserRegister";
 import RiderLogin from "./pages/RiderLogin";
-
 import RiderRegister from "./pages/RiderRegister";
-
 import AdminLogin from "./pages/admin/AdminLogin";
 import RiderDashboard from "./pages/dashboards/RiderDashboard";
 import UserDashboard from "./pages/dashboards/UserDashboard";
@@ -20,21 +20,23 @@ import Profile from "./pages/Profile";
 import Navbar from "./components/Navbar";
 import Parcel from "./pages/Parcel";
 import Activity from "./pages/Activity";
-import AdminDashboard from "./pages/admin/AdminDashboard"; // ✅ fixed import
-
-// Detail Pages
+import AdminDashboard from "./pages/admin/AdminDashboard";
 import CaptainDetails from "./pages/CaptainDetails";
 import RiderDetails from "./pages/RiderDetails";
 
+// Wrapper
+import ProtectedRoute from "./components/ProtectedRoutes";
+
 export default function App() {
   const { auth } = useAuth();
-  const { token, role } = auth || {};
+  const token = auth?.token || null;
+  const roles = auth?.roles || [];
   const isAuth = Boolean(token);
 
   const redirectByRole = () => {
-    if (role === "user") return "/user-dashboard";
-    if (role === "rider") return "/rider-dashboard";
-    if (role === "admin") return "/admin-dashboard";
+    if (roles.includes("user")) return "/user-dashboard";
+    if (roles.includes("rider")) return "/rider-dashboard";
+    if (roles.includes("admin")) return "/admin-dashboard";
     return "/login";
   };
 
@@ -49,110 +51,131 @@ export default function App() {
             element={<Navigate to={isAuth ? redirectByRole() : "/login"} />}
           />
 
-          {/* ================= USER ROUTES ================= */}
+          {/* USER */}
+          <Route path="/force-logout" element={<ForceLogout />} />
+
           <Route
             path="/login"
-            element={
-              isAuth ? <Navigate to={redirectByRole()} /> : <UserLogin />
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <UserLogin />}
           />
           <Route
             path="/register"
-            element={
-              isAuth ? <Navigate to={redirectByRole()} /> : <UserRegister />
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <UserRegister />}
           />
           <Route
             path="/user-dashboard"
-            element={isAuth && role === "user" ? <UserDashboard /> : <Navigate to="/login" />}
+            element={
+              <ProtectedRoute role="user">
+                <UserDashboard />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/booking"
-            element={isAuth && role === "user" ? <Booking /> : <Navigate to={redirectByRole()} />}
+            element={
+              <ProtectedRoute role="user">
+                <Booking />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/parcel"
-            element={isAuth && role === "user" ? <Parcel /> : <Navigate to={redirectByRole()} />}
+            element={
+              <ProtectedRoute role="user">
+                <Parcel />
+              </ProtectedRoute>
+            }
           />
 
-          {/* ================= RIDER ROUTES ================= */}
+          {/* RIDER */}
           <Route
             path="/rider-login"
-            element={
-              isAuth ? <Navigate to={redirectByRole()} /> : <RiderLogin />
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <RiderLogin />}
           />
           <Route
             path="/rider-register"
-            element={
-              isAuth ? <Navigate to={redirectByRole()} /> : <RiderRegister />
-            }
+            element={isAuth ? <Navigate to={redirectByRole()} /> : <RiderRegister />}
           />
           <Route
             path="/rider-dashboard"
-            element={isAuth && role === "rider" ? <RiderDashboard /> : <Navigate to="/rider-login" />}
+            element={
+              <ProtectedRoute role="rider">
+                <RiderDashboard />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/upload-docs"
-            element={isAuth && role === "rider" ? <DocumentUpload /> : <Navigate to="/rider-login" />}
+            element={
+              <ProtectedRoute role="rider">
+                <DocumentUpload />
+              </ProtectedRoute>
+            }
           />
 
-          {/* ================= ADMIN ROUTES ================= */}
+          {/* ADMIN */}
           <Route
             path="/admin"
             element={isAuth ? <Navigate to={redirectByRole()} /> : <AdminLogin />}
           />
+          
           <Route
             path="/admin-dashboard/*"
             element={
-              isAuth && role === "admin" ? (
-                <AdminDashboard /> // ✅ replaced AdminLayout with AdminDashboard
-              ) : (
-                <Navigate to="/admin" />
-              )
+              <ProtectedRoute role="admin">
+                <AdminDashboard />
+              </ProtectedRoute>
             }
           />
           <Route
             path="/admin/captain/:id"
-            element={isAuth && role === "admin" ? <CaptainDetails /> : <Navigate to="/admin" />}
+            element={
+              <ProtectedRoute role="admin">
+                <CaptainDetails />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/admin/rider/:id"
-            element={isAuth && role === "admin" ? <RiderDetails /> : <Navigate to="/admin" />}
+            element={
+              <ProtectedRoute role="admin">
+                <RiderDetails />
+              </ProtectedRoute>
+            }
           />
 
-          {/* ================= COMMON ROUTES ================= */}
-          
-          <Route
-            path="/booking"
-            element={
-              isAuth && role === "user" ? <Booking /> : <Navigate to={redirectByRole()} />
-           }
-            />
-          
-          <Route
-           path="/parcel"
-        element={
-          isAuth && role === "user" ? <Parcel /> : <Navigate to={redirectByRole()} />
-          }
-           />
+          {/* COMMON */}
           <Route
             path="/ride/:id"
-            element={isAuth ? <RideTrack /> : <Navigate to="/login" />}
+            element={
+              <ProtectedRoute>
+                <RideTrack />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/history"
-            element={isAuth ? <History /> : <Navigate to="/login" />}
+            element={
+              <ProtectedRoute>
+                <History />
+              </ProtectedRoute>
+            }
           />
           <Route
             path="/profile"
             element={
-            isAuth ? <Profile /> : <Navigate to="/login" />
-               }
-              />
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/activity"
-            element={isAuth ? <Activity /> : <Navigate to="/login" />}
+            element={
+              <ProtectedRoute>
+                <Activity />
+              </ProtectedRoute>
+            }
           />
 
           {/* 404 */}
@@ -162,4 +185,3 @@ export default function App() {
     </>
   );
 }
-// end

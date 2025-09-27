@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { sendOtp, verifyOtp } from "../services/api";
-import { useAuth } from "../contexts/AuthContext"; 
+import { useAuth } from "../contexts/AuthContext";
 import {
   Box,
   Button,
@@ -20,20 +20,16 @@ export default function UserLogin() {
   const [message, setMessage] = useState({ type: "", text: "" });
 
   const navigate = useNavigate();
-  const { login } = useAuth(); 
+  const { login } = useAuth();
 
-  // ✅ Mobile number validator
   const isValidMobile = (num) => /^[0-9]{10}$/.test(num);
 
-  // Step 1: Send OTP
   const handleSendOtp = async () => {
     setMessage({ type: "", text: "" });
-
     if (!mobile || !isValidMobile(mobile)) {
       setMessage({ type: "error", text: "Enter a valid 10-digit mobile number" });
       return;
     }
-
     try {
       setLoading(true);
       const res = await sendOtp(mobile, "user");
@@ -44,44 +40,34 @@ export default function UserLogin() {
         setMessage({ type: "error", text: res.data.message || "Failed to send OTP" });
       }
     } catch (err) {
-      console.error(err);
       setMessage({ type: "error", text: "Server error while sending OTP" });
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 2: Verify OTP
   const handleVerifyOtp = async () => {
     setMessage({ type: "", text: "" });
-
     if (!otp || otp.length < 4) {
       setMessage({ type: "error", text: "Enter a valid OTP" });
       return;
     }
-
     try {
       setLoading(true);
       const res = await verifyOtp(mobile, otp, "user");
-
       if (res.data.success) {
         login({
           token: res.data.token,
-          role: res.data.role || res.data.user?.role || "user",
           user: res.data.user,
+          roles: [res.data.role || res.data.user?.role || "user"], // ✅ FIX
         });
-
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
         setTimeout(() => navigate("/user-dashboard"), 1000);
       } else {
         setMessage({ type: "error", text: res.data.message || "Invalid OTP" });
       }
     } catch (err) {
-      console.error(err);
-      setMessage({
-        type: "error",
-        text: err.response?.data?.message || "Server error while verifying OTP",
-      });
+      setMessage({ type: "error", text: "Server error while verifying OTP" });
     } finally {
       setLoading(false);
     }
@@ -99,19 +85,13 @@ export default function UserLogin() {
             <TextField
               fullWidth
               label="Mobile Number"
-              variant="outlined"
-              margin="normal"
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
-              inputProps={{ maxLength: 10 }} // ✅ restrict to 10 digits
+              margin="normal"
+              inputProps={{ maxLength: 10 }}
             />
-            <Button
-              fullWidth
-              variant="contained"
-              sx={{ mt: 2, bgcolor: "black", "&:hover": { bgcolor: "#333" } }}
-              onClick={handleSendOtp}
-              disabled={loading}
-            >
+            <Button fullWidth variant="contained" sx={{ mt: 2, bgcolor: "black" }}
+              onClick={handleSendOtp} disabled={loading}>
               {loading ? <CircularProgress size={24} color="inherit" /> : "Send OTP"}
             </Button>
           </>
@@ -122,18 +102,12 @@ export default function UserLogin() {
             <TextField
               fullWidth
               label="Enter OTP"
-              variant="outlined"
-              margin="normal"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
+              margin="normal"
             />
-            <Button
-              fullWidth
-              variant="contained"
-              sx={{ mt: 2, bgcolor: "black", "&:hover": { bgcolor: "#333" } }}
-              onClick={handleVerifyOtp}
-              disabled={loading}
-            >
+            <Button fullWidth variant="contained" sx={{ mt: 2, bgcolor: "black" }}
+              onClick={handleVerifyOtp} disabled={loading}>
               {loading ? <CircularProgress size={24} color="inherit" /> : "Verify OTP"}
             </Button>
           </>
@@ -142,23 +116,14 @@ export default function UserLogin() {
         <Box sx={{ mt: 3 }}>
           <Typography variant="body2">
             Don’t have an account?{" "}
-            <Link to="/register" style={{ textDecoration: "none" }}>
-              Sign Up
-            </Link>
+            <Link to="/register">Sign Up</Link>
           </Typography>
           <Typography variant="body2" sx={{ mt: 1 }}>
             Are you a Rider?{" "}
-            <Link to="/rider-login" style={{ textDecoration: "none" }}>
-              Login as Rider
-            </Link>
+            <Link to="/rider-login">Login as Rider</Link>
           </Typography>
         </Box>
       </Box>
     </Container>
   );
 }
-
-
-
-
-

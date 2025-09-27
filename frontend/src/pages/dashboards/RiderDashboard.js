@@ -9,6 +9,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { useAuth } from "../../contexts/AuthContext";
+import { useNavigate } from "react-router-dom";  // ✅ added navigate
 import { io } from "socket.io-client";
 
 const socket = io("http://localhost:5000");
@@ -17,10 +18,17 @@ export default function RiderDashboard() {
   const [rides, setRides] = useState([]);
   const [selectedRide, setSelectedRide] = useState(null);
   const [loading, setLoading] = useState(false);
-  const { auth } = useAuth();
+  const { auth, logout } = useAuth();   // ✅ added logout
+  const navigate = useNavigate();
 
   const [riderLocation, setRiderLocation] = useState(null);
   const [route, setRoute] = useState(null);
+
+  // ✅ handle logout
+  const handleLogout = () => {
+    logout();
+    navigate("/rider-login");
+  };
 
   // Icons
   const pickupIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/32/32339.png", iconSize: [25, 25] });
@@ -119,6 +127,15 @@ export default function RiderDashboard() {
       <Typography variant="h4" gutterBottom>
         Rider Dashboard
       </Typography>
+
+      {/* ✅ Logout button */}
+      <Button
+        variant="contained"
+        sx={{ bgcolor: "black", color: "white", mb: 2, "&:hover": { bgcolor: "#333" } }}
+        onClick={handleLogout}
+      >
+        Logout
+      </Button>
 
       {loading ? (
         <CircularProgress />
