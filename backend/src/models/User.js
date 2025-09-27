@@ -1,30 +1,38 @@
-// models/User.js
 const mongoose = require("mongoose");
-
-const documentSchema = new mongoose.Schema({
-  url: { type: String },
-  mimetype: { type: String },
-  public_id: { type: String },
-});
 
 const userSchema = new mongoose.Schema(
   {
-    fullName: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
-    mobile: { type: String },
-    role: { type: String, enum: ["user", "rider", "admin"], default: "user" },
-    approvalStatus: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
-    // documents object with keys for each doc
-    documents: {
-      aadharFront: { type: documentSchema, default: null },
-      aadharBack: { type: documentSchema, default: null },
-      license: { type: documentSchema, default: null },
-      panCard: { type: documentSchema, default: null },
-      rc: { type: documentSchema, default: null },
+    fullName: { type: String, required: true, trim: true },
+    email: { type: String, unique: true, sparse: true },
+    mobile: { type: String, required: true, unique: true },
+
+    // ✅ Only Rider, User, Admin
+    role: {
+      type: String,
+      enum: ["rider", "user", "admin"],
+      default: "user",
     },
-    // any other fields you have
+
+    approvalStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "approved", // Riders may need admin approval later
+    },
+
+    // Rider documents if needed
+    documents: {
+      aadharFront: { url: String, mimetype: String, public_id: String },
+      aadharBack: { url: String, mimetype: String, public_id: String },
+      license: { url: String, mimetype: String, public_id: String },
+      panCard: { url: String, mimetype: String, public_id: String },
+      rc: { url: String, mimetype: String, public_id: String },
+    },
+
+    loginCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
+
+userSchema.index({ mobile: 1 });
 
 module.exports = mongoose.model("User", userSchema);
