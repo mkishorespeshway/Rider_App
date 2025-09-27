@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.js
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
@@ -8,29 +9,27 @@ export const AuthProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : { token: null, user: null, roles: [] };
   });
 
-  // 🚀 Login → save token, roles, user
+  // 🚀 Normalize login payload
   const login = (data) => {
+    const role = data.role || data.user?.role;
     const payload = {
       token: data.token,
       user: data.user,
-      roles: data.roles || (data.user?.roles || []),
+      roles: data.roles || (role ? [role] : []), // always array
     };
     setAuth(payload);
     localStorage.setItem("auth", JSON.stringify(payload));
   };
 
-  // 🚀 Logout
   const logout = () => {
     setAuth({ token: null, user: null, roles: [] });
     localStorage.removeItem("auth");
+    localStorage.removeItem("token"); // ✅ clear leftover from old AdminLogin
   };
 
-  // Keep state synced with localStorage
   useEffect(() => {
     const saved = localStorage.getItem("auth");
-    if (saved) {
-      setAuth(JSON.parse(saved));
-    }
+    if (saved) setAuth(JSON.parse(saved));
   }, []);
 
   return (

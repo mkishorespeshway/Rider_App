@@ -15,7 +15,6 @@ export default function UserRegister() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(""); setSuccess(""); setLoading(true);
-
     try {
       const res = await signupUser(formData);
       if (res.data.success) {
@@ -23,7 +22,6 @@ export default function UserRegister() {
         setTimeout(() => navigate("/login"), 2000);
       }
     } catch (err) {
-      console.error(err);
       setError(err.response?.data?.message || "Server error. Try again.");
     } finally {
       setLoading(false);

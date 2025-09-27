@@ -22,6 +22,7 @@ export default function UserDashboard() {
         Welcome to the user dashboard! 🚗
       </Typography>
 
+      {/* ✅ Logout button */}
       <Button
         variant="contained"
         sx={{ bgcolor: "black", color: "white", "&:hover": { bgcolor: "#333" } }}
