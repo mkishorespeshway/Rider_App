@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   Container, Paper, Typography, TextField, Box,
-  Button, ListItemButton, Drawer, CircularProgress,
-  Card, CardContent, Dialog, DialogTitle, DialogContent
+  Button, ListItemButton, Drawer, CircularProgress
 } from "@mui/material";
 import {
   MapContainer, TileLayer, Marker, Polyline, Popup, useMapEvents
@@ -29,14 +28,22 @@ export default function Booking() {
   const [rideOptions, setRideOptions] = useState([]);
   const [selectedRide, setSelectedRide] = useState(null);
 
-  const [lookingForDriver, setLookingForDriver] = useState(false);
-  const [driver, setDriver] = useState(null);
-  const [driverLocation, setDriverLocation] = useState(null);
-  const [rideStarted, setRideStarted] = useState(false);
-  const [showDriverModal, setShowDriverModal] = useState(false);
+  const [lookingForRider, setLookingForRider] = useState(false);
+  const [assignedRider, setAssignedRider] = useState(null);
+  const [riderLocation, setRiderLocation] = useState(null);
+  const [riderPanelOpen, setRiderPanelOpen] = useState(false);
+  const [rideStatus, setRideStatus] = useState("Waiting for rider 🚖");
 
   const { auth } = useAuth();
   const navigate = useNavigate();
+
+  // ✅ Join user room after login
+  useEffect(() => {
+    if (auth?.user?._id) {
+      socket.emit("join", auth.user._id);
+      console.log("📌 User joined room:", auth.user._id);
+    }
+  }, [auth]);
 
   // 📍 Get current location
   useEffect(() => {
@@ -95,30 +102,18 @@ export default function Booking() {
     fetchRoute();
   }, [pickup, drop]);
 
-  // 🚖 Update ride options (price, eta)
+  // 🚖 Update ride options
   useEffect(() => {
     if (distance) {
       setRideOptions([
-        {
-          id: "bike", name: "Bike", eta: "3 min",
-          price: (distance * 10).toFixed(2), capacity: 1,
-          image: "https://cdn-icons-png.flaticon.com/512/2972/2972185.png"
-        },
-        {
-          id: "auto", name: "Auto", eta: "2 min",
-          price: (distance * 15).toFixed(2), capacity: 3,
-          image: "https://cdn-icons-png.flaticon.com/512/743/743131.png"
-        },
-        {
-          id: "car", name: "Car", eta: "4 min",
-          price: (distance * 20).toFixed(2), capacity: 4,
-          image: "https://cdn-icons-png.flaticon.com/512/743/743007.png"
-        },
-        {
-          id: "parcel", name: "Parcel", eta: "—",
-          price: "Go to Parcel Page", capacity: "-",
-          image: "https://cdn-icons-png.flaticon.com/512/2921/2921222.png"
-        }
+        { id: "bike", name: "Bike", eta: "3 min", price: (distance * 10).toFixed(2), capacity: 1,
+          image: "https://cdn-icons-png.flaticon.com/512/2972/2972185.png" },
+        { id: "auto", name: "Auto", eta: "2 min", price: (distance * 15).toFixed(2), capacity: 3,
+          image: "https://cdn-icons-png.flaticon.com/512/743/743131.png" },
+        { id: "car", name: "Car", eta: "4 min", price: (distance * 20).toFixed(2), capacity: 4,
+          image: "https://cdn-icons-png.flaticon.com/512/743/743007.png" },
+        { id: "parcel", name: "Parcel", eta: "—", price: "Go to Parcel Page", capacity: "-",
+          image: "https://cdn-icons-png.flaticon.com/512/2921/2921222.png" }
       ]);
     }
   }, [distance]);
@@ -183,63 +178,44 @@ export default function Booking() {
       navigate("/parcel");
       return;
     }
-    setLookingForDriver(true);
-    socket.emit("rideRequested", {
-      type: selectedRide,
-      pickup: pickupAddress,
-      drop: dropAddress,
-      distance,
-    });
+    setLookingForRider(true);
   };
 
-  // 🚖 Listen for driver response + GPS
+  // 🚖 Listen for backend events
   useEffect(() => {
     socket.on("rideAccepted", (ride) => {
-      setLookingForDriver(false);
+      console.log("✅ Ride accepted:", ride);
+      setLookingForRider(false);
       setDrawerOpen(false);
-      setDriver(ride.driver);
-      setRideStarted(true);
-      setShowDriverModal(true);
+      setAssignedRider(ride.acceptedBy);
+      setRiderPanelOpen(true);
+      setRideStatus("Rider en route 🚖");
     });
 
     socket.on("rideRejected", () => {
-      setLookingForDriver(false);
-      alert("❌ All drivers rejected your request.");
+      setLookingForRider(false);
+      alert("❌ All riders rejected your request.");
     });
 
-    socket.on("driverLocationUpdate", ({ coords }) => {
-      setDriverLocation(coords);
-    });
-
-    socket.on("driverArrived", () => {
-      alert("🚖 Your driver has arrived at pickup location!");
+    socket.on("riderLocationUpdate", ({ coords }) => {
+      setRiderLocation(coords);
     });
 
     return () => {
       socket.off("rideAccepted");
       socket.off("rideRejected");
-      socket.off("driverLocationUpdate");
-      socket.off("driverArrived");
+      socket.off("riderLocationUpdate");
     };
   }, []);
 
   // Icons
-  const pickupIcon = new L.Icon({
-    iconUrl: "https://cdn-icons-png.flaticon.com/512/32/32339.png",
-    iconSize: [25, 25],
-  });
-  const dropIcon = new L.Icon({
-    iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
-    iconSize: [35, 35],
-  });
+  const pickupIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/32/32339.png", iconSize: [25, 25] });
+  const dropIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png", iconSize: [35, 35] });
   const currentIcon = new L.DivIcon({
     className: "custom-blue-dot",
     html: `<div style="width:16px;height:16px;background:blue;border-radius:50%;border:2px solid white;"></div>`,
   });
-  const driverIcon = new L.Icon({
-    iconUrl: "https://cdn-icons-png.flaticon.com/512/64/64113.png",
-    iconSize: [35, 35],
-  });
+  const riderIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/64/64113.png", iconSize: [35, 35] });
 
   return (
     <Container maxWidth="xl" sx={{ mt: 3 }}>
@@ -247,8 +223,7 @@ export default function Booking() {
         {/* Left panel */}
         <Paper sx={{ p: 3, borderRadius: 2 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Find a trip</Typography>
-          <TextField fullWidth label="Pickup Address" value={pickupAddress}
-            sx={{ mb: 2 }} InputProps={{ readOnly: true }} />
+          <TextField fullWidth label="Pickup Address" value={pickupAddress} sx={{ mb: 2 }} InputProps={{ readOnly: true }} />
           <TextField fullWidth label="Drop Address" value={dropAddress}
             onChange={(e) => { setDropAddress(e.target.value); fetchSuggestions(e.target.value); }}
             sx={{ mb: 2 }} />
@@ -262,22 +237,6 @@ export default function Booking() {
           <Button fullWidth variant="contained"
             sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" }, mt: 2 }}
             onClick={handleFindRiders}>Find Riders</Button>
-
-          {/* ✅ Driver details card */}
-          {driver && (
-            <Card sx={{ mt: 3, p: 2 }}>
-              <CardContent>
-                <Typography variant="h6">Your Driver</Typography>
-                <Typography><b>Name:</b> {driver.fullName}</Typography>
-                <Typography><b>Mobile:</b> {driver.mobile}</Typography>
-                <Typography><b>Vehicle:</b> {driver.vehicle?.type} ({driver.vehicle?.plate})</Typography>
-                <Box mt={2}>
-                  <Button variant="contained" color="success" sx={{ mr: 2 }}>📞 Call</Button>
-                  <Button variant="outlined" color="primary">💬 Chat</Button>
-                </Box>
-              </CardContent>
-            </Card>
-          )}
         </Paper>
 
         {/* Right panel */}
@@ -288,8 +247,8 @@ export default function Booking() {
               <Marker position={pickup} icon={currentIcon}><Popup>You are here</Popup></Marker>
               <DraggablePickupMarker />
               {drop && <Marker position={drop} icon={dropIcon}><Popup>Drop • {distance} km</Popup></Marker>}
-              {driverLocation && (
-                <Marker position={driverLocation} icon={driverIcon}><Popup>Driver</Popup></Marker>
+              {riderLocation && (
+                <Marker position={riderLocation} icon={riderIcon}><Popup>Rider</Popup></Marker>
               )}
               <LocationMarker />
               {route && <Polyline positions={route} pathOptions={{ color: "black", weight: 4 }} />}
@@ -325,10 +284,10 @@ export default function Booking() {
               </Typography>
             </Box>
           ))}
-          {lookingForDriver ? (
+          {lookingForRider ? (
             <Box textAlign="center" sx={{ my: 3 }}>
               <CircularProgress />
-              <Typography variant="body1" sx={{ mt: 2 }}>⏳ Looking for drivers...</Typography>
+              <Typography variant="body1" sx={{ mt: 2 }}>⏳ Looking for riders...</Typography>
             </Box>
           ) : (
             <Button variant="contained" fullWidth sx={{ mt: 2 }}
@@ -340,33 +299,29 @@ export default function Booking() {
         </Box>
       </Drawer>
 
-      {/* Driver accepted modal */}
-      <Dialog open={showDriverModal} onClose={() => setShowDriverModal(false)}>
-        <DialogTitle>Ride Started 🚖</DialogTitle>
-        <DialogContent>
-          {driver && (
-            <Box>
-              <Typography><b>Driver:</b> {driver.fullName}</Typography>
-              <Typography><b>Mobile:</b> {driver.mobile}</Typography>
-              <Typography><b>Vehicle:</b> {driver.vehicle?.type} ({driver.vehicle?.plate})</Typography>
-            </Box>
+      {/* ✅ Rider details drawer */}
+      <Drawer anchor="bottom" open={riderPanelOpen} onClose={() => setRiderPanelOpen(false)}>
+        <Box sx={{ p: 3 }}>
+          {assignedRider && (
+            <>
+              <Typography variant="h6" sx={{ fontWeight: "bold", mb: 1 }}>
+                Your Rider is on the way 🚗
+              </Typography>
+              <Typography><b>Name:</b> {assignedRider.fullName}</Typography>
+              <Typography><b>Mobile:</b> {assignedRider.mobile}</Typography>
+              <Typography><b>Vehicle:</b> {assignedRider.vehicle?.type} ({assignedRider.vehicle?.plate})</Typography>
+              <Typography><b>Fare:</b> ₹{(distance * 15).toFixed(2)}</Typography>
+              <Box sx={{ mt: 2, display: "flex", gap: 2 }}>
+                <Button variant="contained" color="success">📞 Call</Button>
+                <Button variant="outlined" color="primary">💬 Chat</Button>
+              </Box>
+              <Typography variant="body1" sx={{ mt: 2 }}>
+                {rideStatus}
+              </Typography>
+            </>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Ride in progress card */}
-      {rideStarted && driver && (
-        <Card sx={{ mt: 3, p: 2 }}>
-          <CardContent>
-            <Typography variant="h6">Ride in Progress</Typography>
-            <Typography>Driver: {driver.fullName}</Typography>
-            <Typography>Vehicle: {driver.vehicle?.type} ({driver.vehicle?.plate})</Typography>
-            {driverLocation && (
-              <Typography>Driver en route 🚗 (lat:{driverLocation.lat}, lng:{driverLocation.lng})</Typography>
-            )}
-          </CardContent>
-        </Card>
-      )}
+        </Box>
+      </Drawer>
     </Container>
   );
 }

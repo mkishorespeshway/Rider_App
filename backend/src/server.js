@@ -6,8 +6,6 @@ const cloudinary = require("cloudinary").v2;
 require("dotenv").config();
 const http = require("http");
 const { Server } = require("socket.io");
-const { updateDriverLocation } = require("./controllers/rides.controller");
-
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -29,28 +27,28 @@ app.set("io", io); // make io available inside controllers
 io.on("connection", (socket) => {
   console.log("✅ Socket connected:", socket.id);
 
-  // Rider created a new ride
-  socket.on("newRide", (ride) => {
-    console.log("📦 New ride request:", ride);
-    io.emit("rideRequest", ride); // notify all drivers
+  // ✅ Join personal room after login
+  socket.on("join", (userId) => {
+    console.log(`📌 User joined room: ${userId}`);
+    socket.join(userId);
   });
 
-  // Driver accepted
-  socket.on("acceptRide", (ride) => {
-    console.log("🚖 Ride accepted:", ride._id);
-    io.emit("rideAccepted", ride); // notify rider
+  socket.on("disconnect", () => {
+    console.log("❌ Socket disconnected:", socket.id);
   });
 
-  // Driver rejected
-  socket.on("rejectRide", (ride) => {
+
+
+  // Rider accepts ride
+  socket.on("riderAccepted", (ride) => {
+    console.log("🚖 Rider accepted ride:", ride._id);
+    io.to(ride.riderId.toString()).emit("rideAccepted", ride); // notify booking rider
+  });
+
+  // Rider rejects
+  socket.on("riderRejected", (ride) => {
     console.log("❌ Ride rejected:", ride._id);
-    io.emit("rideRejected", ride); // notify rider
-  });
-
-  // Driver sends GPS updates
-  socket.on("driverLocation", ({ rideId, coords }) => {
-    console.log(`📍 Driver location update for ride ${rideId}:`, coords);
-    io.emit("driverLocationUpdate", { rideId, coords });
+    io.to(ride.riderId.toString()).emit("rideRejected", ride);
   });
 
   // Rider sends GPS updates
@@ -58,16 +56,6 @@ io.on("connection", (socket) => {
     console.log(`📍 Rider location update for ride ${rideId}:`, coords);
     io.emit("riderLocationUpdate", { rideId, coords });
   });
-  
-  io.on("connection", (socket) => {
-  console.log("✅ Socket connected:", socket.id);
-
-  updateDriverLocation(io, socket);
-
-  socket.on("disconnect", () => {
-    console.log("❌ Socket disconnected:", socket.id);
-  });
-});
 
   socket.on("disconnect", () => {
     console.log("❌ Socket disconnected:", socket.id);
@@ -100,8 +88,8 @@ mongoose
   })
   .then(async () => {
     console.log("✅ MongoDB Connected");
+
     const User = require("./models/User");
-    const Driver = require("./models/Driver");
     const Ride = require("./models/Ride");
     const Vehicle = require("./models/Vehicle");
     const Payment = require("./models/Payment");
@@ -111,7 +99,6 @@ mongoose
     try {
       const models = [
         { model: User, name: "User" },
-        { model: Driver, name: "Driver" },
         { model: Ride, name: "Ride" },
         { model: Vehicle, name: "Vehicle" },
         { model: Payment, name: "Payment" },
@@ -139,7 +126,6 @@ app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/otp", require("./routes/otpRoutes"));
 app.use("/api/rides", require("./routes/rides.routes"));
 app.use("/api/rider", require("./routes/rider.routes"));
-app.use("/api/drivers", require("./routes/drivers.routes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/parcels", require("./routes/parcelRoutes"));
 app.use("/api/sos", require("./routes/sosRoutes"));
