@@ -19,8 +19,3 @@ yarn-error.log*
 .env
 frontend/.env
 backend/.env
-
-# Cache
-.cache/
-frontend/.cache/
-backend/.cache/

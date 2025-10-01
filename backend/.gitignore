@@ -10,6 +10,7 @@ build/
 *.cache
 .cache/
 frontend/node_modules/.cache/
+frontend/.cache
 
 # env files
 .env
