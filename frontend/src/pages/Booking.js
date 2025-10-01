@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from "react";
 import {
   Container, Paper, Typography, TextField, Box,
-  Button, ListItemButton, Drawer, CircularProgress
+  Button, Drawer, CircularProgress, ListItemButton
 } from "@mui/material";
-import {
-  MapContainer, TileLayer, Marker, Polyline, Popup, useMapEvents
-} from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { io } from "socket.io-client";
+import MapComponent from "../components/Map";
 
 const socket = io("http://localhost:5000");
 
@@ -20,9 +16,11 @@ export default function Booking() {
   const [drop, setDrop] = useState(null);
   const [pickupAddress, setPickupAddress] = useState("");
   const [dropAddress, setDropAddress] = useState("");
+  const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropSuggestions, setDropSuggestions] = useState([]);
   const [route, setRoute] = useState(null);
   const [distance, setDistance] = useState(null);
+  const [duration, setDuration] = useState(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rideOptions, setRideOptions] = useState([]);
@@ -37,15 +35,16 @@ export default function Booking() {
   const { auth } = useAuth();
   const navigate = useNavigate();
 
-  // ✅ Join user room after login
+  const GOOGLE_API_KEY = "AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"; // 🔑 Replace with your real key
+
+  // ✅ Join socket room
   useEffect(() => {
     if (auth?.user?._id) {
       socket.emit("join", auth.user._id);
-      console.log("📌 User joined room:", auth.user._id);
     }
   }, [auth]);
 
-  // 📍 Get current location
+  // 📍 Get current location for pickup
   useEffect(() => {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -54,106 +53,118 @@ export default function Booking() {
         const addr = await getAddressFromCoords(loc.lat, loc.lng);
         setPickupAddress(addr);
       },
-      (err) => console.error("Geolocation error:", err)
+      (err) => console.error("Geolocation error:", err.message)
     );
   }, []);
 
-  // 🌍 Reverse geocode
+  // 🌍 Reverse geocode helper
   const getAddressFromCoords = async (lat, lng) => {
     try {
       const res = await axios.get(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_API_KEY}`
       );
-      return res.data.display_name || "";
+      return res.data.results[0]?.formatted_address || "";
     } catch {
       return "";
     }
   };
 
-  // 🔎 Drop suggestions
-  const fetchSuggestions = async (query) => {
-    if (!query) return;
+  // 🔎 Fetch suggestions using Google AutocompleteService (with 50 km radius)
+  const fetchSuggestions = (input, setSuggestions, loc) => {
+    if (!input || !window.google) return setSuggestions([]);
+
+    const service = new window.google.maps.places.AutocompleteService();
+
+    service.getPlacePredictions(
+      {
+        input,
+        location: loc
+          ? new window.google.maps.LatLng(loc.lat, loc.lng)
+          : new window.google.maps.LatLng(17.385044, 78.486671), // Hyderabad fallback
+        radius: 50000, // ✅ 50 km
+        componentRestrictions: { country: "in" }, // ✅ restrict to India (optional)
+      },
+      (predictions, status) => {
+        if (
+          status === window.google.maps.places.PlacesServiceStatus.OK &&
+          predictions
+        ) {
+          setSuggestions(predictions);
+        } else {
+          setSuggestions([]);
+        }
+      }
+    );
+  };
+
+  const handlePickupSelect = async (placeId, description) => {
     try {
-      const res = await axios.get("https://nominatim.openstreetmap.org/search", {
-        params: { q: query, format: "json", limit: 5 },
-      });
-      setDropSuggestions(res.data);
+      const service = new window.google.maps.places.PlacesService(
+        document.createElement("div")
+      );
+      service.getDetails(
+        { placeId, fields: ["geometry.location"] },
+        (place, status) => {
+          if (
+            status === window.google.maps.places.PlacesServiceStatus.OK &&
+            place.geometry
+          ) {
+            const loc = {
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng(),
+            };
+            setPickup(loc);
+            setPickupAddress(description);
+            setPickupSuggestions([]);
+          }
+        }
+      );
     } catch (err) {
-      console.error("Suggestion fetch failed:", err);
+      console.error("Pickup place details failed:", err);
     }
   };
 
-  // 🛣 Route + Distance
-  useEffect(() => {
-    const fetchRoute = async () => {
-      if (pickup && drop) {
-        try {
-          const res = await axios.get(
-            `https://router.project-osrm.org/route/v1/driving/${pickup.lng},${pickup.lat};${drop.lng},${drop.lat}?overview=full&geometries=geojson`
-          );
-          const data = res.data.routes[0];
-          setRoute(data.geometry.coordinates.map((c) => [c[1], c[0]]));
-          setDistance((data.distance / 1000).toFixed(2));
-        } catch (err) {
-          console.error("Route fetch failed:", err);
+  const handleDropSelect = async (placeId, description) => {
+    try {
+      const service = new window.google.maps.places.PlacesService(
+        document.createElement("div")
+      );
+      service.getDetails(
+        { placeId, fields: ["geometry.location"] },
+        (place, status) => {
+          if (
+            status === window.google.maps.places.PlacesServiceStatus.OK &&
+            place.geometry
+          ) {
+            const loc = {
+              lat: place.geometry.location.lat(),
+              lng: place.geometry.location.lng(),
+            };
+            setDrop(loc);
+            setDropAddress(description);
+            setDropSuggestions([]);
+          }
         }
-      }
-    };
-    fetchRoute();
-  }, [pickup, drop]);
+      );
+    } catch (err) {
+      console.error("Drop place details failed:", err);
+    }
+  };
 
-  // 🚖 Update ride options
+  // 🚖 Update ride options dynamically
   useEffect(() => {
     if (distance) {
+      const km = parseFloat(distance);
       setRideOptions([
-        { id: "bike", name: "Bike", eta: "3 min", price: (distance * 10).toFixed(2), capacity: 1,
-          image: "https://cdn-icons-png.flaticon.com/512/2972/2972185.png" },
-        { id: "auto", name: "Auto", eta: "2 min", price: (distance * 15).toFixed(2), capacity: 3,
-          image: "https://cdn-icons-png.flaticon.com/512/743/743131.png" },
-        { id: "car", name: "Car", eta: "4 min", price: (distance * 20).toFixed(2), capacity: 4,
-          image: "https://cdn-icons-png.flaticon.com/512/743/743007.png" },
-        { id: "parcel", name: "Parcel", eta: "—", price: "Go to Parcel Page", capacity: "-",
-          image: "https://cdn-icons-png.flaticon.com/512/2921/2921222.png" }
+        { id: "bike", name: "Bike", eta: "3 min", price: "₹" + (km * 10).toFixed(2) },
+        { id: "auto", name: "Auto", eta: "2 min", price: "₹" + (km * 15).toFixed(2) },
+        { id: "car", name: "Car", eta: "4 min", price: "₹" + (km * 20).toFixed(2) },
+        { id: "parcel", name: "Parcel", eta: "—", price: "Go to Parcel Page" }
       ]);
     }
   }, [distance]);
 
-  // 📍 Drop marker by map click
-  function LocationMarker() {
-    useMapEvents({
-      async click(e) {
-        setDrop(e.latlng);
-        const addr = await getAddressFromCoords(e.latlng.lat, e.latlng.lng);
-        setDropAddress(addr);
-      },
-    });
-    return null;
-  }
-
-  // 📍 Draggable pickup marker
-  function DraggablePickupMarker() {
-    return (
-      pickup && (
-        <Marker
-          position={pickup}
-          icon={pickupIcon}
-          draggable={true}
-          eventHandlers={{
-            dragend: async (e) => {
-              const newPos = e.target.getLatLng();
-              setPickup(newPos);
-              const addr = await getAddressFromCoords(newPos.lat, newPos.lng);
-              setPickupAddress(addr);
-            },
-          }}
-        >
-          <Popup>Pickup</Popup>
-        </Marker>
-      )
-    );
-  }
-
-  // 🔥 create ride request
+  // 🔥 Create ride request
   const handleFindRiders = async () => {
     if (!pickup || !drop || !distance) {
       alert("Please select pickup and drop");
@@ -181,10 +192,9 @@ export default function Booking() {
     setLookingForRider(true);
   };
 
-  // 🚖 Listen for backend events
+  // 🚖 Socket listeners
   useEffect(() => {
     socket.on("rideAccepted", (ride) => {
-      console.log("✅ Ride accepted:", ride);
       setLookingForRider(false);
       setDrawerOpen(false);
       setAssignedRider(ride.acceptedBy);
@@ -208,52 +218,79 @@ export default function Booking() {
     };
   }, []);
 
-  // Icons
-  const pickupIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/32/32339.png", iconSize: [25, 25] });
-  const dropIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png", iconSize: [35, 35] });
-  const currentIcon = new L.DivIcon({
-    className: "custom-blue-dot",
-    html: `<div style="width:16px;height:16px;background:blue;border-radius:50%;border:2px solid white;"></div>`,
-  });
-  const riderIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/64/64113.png", iconSize: [35, 35] });
-
   return (
     <Container maxWidth="xl" sx={{ mt: 3 }}>
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 2 }}>
         {/* Left panel */}
         <Paper sx={{ p: 3, borderRadius: 2 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Find a trip</Typography>
-          <TextField fullWidth label="Pickup Address" value={pickupAddress} sx={{ mb: 2 }} InputProps={{ readOnly: true }} />
-          <TextField fullWidth label="Drop Address" value={dropAddress}
-            onChange={(e) => { setDropAddress(e.target.value); fetchSuggestions(e.target.value); }}
-            sx={{ mb: 2 }} />
-          {dropSuggestions.map((s, i) => (
-            <ListItemButton key={i} onClick={() => {
-              setDrop({ lat: parseFloat(s.lat), lng: parseFloat(s.lon) });
-              setDropAddress(s.display_name);
-              setDropSuggestions([]);
-            }}>{s.display_name}</ListItemButton>
+
+          {/* ✅ Pickup Input with Suggestions */}
+          <TextField
+            fullWidth
+            label="Pickup Address"
+            value={pickupAddress}
+            onChange={(e) => {
+              setPickupAddress(e.target.value);
+              fetchSuggestions(e.target.value, setPickupSuggestions, pickup);
+            }}
+            sx={{ mb: 1 }}
+          />
+          {pickupSuggestions.map((s, i) => (
+            <ListItemButton
+              key={i}
+              onClick={() => handlePickupSelect(s.place_id, s.description)}
+            >
+              {s.description}
+            </ListItemButton>
           ))}
-          <Button fullWidth variant="contained"
+
+          {/* ✅ Drop Input with Suggestions */}
+          <TextField
+            fullWidth
+            label="Drop Address"
+            value={dropAddress}
+            onChange={(e) => {
+              setDropAddress(e.target.value);
+              fetchSuggestions(e.target.value, setDropSuggestions, pickup);
+            }}
+            sx={{ mb: 1 }}
+          />
+          {dropSuggestions.map((s, i) => (
+            <ListItemButton
+              key={i}
+              onClick={() => handleDropSelect(s.place_id, s.description)}
+            >
+              {s.description}
+            </ListItemButton>
+          ))}
+
+          <Button
+            fullWidth
+            variant="contained"
             sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" }, mt: 2 }}
-            onClick={handleFindRiders}>Find Riders</Button>
+            onClick={handleFindRiders}
+          >
+            Find Riders
+          </Button>
         </Paper>
 
-        {/* Right panel */}
+        {/* Right panel (Map) */}
         <Paper sx={{ p: 1, borderRadius: 2 }}>
-          {pickup && (
-            <MapContainer center={pickup} zoom={13} style={{ height: "600px", width: "100%" }}>
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Marker position={pickup} icon={currentIcon}><Popup>You are here</Popup></Marker>
-              <DraggablePickupMarker />
-              {drop && <Marker position={drop} icon={dropIcon}><Popup>Drop • {distance} km</Popup></Marker>}
-              {riderLocation && (
-                <Marker position={riderLocation} icon={riderIcon}><Popup>Rider</Popup></Marker>
-              )}
-              <LocationMarker />
-              {route && <Polyline positions={route} pathOptions={{ color: "black", weight: 4 }} />}
-            </MapContainer>
-          )}
+          <MapComponent
+            apiKey={GOOGLE_API_KEY}
+            pickup={pickup}
+            setPickup={setPickup}
+            setPickupAddress={setPickupAddress}
+            drop={drop}
+            setDrop={setDrop}
+            setDropAddress={setDropAddress}
+            riderLocation={riderLocation}
+            route={route}
+            setRoute={setRoute}
+            setDistance={setDistance}
+            setDuration={setDuration}
+          />
         </Paper>
       </Box>
 
@@ -268,20 +305,13 @@ export default function Booking() {
                 borderRadius: 2, p: 2, mb: 2, cursor: "pointer",
                 display: "flex", justifyContent: "space-between", alignItems: "center"
               }}>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <img src={opt.image} alt={opt.name} width={50} height={50} />
-                <Box>
-                  <Typography variant="body1" sx={{ fontWeight: "bold" }}>
-                    {opt.name} • {opt.capacity} seats
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {opt.eta} • {distance ? `${distance} km` : "—"}
-                  </Typography>
-                </Box>
+              <Box>
+                <Typography variant="body1" sx={{ fontWeight: "bold" }}>{opt.name}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {opt.eta} • {distance || "—"} • {duration || ""}
+                </Typography>
               </Box>
-              <Typography variant="h6" sx={{ fontWeight: "bold", color: "black" }}>
-                {isNaN(opt.price) ? opt.price : `₹${opt.price}`}
-              </Typography>
+              <Typography variant="h6" sx={{ fontWeight: "bold", color: "black" }}>{opt.price}</Typography>
             </Box>
           ))}
           {lookingForRider ? (
@@ -292,14 +322,15 @@ export default function Booking() {
           ) : (
             <Button variant="contained" fullWidth sx={{ mt: 2 }}
               onClick={handleRequestRide} disabled={!selectedRide}>
-              {selectedRide === "parcel" ? "Go to Parcel Page"
+              {selectedRide === "parcel"
+                ? "Go to Parcel Page"
                 : `Request ${rideOptions.find((r) => r.id === selectedRide)?.name || ""}`}
             </Button>
           )}
         </Box>
       </Drawer>
 
-      {/* ✅ Rider details drawer */}
+      {/* Rider details drawer */}
       <Drawer anchor="bottom" open={riderPanelOpen} onClose={() => setRiderPanelOpen(false)}>
         <Box sx={{ p: 3 }}>
           {assignedRider && (
@@ -310,14 +341,12 @@ export default function Booking() {
               <Typography><b>Name:</b> {assignedRider.fullName}</Typography>
               <Typography><b>Mobile:</b> {assignedRider.mobile}</Typography>
               <Typography><b>Vehicle:</b> {assignedRider.vehicle?.type} ({assignedRider.vehicle?.plate})</Typography>
-              <Typography><b>Fare:</b> ₹{(distance * 15).toFixed(2)}</Typography>
+              <Typography><b>Fare:</b> {rideOptions.find((r) => r.id === selectedRide)?.price}</Typography>
               <Box sx={{ mt: 2, display: "flex", gap: 2 }}>
                 <Button variant="contained" color="success">📞 Call</Button>
                 <Button variant="outlined" color="primary">💬 Chat</Button>
               </Box>
-              <Typography variant="body1" sx={{ mt: 2 }}>
-                {rideStatus}
-              </Typography>
+              <Typography variant="body1" sx={{ mt: 2 }}>{rideStatus}</Typography>
             </>
           )}
         </Box>

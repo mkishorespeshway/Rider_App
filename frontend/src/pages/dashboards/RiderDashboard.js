@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from "react";
 import {
-  Box, Card, CardContent, Typography, Button, CircularProgress, Paper
+  Box,
+  Card,
+  CardContent,
+  Typography,
+  Button,
+  CircularProgress,
+  Paper,
 } from "@mui/material";
-import {
-  MapContainer, TileLayer, Marker, Popup, Polyline
-} from "react-leaflet";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { useAuth } from "../../contexts/AuthContext";
-import { useNavigate } from "react-router-dom";  // ✅ added navigate
+import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
+import Map from "../../components/Map"; // ✅ Google Maps component
 
 const socket = io("http://localhost:5000");
 
@@ -18,32 +20,35 @@ export default function RiderDashboard() {
   const [rides, setRides] = useState([]);
   const [selectedRide, setSelectedRide] = useState(null);
   const [loading, setLoading] = useState(false);
-  const { auth, logout } = useAuth();   // ✅ added logout
+  const { auth, logout } = useAuth();
   const navigate = useNavigate();
 
+  // map state
+  const [pickup, setPickup] = useState(null);
+  const [pickupAddress, setPickupAddress] = useState("");
+  const [drop, setDrop] = useState(null);
+  const [dropAddress, setDropAddress] = useState("");
   const [riderLocation, setRiderLocation] = useState(null);
-  const [route, setRoute] = useState(null);
+  const [distance, setDistance] = useState("");
+  const [duration, setDuration] = useState("");
 
-  // ✅ handle logout
+  // ✅ Logout
   const handleLogout = () => {
     logout();
     navigate("/rider-login");
   };
 
-  // Icons
-  const pickupIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/32/32339.png", iconSize: [25, 25] });
-  const dropIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png", iconSize: [35, 35] });
-  const riderIcon = new L.Icon({ iconUrl: "https://cdn-icons-png.flaticon.com/512/64/64113.png", iconSize: [35, 35] });
-
-  // ✅ Get rider's live location
+  // ✅ Get rider's live location (updates every 5s)
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
+    const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        setRiderLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setRiderLocation(loc);
       },
       (err) => console.error("Geolocation error:", err),
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
     );
+    return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
   // 🔄 Fetch pending rides
@@ -51,7 +56,7 @@ export default function RiderDashboard() {
     try {
       setLoading(true);
       const res = await axios.get("http://localhost:5000/api/rides/pending", {
-        headers: { Authorization: `Bearer ${auth?.token}` }
+        headers: { Authorization: `Bearer ${auth?.token}` },
       });
       setRides(res.data.rides || []);
     } catch (err) {
@@ -67,6 +72,9 @@ export default function RiderDashboard() {
     socket.on("rideAccepted", (ride) => {
       console.log("✅ Ride accepted event:", ride);
       setSelectedRide(ride);
+
+      if (ride.pickupCoords) setPickup(ride.pickupCoords);
+      if (ride.dropCoords) setDrop(ride.dropCoords);
     });
 
     socket.on("rideRejected", () => {
@@ -90,19 +98,8 @@ export default function RiderDashboard() {
       );
       setSelectedRide(res.data.ride);
 
-      // ✅ Fetch route polyline between pickup & drop
-      if (res.data.ride.pickupCoords && res.data.ride.dropCoords) {
-        const { lat: pLat, lng: pLng } = res.data.ride.pickupCoords;
-        const { lat: dLat, lng: dLng } = res.data.ride.dropCoords;
-        try {
-          const routeRes = await axios.get(
-            `https://router.project-osrm.org/route/v1/driving/${pLng},${pLat};${dLng},${dLat}?overview=full&geometries=geojson`
-          );
-          setRoute(routeRes.data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]));
-        } catch (err) {
-          console.error("❌ Route fetch error:", err);
-        }
-      }
+      if (res.data.ride.pickupCoords) setPickup(res.data.ride.pickupCoords);
+      if (res.data.ride.dropCoords) setDrop(res.data.ride.dropCoords);
     } catch (err) {
       alert("Failed to accept ride");
     }
@@ -128,10 +125,14 @@ export default function RiderDashboard() {
         Rider Dashboard
       </Typography>
 
-      {/* ✅ Logout button */}
       <Button
         variant="contained"
-        sx={{ bgcolor: "black", color: "white", mb: 2, "&:hover": { bgcolor: "#333" } }}
+        sx={{
+          bgcolor: "black",
+          color: "white",
+          mb: 2,
+          "&:hover": { bgcolor: "#333" },
+        }}
         onClick={handleLogout}
       >
         Logout
@@ -141,63 +142,88 @@ export default function RiderDashboard() {
         <CircularProgress />
       ) : selectedRide ? (
         <>
-          {/* ✅ Show User details once ride accepted */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6">🚖 Ride Accepted</Typography>
-              <Typography><b>User:</b> {selectedRide.riderId?.fullName}</Typography>
-              <Typography><b>Phone:</b> {selectedRide.riderId?.mobile}</Typography>
-              <Typography><b>Pickup:</b> {selectedRide.pickup}</Typography>
-              <Typography><b>Drop:</b> {selectedRide.drop}</Typography>
+              <Typography>
+                <b>User:</b> {selectedRide.riderId?.fullName}
+              </Typography>
+              <Typography>
+                <b>Phone:</b> {selectedRide.riderId?.mobile}
+              </Typography>
+              <Typography>
+                <b>Pickup:</b> {selectedRide.pickup}
+              </Typography>
+              <Typography>
+                <b>Drop:</b> {selectedRide.drop}
+              </Typography>
+              <Typography>
+                <b>Distance:</b> {distance} km
+              </Typography>
+              <Typography>
+                <b>ETA:</b> {duration}
+              </Typography>
               <Box mt={2}>
-                <Button variant="contained" color="success" sx={{ mr: 2 }}>Call 📞</Button>
-                <Button variant="outlined" color="primary">Chat 💬</Button>
+                <Button variant="contained" color="success" sx={{ mr: 2 }}>
+                  Call 📞
+                </Button>
+                <Button variant="outlined" color="primary">
+                  Chat 💬
+                </Button>
               </Box>
             </CardContent>
           </Card>
 
-          {/* ✅ Map with rider + pickup/drop + polyline */}
+          {/* ✅ Google Map */}
           <Paper sx={{ p: 1 }}>
-            <MapContainer
-              center={riderLocation || selectedRide.pickupCoords}
-              zoom={13}
-              style={{ height: "500px", width: "100%" }}
-            >
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              {riderLocation && (
-                <Marker position={riderLocation} icon={riderIcon}>
-                  <Popup>You (Rider)</Popup>
-                </Marker>
-              )}
-              {selectedRide.pickupCoords && (
-                <Marker position={selectedRide.pickupCoords} icon={pickupIcon}>
-                  <Popup>Pickup</Popup>
-                </Marker>
-              )}
-              {selectedRide.dropCoords && (
-                <Marker position={selectedRide.dropCoords} icon={dropIcon}>
-                  <Popup>Drop</Popup>
-                </Marker>
-              )}
-              {route && <Polyline positions={route} pathOptions={{ color: "blue", weight: 4 }} />}
-            </MapContainer>
+            <Map
+              apiKey="AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"
+              pickup={pickup}
+              setPickup={setPickup}
+              setPickupAddress={setPickupAddress}
+              drop={drop}
+              setDrop={setDrop}
+              setDropAddress={setDropAddress}
+              riderLocation={riderLocation}
+              setDistance={setDistance}
+              setDuration={setDuration}
+            />
           </Paper>
         </>
       ) : (
         <>
-          <Typography variant="h5" gutterBottom>Pending Ride Requests</Typography>
+          <Typography variant="h5" gutterBottom>
+            Pending Ride Requests
+          </Typography>
           {rides.length === 0 ? (
             <Typography>No pending rides</Typography>
           ) : (
             rides.map((ride) => (
               <Card key={ride._id} sx={{ mb: 2 }}>
                 <CardContent>
-                  <Typography><b>Pickup:</b> {ride.pickup}</Typography>
-                  <Typography><b>Drop:</b> {ride.drop}</Typography>
+                  <Typography>
+                    <b>Pickup:</b> {ride.pickup}
+                  </Typography>
+                  <Typography>
+                    <b>Drop:</b> {ride.drop}
+                  </Typography>
                   <Typography>Status: {ride.status}</Typography>
                   <Box mt={2}>
-                    <Button variant="contained" color="success" onClick={() => handleAccept(ride._id)}>Accept ✅</Button>
-                    <Button variant="contained" color="error" sx={{ ml: 2 }} onClick={() => handleReject(ride._id)}>Reject ❌</Button>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={() => handleAccept(ride._id)}
+                    >
+                      Accept ✅
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      sx={{ ml: 2 }}
+                      onClick={() => handleReject(ride._id)}
+                    >
+                      Reject ❌
+                    </Button>
                   </Box>
                 </CardContent>
               </Card>
