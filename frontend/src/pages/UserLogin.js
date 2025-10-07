@@ -40,7 +40,8 @@ export default function UserLogin() {
         setMessage({ type: "error", text: res.data.message || "Failed to send OTP" });
       }
     } catch (err) {
-      setMessage({ type: "error", text: "Server error while sending OTP" });
+      const msg = err?.response?.data?.message || "Server error while sending OTP";
+      setMessage({ type: "error", text: msg });
     } finally {
       setLoading(false);
     }
@@ -62,12 +63,13 @@ export default function UserLogin() {
           roles: [res.data.role || res.data.user?.role || "user"], // ✅ FIX
         });
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
-        setTimeout(() => navigate("/user-dashboard"), 1000);
+        navigate("/booking");
       } else {
         setMessage({ type: "error", text: res.data.message || "Invalid OTP" });
       }
     } catch (err) {
-      setMessage({ type: "error", text: "Server error while verifying OTP" });
+      const msg = err?.response?.data?.message || "Server error while verifying OTP";
+      setMessage({ type: "error", text: msg });
     } finally {
       setLoading(false);
     }

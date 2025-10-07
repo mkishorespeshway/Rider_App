@@ -65,6 +65,13 @@ io.on("connection", (socket) => {
 // === Middleware ===
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
+ // Raw body for Razorpay webhook
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
+ // JSON parser for all other routes
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') return next();
+   return express.json({ limit: '10mb' })(req, res, next);
+ });
 
 // Request logger
 app.use((req, res, next) => {
@@ -129,6 +136,8 @@ app.use("/api/rider", require("./routes/rider.routes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/parcels", require("./routes/parcelRoutes"));
 app.use("/api/sos", require("./routes/sosRoutes"));
+app.use("/api/pricing", require("./routes/pricingRoutes"));
+app.use("/api/payments", require("./routes/payments.routes"));
 
 // Uploads folder
 app.use("/uploads", express.static("uploads"));

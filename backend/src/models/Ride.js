@@ -18,6 +18,12 @@ const rideSchema = new mongoose.Schema(
       required: true,
     },
 
+    // Driver who accepted the ride
+    driverId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    
     captainId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -33,6 +39,41 @@ const rideSchema = new mongoose.Schema(
     dropCoords: {
       lat: { type: Number, required: true },
       lng: { type: Number, required: true },
+    },
+    // Zone identifiers for pricing auditability
+    pickupZoneId: { type: String, default: null },
+    dropZoneId: { type: String, default: null },
+
+    // Dynamic pricing fields
+    distance: { type: Number, required: true, default: 0 }, // in kilometers
+    basePrice: { type: Number, required: true, default: 25 }, // base fare in rupees
+    
+    // Pricing factors
+    pricingFactors: {
+      weatherMultiplier: { type: Number, default: 1.0 },
+      trafficMultiplier: { type: Number, default: 1.0 },
+      demandMultiplier: { type: Number, default: 1.0 },
+      timeMultiplier: { type: Number, default: 1.0 },
+    },
+    
+    // Final calculated price
+    finalPrice: { type: Number, required: true, default: 0 },
+    
+    // Payment details
+    paymentMethod: { 
+      type: String, 
+      enum: ["COD", "online"], 
+      default: "COD" 
+    },
+    detailedPaymentMethod: {
+      type: String,
+      enum: ["upi", "card", "wallet", ""],
+      default: ""
+    },
+    paymentStatus: { 
+      type: String, 
+      enum: ["pending", "completed"], 
+      default: "pending" 
     },
 
     status: {

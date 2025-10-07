@@ -34,7 +34,7 @@ exports.send = async (req, res) => {
 
     const otpRecord = await Otp.findOneAndUpdate(
       { mobile },
-      { otp, userId: user._id, otpExpires },
+      { otp, userId: user._id, role: user.role, otpExpires },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 

@@ -285,6 +285,22 @@ export default function AdminDashboard() {
                   <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Mobile</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Role</TableCell>
+                  
+                  {/* Additional rider signup fields */}
+                  {(activeTab === "riders" || activeTab === "captains" || activeTab === "pending") && (
+                    <>
+                      <TableCell sx={{ fontWeight: 600 }}>Gender</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Language</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Emergency Contact</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Address</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Vehicle Type</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Vehicle Number</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Profile Picture</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Vehicle Image</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                    </>
+                  )}
+                  
                   {(activeTab === "captains" || activeTab === "pending") && <TableCell sx={{ fontWeight: 600 }}>Documents</TableCell>}
                   {activeTab === "pending" && <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>Actions</TableCell>}
                   {activeTab === "rides" && <>
@@ -303,6 +319,64 @@ export default function AdminDashboard() {
                     <TableCell>{item.email || "-"}</TableCell>
                     <TableCell>{item.mobile || "-"}</TableCell>
                     <TableCell>{item.role || "-"}</TableCell>
+
+                    {/* Additional rider signup fields */}
+                    {(activeTab === "riders" || activeTab === "captains" || activeTab === "pending") && (
+                      <>
+                        <TableCell>{item.gender || "-"}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            const list = Array.isArray(item.preferredLanguages)
+                              ? item.preferredLanguages.filter(Boolean)
+                              : [];
+                            if (list.length) return list.join(", ");
+                            return item.preferredLanguage || "-";
+                          })()}
+                        </TableCell>
+                        <TableCell>
+                           {item.emergencyContactName && item.emergencyContactNumber
+                               ? `${item.emergencyContactName} (${item.emergencyContactNumber})`
+                                   : "-"}
+                        </TableCell>
+
+                       <TableCell>{item.address || "-"}</TableCell>
+                        <TableCell>{item.vehicleType || "-"}</TableCell>
+                        <TableCell>{item.vehicleNumber || "-"}</TableCell>
+                        <TableCell>
+                          {item.profilePicture ? (
+                            <Button 
+                              variant="outlined" 
+                              size="small" 
+                              onClick={() => window.open(item.profilePicture, '_blank')}
+                            >
+                              View Profile
+                            </Button>
+                          ) : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {item.vehicleImage ? (
+                            <Button 
+                              variant="outlined" 
+                              size="small" 
+                              onClick={() => window.open(item.vehicleImage, '_blank')}
+                            >
+                              View Vehicle
+                            </Button>
+                          ) : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Typography 
+                            sx={{ 
+                              color: item.approvalStatus === 'approved' ? 'green' : 
+                                     item.approvalStatus === 'rejected' ? 'red' : 'orange',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            {item.approvalStatus || 'pending'}
+                          </Typography>
+                        </TableCell>
+                      </>
+                    )}
 
                     {(activeTab === "captains" || activeTab === "pending") && (
                       <TableCell>{renderDocumentsCell(item)}</TableCell>
@@ -428,6 +502,6 @@ export default function AdminDashboard() {
           <Typography textAlign="center" mt={3}>No data found</Typography>
         )}
       </Box>
-    </Box>
-  );
+    </Box>
+  );
 }

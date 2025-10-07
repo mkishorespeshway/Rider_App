@@ -22,6 +22,11 @@ const RIDES_API = axios.create({
   baseURL: `${API_BASE}/api/rides`,
   headers: { "Content-Type": "application/json" },
 });
+// ✅ Payments API
+const PAYMENTS_API = axios.create({
+  baseURL: `${API_BASE}/api/payments`,
+  headers: { "Content-Type": "application/json" },
+});
 
 // helper: get token either from auth object or legacy token key
 const getToken = () => {
@@ -35,47 +40,31 @@ const getToken = () => {
   return localStorage.getItem("token") || null;
 };
 
-const attachToken = (config) => {
-  const token = getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-};
+// attach token
+[AUTH_API, OTP_API, RIDER_API, ADMIN_API, RIDES_API, PAYMENTS_API].forEach((inst) => {
+  inst.interceptors.request.use((config) => {
+    const token = getToken();
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    return config;
+  });
+});
 
-RIDER_API.interceptors.request.use(attachToken);
-RIDES_API.interceptors.request.use(attachToken);
-ADMIN_API.interceptors.request.use(attachToken);
-
-// --- AUTH & RIDER APIs ---
-export const signupUser = (formData) => AUTH_API.post("/signup-user", formData);
-
-// ✅ FIXED: sends FormData correctly
+// --- AUTH APIs ---
+export const signupUser = (payload) => AUTH_API.post("/signup-user", payload);
 export const signupRider = (formData) =>
-  RIDER_API.post("/signup", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-
-export const sendOtp = (mobile, role) => OTP_API.post("/send", { mobile, role });
-export const verifyOtp = (mobile, otp, role) => OTP_API.post("/verify", { mobile, otp, role });
-export const checkRiderApproval = (mobile) =>
-  RIDER_API.get(`/check-approval/${mobile}`);
-
+  RIDER_API.post("/signup", formData, { headers: { "Content-Type": "multipart/form-data" } });
+export const sendOtp = (mobile) => OTP_API.post("/send", { mobile });
+export const verifyOtp = (mobile, otp) => OTP_API.post("/verify", { mobile, otp });
 export const getRiderStatus = () => RIDER_API.get("/status");
-export const uploadRiderDocs = (riderId, docs) =>
-  RIDER_API.post(`/upload-docs/${riderId}`, docs, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+export const checkRiderApproval = (mobile) => RIDER_API.get(`/check-approval/${mobile}`);
 
 // --- ADMIN APIs ---
-export const loginAdmin = (data) => ADMIN_API.post("/login", data);
+export const loginAdmin = (payload) => ADMIN_API.post("/login", payload);
 export const getAllRiders = () => ADMIN_API.get("/riders");
-export const getAllUsers = () => ADMIN_API.get("/users");
-
 export const approveRider = (id) => ADMIN_API.post(`/captain/${id}/approve`);
 export const rejectRider = (id) => ADMIN_API.post(`/captain/${id}/reject`);
-
 export const getPendingCaptains = () => ADMIN_API.get("/pending-captains");
+export const getAllUsers = () => ADMIN_API.get("/users");
 export const getCaptains = () => ADMIN_API.get("/captains");
 export const getOverview = () => ADMIN_API.get("/overview");
 export const getAllRides = () => ADMIN_API.get("/rides");
@@ -84,6 +73,19 @@ export const getAllRides = () => ADMIN_API.get("/rides");
 export const createRide = (data) => RIDES_API.post("/create", data);
 export const findDrivers = () => RIDES_API.get("/drivers");
 export const getRideHistory = () => RIDES_API.get("/history");
+
+// --- Payments ---
+export const initiatePayment = (data) => PAYMENTS_API.post("/initiate", data);
+export const verifyPayment = (data) => PAYMENTS_API.post("/verify", data);
+
+// Upload rider documents (legacy usage in DocumentUpload)
+export const uploadRiderDocs = (token, formData) =>
+  axios.post(`${API_BASE}/api/rider/upload-docs`, formData, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "multipart/form-data",
+    },
+  });
 
 // --- 🚨 SOS APIs ---
 export const sendSOS = (role, id) =>
@@ -124,6 +126,8 @@ export default {
   createRide,
   findDrivers,
   getRideHistory,
+  initiatePayment,
+  verifyPayment,
   sendSOS,
   getSOSAlerts,
   resolveSOS,

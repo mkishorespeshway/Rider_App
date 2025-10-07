@@ -28,8 +28,8 @@ export default function AdminLogin() {
         setError("Invalid credentials");
       }
     } catch (err) {
-      console.error("Admin login error:", err);
-      setError("Login failed. Check your credentials.");
+      const msg = err?.response?.data?.message || "Login failed. Check your credentials.";
+      setError(msg);
     }
   };
 

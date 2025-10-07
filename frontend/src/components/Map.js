@@ -1,17 +1,31 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   GoogleMap,
   Marker,
   useJsApiLoader,
 } from "@react-google-maps/api";
+import axios from "axios";
 
 const containerStyle = {
   width: "100%",
   height: "600px",
 };
 
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
 // Default Hyderabad
 const DEFAULT_PICKUP = { lat: 17.385044, lng: 78.486671 };
+
+// Normalize any object that may have latitude/longitude instead of lat/lng
+const normalizeLatLng = (pos) => {
+  if (!pos) return null;
+  const latRaw = pos.lat ?? pos.latitude;
+  const lngRaw = pos.lng ?? pos.longitude;
+  const lat = typeof latRaw === "number" ? latRaw : parseFloat(latRaw);
+  const lng = typeof lngRaw === "number" ? lngRaw : parseFloat(lngRaw);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+  return null;
+};
 
 export default function Map({
   apiKey,
@@ -24,27 +38,42 @@ export default function Map({
   riderLocation,
   setDistance,
   setDuration,
+  // NEW: send normal (baseline) duration to parent alongside current duration
+  setNormalDuration,
 }) {
   const mapRef = useRef(null);
   const directionsRendererRef = useRef(null);
+  const [routeColor, setRouteColor] = useState("blue");
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: apiKey,
     libraries: ["places"], // ✅ only "places", no "marker"
   });
 
-  // ✅ Reverse geocode
-  const getAddressFromCoords = async (lat, lng, cb) => {
-    try {
-      const res = await fetch(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
-      );
-      const data = await res.json();
-      cb(data.results[0]?.formatted_address || "");
-    } catch (err) {
-      console.error("Reverse geocode failed:", err);
+  // Fetch pricing factors to determine traffic severity and set route color
+  useEffect(() => {
+    async function fetchFactorsAndSetColor() {
+      try {
+        const lat = (pickup?.lat ?? pickup?.latitude);
+        const lng = (pickup?.lng ?? pickup?.longitude);
+        if (!lat || !lng) return;
+        const { data } = await axios.get(`${API_URL}/pricing/factors`, {
+          params: { latitude: lat, longitude: lng },
+        });
+        const traffic = (data.currentTraffic || "light").toLowerCase();
+        let color = "blue";
+        if (traffic === "severe") color = "red";
+        else if (traffic === "heavy") color = "#ff7f00"; // orange
+        else if (traffic === "moderate") color = "#f1c40f"; // yellow
+        else color = "#3498db"; // light → blue
+        setRouteColor(color);
+      } catch (e) {
+        console.warn("Failed to fetch pricing factors:", e.message);
+        setRouteColor("blue");
+      }
     }
-  };
+    fetchFactorsAndSetColor();
+  }, [pickup]);
 
   // ✅ Ensure pickup always exists → try GPS first
   useEffect(() => {
@@ -72,7 +101,7 @@ export default function Map({
     }
   }, [pickup, setPickup, setPickupAddress]);
 
-  // ✅ Fetch directions
+  // ✅ Fetch directions with traffic-aware duration when possible
   useEffect(() => {
     if (isLoaded && pickup && drop) {
       const directionsService = new window.google.maps.DirectionsService();
@@ -80,28 +109,56 @@ export default function Map({
       if (!directionsRendererRef.current) {
         directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
           suppressMarkers: true,
-          polylineOptions: { strokeColor: "blue", strokeWeight: 5 },
+          polylineOptions: { strokeColor: routeColor, strokeWeight: 5 },
         });
       }
 
       directionsRendererRef.current.setMap(mapRef.current);
 
+      const origin = normalizeLatLng(pickup) || pickup; // fallback to original if already lat/lng
+      const destination = normalizeLatLng(drop) || drop;
+
       directionsService.route(
         {
-          origin: pickup,
-          destination: drop,
+          origin,
+          destination,
           travelMode: window.google.maps.TravelMode.DRIVING,
+          // driving options enable traffic-based ETA
+          drivingOptions: {
+            departureTime: new Date(),
+            trafficModel: "bestguess",
+          },
         },
         (result, status) => {
           if (status === "OK" && result) {
             directionsRendererRef.current.setDirections(result);
 
-            // ✅ repeat suppression each time
-            directionsRendererRef.current.setOptions({ suppressMarkers: true });
+            // ✅ repeat suppression each time and update polyline color
+            directionsRendererRef.current.setOptions({
+              suppressMarkers: true,
+              polylineOptions: { strokeColor: routeColor, strokeWeight: 5 },
+            });
 
             const leg = result.routes[0].legs[0];
-            setDistance(leg.distance.text.replace(" km", ""));
-            setDuration(leg.duration.text);
+
+            // Use numeric meters for exact km
+            const meters = leg.distance?.value;
+            if (typeof meters === "number") {
+              const km = meters / 1000;
+              setDistance(km.toFixed(2));
+            } else if (leg.distance?.text) {
+              // fallback to parsing text if numeric not available
+              const parsed = parseFloat(leg.distance.text.replace(/[^0-9.]/g, ""));
+              if (!isNaN(parsed)) setDistance(parsed.toFixed(2));
+            }
+
+            // Duration: current (traffic-aware) vs normal
+            const normalText = leg.duration?.text || "";
+            const currentText = leg.duration_in_traffic?.text || normalText;
+            setDuration(currentText);
+            if (typeof setNormalDuration === "function") {
+              setNormalDuration(normalText);
+            }
           } else {
             console.error("Directions request failed:", status);
           }
@@ -110,27 +167,25 @@ export default function Map({
     } else if (directionsRendererRef.current) {
       directionsRendererRef.current.setMap(null);
     }
-  }, [isLoaded, pickup, drop, setDistance, setDuration]);
+  }, [isLoaded, pickup, drop, setDistance, setDuration, routeColor, setNormalDuration]);
 
-  // ✅ Recenter map when pickup changes
- // ✅ Recenter map when pickup changes
-useEffect(() => {
-  if (pickup && mapRef.current) {
-    new window.google.maps.Marker({
-      position: pickup,
-      map: mapRef.current,
-      icon: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
-    });
-  }
-}, [pickup]);
-
+  // ❌ Remove imperative marker creation to avoid duplicate pins
+  // useEffect(() => {
+  //   if (pickup && mapRef.current) {
+  //     new window.google.maps.Marker({
+  //       position: pickup,
+  //       map: mapRef.current,
+  //       icon: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+  //     });
+  //   }
+  // }, [pickup]);
 
   if (!isLoaded) return <p>Loading Map...</p>;
 
   return (
     <GoogleMap
       mapContainerStyle={containerStyle}
-      center={pickup || DEFAULT_PICKUP}
+      center={normalizeLatLng(pickup) || DEFAULT_PICKUP}
       zoom={14}
       options={{
         disableDefaultUI: true,
@@ -138,49 +193,76 @@ useEffect(() => {
         streetViewControl: false,
         fullscreenControl: false,
         gestureHandling: "greedy",
-            mapTypeControl: false,      // ❌ removes Map/Satellite toggle
-            rotateControl: false,       // ❌ removes rotate control (map compass)
-            scaleControl: true,         // ✅ adds scale bar
+        mapTypeControl: false, // ❌ removes Map/Satellite toggle
       }}
-      onLoad={(map) => (mapRef.current = map)}
+      onLoad={(map) => {
+        mapRef.current = map;
+      }}
       onClick={(e) => {
-        const loc = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-        setDrop(loc);
-        getAddressFromCoords(loc.lat, loc.lng, setDropAddress);
+        try {
+          const lat = e.latLng.lat();
+          const lng = e.latLng.lng();
+          if (typeof setDrop === "function") {
+            setDrop({ lat, lng });
+          }
+          getAddressFromCoords(lat, lng, setDropAddress);
+        } catch (err) {
+          console.warn("Map click to set drop failed:", err);
+        }
       }}
     >
-      {/* ✅ Pickup Marker (Green, never disappears) */}
+      {/* ✅ Pickup Marker */}
       {pickup && (
         <Marker
-         // key={`pickup-${pickup.lat}-${pickup.lng}`} // 🔑 stable key
-         key={`pickup-${pickup.lat.toFixed(5)}-${pickup.lng.toFixed(5)}-${Date.now()}`}
-
-          position={pickup}
-          draggable={true}
+          key={`pickup-${(normalizeLatLng(pickup)?.lat ?? pickup.lat ?? pickup.latitude)}-${(normalizeLatLng(pickup)?.lng ?? pickup.lng ?? pickup.longitude)}`}
+          position={normalizeLatLng(pickup) || pickup}
           icon={{
             url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+            scaledSize: new window.google.maps.Size(40, 40),
           }}
+          draggable={true}
           onDragEnd={(e) => {
-            const loc = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-            setPickup(loc);
-            getAddressFromCoords(loc.lat, loc.lng, setPickupAddress);
+            try {
+              const lat = e.latLng.lat();
+              const lng = e.latLng.lng();
+              if (typeof setPickup === "function") {
+                setPickup({ lat, lng });
+              }
+              getAddressFromCoords(lat, lng, setPickupAddress);
+              if (mapRef.current) {
+                mapRef.current.panTo({ lat, lng });
+              }
+            } catch (err) {
+              console.warn("Pickup drag failed:", err);
+            }
           }}
         />
       )}
 
-      {/* ✅ Drop Marker (Red) */}
+      {/* ✅ Drop Marker */}
       {drop && (
         <Marker
-          key={`drop-${drop.lat}-${drop.lng}`}
-          position={drop}
-          draggable={true}
+          key={`drop-${(drop.lat ?? drop.latitude)}-${(drop.lng ?? drop.longitude)}`}
+          position={normalizeLatLng(drop) || drop}
           icon={{
             url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+            scaledSize: new window.google.maps.Size(40, 40),
           }}
+          draggable={true}
           onDragEnd={(e) => {
-            const loc = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-            setDrop(loc);
-            getAddressFromCoords(loc.lat, loc.lng, setDropAddress);
+            try {
+              const lat = e.latLng.lat();
+              const lng = e.latLng.lng();
+              if (typeof setDrop === "function") {
+                setDrop({ lat, lng });
+              }
+              getAddressFromCoords(lat, lng, setDropAddress);
+              if (mapRef.current) {
+                mapRef.current.panTo({ lat, lng });
+              }
+            } catch (err) {
+              console.warn("Drop drag failed:", err);
+            }
           }}
         />
       )}
@@ -188,8 +270,8 @@ useEffect(() => {
       {/* ✅ Rider Marker (Blue Car Icon) */}
       {riderLocation && (
         <Marker
-          key={`rider-${riderLocation.lat}-${riderLocation.lng}`}
-          position={riderLocation}
+          key={`rider-${(riderLocation.lat ?? riderLocation.latitude)}-${(riderLocation.lng ?? riderLocation.longitude)}`}
+          position={normalizeLatLng(riderLocation) || riderLocation}
           icon={{
             url: "https://cdn-icons-png.flaticon.com/512/64/64113.png",
             scaledSize: new window.google.maps.Size(40, 40),
@@ -198,4 +280,15 @@ useEffect(() => {
       )}
     </GoogleMap>
   );
+}
+
+// Helper: Reverse geocode to get address
+async function getAddressFromCoords(lat, lng, setter) {
+  try {
+    const geocoder = new window.google.maps.Geocoder();
+    const { results } = await geocoder.geocode({ location: { lat, lng } });
+    if (results && results[0]) setter(results[0].formatted_address);
+  } catch (e) {
+    console.warn("Reverse geocoding failed:", e.message);
+  }
 }

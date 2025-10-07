@@ -32,7 +32,8 @@ export default function RiderLogin() {
         setMessage({ type: "error", text: res.data.message });
       }
     } catch (err) {
-      setMessage({ type: "error", text: "Server error while sending OTP" });
+      const msg = err?.response?.data?.message || "Server error while sending OTP";
+      setMessage({ type: "error", text: msg });
     } finally {
       setLoading(false);
     }
@@ -65,7 +66,8 @@ export default function RiderLogin() {
         setMessage({ type: "error", text: res.data.message });
       }
     } catch (err) {
-      setMessage({ type: "error", text: "Server error while verifying OTP" });
+      const msg = err?.response?.data?.message || "Server error while verifying OTP";
+      setMessage({ type: "error", text: msg });
     } finally {
       setLoading(false);
     }

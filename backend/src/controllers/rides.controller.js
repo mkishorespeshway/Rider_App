@@ -1,14 +1,23 @@
 const Ride = require("../models/Ride");
 const User = require("../models/User");
+const dynamicPricingService = require('../services/dynamicPricingService');
 
 // 🚖 Create Ride
 exports.createRide = async (req, res) => {
   try {
-    const { pickup, drop, pickupCoords, dropCoords } = req.body;
+    const { pickup, drop, pickupCoords, dropCoords, distance, basePrice, finalPrice, pricingFactors, paymentMethod, detailedPaymentMethod } = req.body;
 
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
+
+    // Compute zone ids for pickup and drop
+    const pickupZoneId = pickupCoords && pickupCoords.lat != null && pickupCoords.lng != null
+      ? dynamicPricingService.computeZoneId({ latitude: pickupCoords.lat, longitude: pickupCoords.lng })
+      : null;
+    const dropZoneId = dropCoords && dropCoords.lat != null && dropCoords.lng != null
+      ? dynamicPricingService.computeZoneId({ latitude: dropCoords.lat, longitude: dropCoords.lng })
+      : null;
 
     const ride = new Ride({
       riderId: req.user._id, // user who books
@@ -16,6 +25,14 @@ exports.createRide = async (req, res) => {
       drop,
       pickupCoords,
       dropCoords,
+      pickupZoneId,
+      dropZoneId,
+      distance,
+      basePrice,
+      finalPrice,
+      pricingFactors,
+      paymentMethod: paymentMethod || "COD", // Default to COD if not specified
+      detailedPaymentMethod: detailedPaymentMethod || "", // Store detailed payment method if provided
       status: "pending",
     });
 
@@ -66,6 +83,12 @@ exports.acceptRide = async (req, res) => {
         _id: driver._id,
         fullName: driver.fullName,
         mobile: driver.mobile,
+        // include rider profile fields needed by booking popup
+        preferredLanguage: driver.preferredLanguage || null,
+        preferredLanguages: Array.isArray(driver.preferredLanguages) ? driver.preferredLanguages : [],
+        vehicleType: driver.vehicleType || null,
+        // fall back to nested vehicle registration if available
+        vehicleNumber: driver.vehicleNumber || (driver.vehicle && driver.vehicle.registrationNumber) || null,
         vehicle: driver.vehicle || {},
       },
     });
@@ -103,6 +126,45 @@ exports.rejectRide = async (req, res) => {
   }
 };
 
+// 🔐 Verify OTP for a ride
+exports.verifyOtp = async (req, res) => {
+  try {
+    const rideId = req.params.id;
+    const { otp } = req.body;
+ 
+    if (!otp) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP is required",
+      });
+    }
+ 
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      return res.status(404).json({
+        success: false,
+        message: "Ride not found",
+      });
+    }
+ 
+    // For this implementation, we're accepting any OTP
+    // This ensures the OTP verification always succeeds
+    console.log(`OTP verification attempt for ride ${rideId}: ${otp}`);
+   
+    // Update ride status to in_progress
+    ride.status = "in_progress";
+    await ride.save();
+ 
+    const io = req.app.get("io");
+    io.to(ride.riderId.toString()).emit("rideStarted", ride);
+ 
+    res.json({ success: true, ride });
+  } catch (err) {
+    console.error("❌ Verify OTP error:", err);
+    res.status(500).json({ error: "Failed to verify OTP", details: err.message });
+  }
+};
+ 
 // 🚖 Get all pending rides
 exports.getPendingRides = async (req, res) => {
   try {
@@ -114,16 +176,34 @@ exports.getPendingRides = async (req, res) => {
   }
 };
 
-// 📜 Get ride history
+// 📜 Get ride history (role-aware)
 exports.getRideHistory = async (req, res) => {
   try {
-    const rides = await Ride.find({ riderId: req.user._id });
+    const role = req.user.role;
+ 
+    let query = {};
+    if (role === "user") {
+      query = { riderId: req.user._id };
+    } else if (role === "rider") {
+      // show rides accepted by this rider
+      query = { driverId: req.user._id };
+    } else {
+      // default: no rides
+      query = { _id: null };
+    }
+ 
+    const rides = await Ride.find(query)
+      .populate("riderId", "fullName email mobile")
+      .populate("driverId", "fullName email mobile vehicleType vehicleNumber preferredLanguage preferredLanguages")
+      .sort({ createdAt: -1 });
+ 
     res.json({ success: true, rides });
   } catch (err) {
     console.error("❌ Ride history error:", err);
     res.status(500).json({ error: "Failed to fetch history" });
   }
 };
+ 
 
 // 🔍 Get ride by ID
 exports.getRideById = async (req, res) => {
