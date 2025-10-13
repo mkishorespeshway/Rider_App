@@ -7,29 +7,21 @@ const keyId = process.env.RAZORPAY_KEY_ID || null;
 const keySecret = process.env.RAZORPAY_KEY_SECRET || null;
 const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || null;
 const isMockMode = !(keyId && keySecret);
+const isTestKey = keyId ? keyId.startsWith('rzp_test') : false;
 
-if (keyId && keySecret) {
+if (keyId && keySecret && !isTestKey) {
   razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
   console.log('✅ Razorpay configured');
 } else {
-  console.warn('⚠️ Razorpay keys missing — using mock instance (payments disabled)');
-  razorpay = {
-    orders: {
-      create: async (options) => {
-        console.log('🧪 Mock Razorpay order created:', options);
-        return {
-          id: `mock_order_${Date.now()}`,
-          amount: options.amount,
-          currency: options.currency,
-          status: 'created',
-        };
-      },
-    },
-  };
+  console.warn('⚠️ Razorpay not configured for LIVE payments — test/mock keys detected or missing');
+  razorpay = null;
 }
 
 // Create a Razorpay order (amount in INR; converted to paise)
 async function createOrder({ rideId, amount, currency = 'INR' }) {
+  if (!keyId || !keySecret || isTestKey || !razorpay) {
+    throw new Error('Live Razorpay keys required. Test/mock keys are not allowed.');
+  }
   const paiseAmount = Math.round(Number(amount) * 100);
   const order = await razorpay.orders.create({
     amount: paiseAmount,
@@ -43,12 +35,8 @@ async function createOrder({ rideId, amount, currency = 'INR' }) {
 
 // Verify Checkout signature returned to frontend
 function verifyCheckoutSignature({ orderId, paymentId, signature }) {
-  if (isMockMode) {
-    // Dev-only: accept any signature when keys are missing
-    return true;
-  }
-  if (!keySecret) {
-    throw new Error('Razorpay key secret not configured');
+  if (!keySecret || isTestKey) {
+    throw new Error('Cannot verify payment without LIVE Razorpay secret');
   }
   const hmac = crypto.createHmac('sha256', keySecret);
   hmac.update(`${orderId}|${paymentId}`);
@@ -58,12 +46,8 @@ function verifyCheckoutSignature({ orderId, paymentId, signature }) {
 
 // Verify Webhook signature
 function verifyWebhookSignature(rawBody, signatureHeader) {
-  if (isMockMode) {
-    // Dev-only: accept any webhook signature when keys are missing
-    return true;
-  }
-  if (!webhookSecret) {
-    throw new Error('Razorpay webhook secret not configured');
+  if (!webhookSecret || isTestKey) {
+    throw new Error('Cannot verify webhook without LIVE Razorpay webhook secret');
   }
   const hmac = crypto.createHmac('sha256', webhookSecret);
   const digest = hmac.update(rawBody).digest('hex');
@@ -76,4 +60,5 @@ module.exports = {
   verifyCheckoutSignature,
   verifyWebhookSignature,
   isMockMode,
+  isTestKey,
 };

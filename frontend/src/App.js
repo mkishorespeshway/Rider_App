@@ -12,9 +12,11 @@ import RiderLogin from "./pages/RiderLogin";
 import RiderRegister from "./pages/RiderRegister";
 import AdminLogin from "./pages/admin/AdminLogin";
 import RiderDashboard from "./pages/dashboards/RiderDashboard";
+import RiderWallet from "./pages/RiderWallet";
 import UserDashboard from "./pages/dashboards/UserDashboard";
 import DocumentUpload from "./pages/DocumentUpload";
 import Booking from "./pages/Booking";
+import Payment from "./pages/Payment";
 import RideTrack from "./pages/RideTrack";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
@@ -35,7 +37,7 @@ export default function App() {
   const isAuth = Boolean(token);
 
   const redirectByRole = () => {
-    if (roles.includes("user")) return "/user-dashboard";
+    if (roles.includes("user")) return "/booking";
     if (roles.includes("rider")) return "/rider-dashboard";
     if (roles.includes("admin")) return "/admin-dashboard";
     return "/login";
@@ -80,6 +82,14 @@ export default function App() {
             }
           />
           <Route
+            path="/payment/:rideId?"
+            element={
+              <ProtectedRoute role="user">
+                <Payment />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/parcel"
             element={
               <ProtectedRoute role="user">
@@ -102,6 +112,14 @@ export default function App() {
             element={
               <ProtectedRoute role="rider">
                 <RiderDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/rider-wallet"
+            element={
+              <ProtectedRoute role="rider">
+                <RiderWallet />
               </ProtectedRoute>
             }
           />

@@ -181,7 +181,7 @@ const BookRide = () => {
                 alert('❌ Payment verification failed. Please contact support.');
               }
             } catch (err) {
-              console.error('Verification error:', err);
+              console.warn('Verification warning:', err);
               alert('❌ Error verifying payment.');
             }
           },
@@ -199,7 +199,7 @@ const BookRide = () => {
 
         const rzp = new window.Razorpay(options);
         rzp.on('payment.failed', function (resp) {
-          console.error('Payment failed:', resp.error);
+          console.warn('Payment failed:', resp.error);
           alert('❌ Payment failed. Please try another method or retry.');
         });
         rzp.open();
@@ -207,7 +207,7 @@ const BookRide = () => {
         alert('Ride booked successfully! Pay with Cash on Delivery at the end of your ride.');
       }
     } catch (err) {
-      console.error('Booking error:', err);
+      console.warn('Booking warning:', err);
       alert('Failed to book ride. Please login and try again.');
     }
   };

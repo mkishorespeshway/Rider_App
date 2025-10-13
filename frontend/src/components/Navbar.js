@@ -76,6 +76,7 @@ export default function Navbar() {
 
               {role === "rider" && (
                 <>
+                  <MenuItem onClick={() => { navigate("/rider-wallet"); handleMenuClose(); }}>Wallet</MenuItem>
                   <MenuItem onClick={() => { navigate("/history"); handleMenuClose(); }}>History</MenuItem>
                   <MenuItem onClick={() => { navigate("/profile"); handleMenuClose(); }}>Profile</MenuItem>
                   <MenuItem onClick={handleLogout} sx={{ color: "red" }}>Logout</MenuItem>

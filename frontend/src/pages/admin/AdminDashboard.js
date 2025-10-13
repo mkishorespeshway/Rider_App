@@ -10,9 +10,11 @@ import {
   rejectRider,
   getSOSAlerts,
   resolveSOS,
+  getPaymentsSummary,
 } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 import {
+  
   AppBar,
   Toolbar,
   Box,
@@ -52,6 +54,9 @@ export default function AdminDashboard() {
     rides: 0,
     riders: 0,
     sos: 0,
+    paymentsTotal: 0,
+    paymentsAdmin: 0,
+    paymentsRider: 0,
   });
 
   const [activeTab, setActiveTab] = useState("overview");
@@ -110,13 +115,23 @@ export default function AdminDashboard() {
         case "rides":
           res = await getAllRides();
           break;
+        case "payments":
+          res = await getPaymentsSummary();
+          setOverview((prev) => ({
+            ...prev,
+            paymentsTotal: res?.data?.data?.totalAmount || 0,
+            paymentsAdmin: res?.data?.data?.adminAmount || 0,
+            paymentsRider: res?.data?.data?.riderAmount || 0,
+          }));
+          break;
         case "sos":
           res = await getSOSAlerts();
           break;
         default:
           res = { data: { data: [] } };
       }
-      setData(res?.data?.data || []);
+      // Payments summary returns {data: {items}}
+      setData(res?.data?.data?.items || res?.data?.data || []);
     } catch (err) {
       console.error(err);
       setError("Failed to fetch data");
@@ -237,6 +252,7 @@ export default function AdminDashboard() {
             <Tab label="Approved Captains" value="captains" />
             <Tab label="Pending Captains" value="pending" />
             <Tab label="Rides" value="rides" />
+            <Tab label="Payments" value="payments" />
             <Tab label="SOS Alerts" value="sos" />
           </Tabs>
         </Paper>
@@ -270,12 +286,74 @@ export default function AdminDashboard() {
           </Grid>
         )}
 
+        {/* Payments Summary */}
+        {activeTab === "payments" && (
+          <Box>
+            <Grid container spacing={3} sx={{ mb: 3 }}>
+              <Grid item xs={12} md={4}>
+                <Card sx={{ p: 2 }}>
+                  <Typography variant="subtitle2">Total Amount</Typography>
+                  <Typography variant="h6">₹{Number(overview.paymentsTotal || 0).toFixed(2)}</Typography>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Card sx={{ p: 2 }}>
+                  <Typography variant="subtitle2">Admin Share (10%)</Typography>
+                  <Typography variant="h6">₹{Number(overview.paymentsAdmin || 0).toFixed(2)}</Typography>
+                </Card>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Card sx={{ p: 2 }}>
+                  <Typography variant="subtitle2">Rider Share (90%)</Typography>
+                  <Typography variant="h6">₹{Number(overview.paymentsRider || 0).toFixed(2)}</Typography>
+                </Card>
+              </Grid>
+            </Grid>
+
+            <Paper sx={{ p: 2, borderRadius: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>Recent Payments</Typography>
+              <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Ride ID</TableCell>
+                  <TableCell>Method</TableCell>
+                  <TableCell align="right">Amount</TableCell>
+                  <TableCell align="right">Admin (10%)</TableCell>
+                  <TableCell align="right">Rider (90%)</TableCell>
+                  <TableCell>Rider Name</TableCell>
+                  <TableCell>Rider Email</TableCell>
+                  <TableCell>Rider Mobile</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Time</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {data.map((p, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>{p.rideId}</TableCell>
+                    <TableCell>{p.method}</TableCell>
+                    <TableCell align="right">₹{Number(p.amount || 0).toFixed(2)}</TableCell>
+                    <TableCell align="right">₹{Number(p.adminShare || 0).toFixed(2)}</TableCell>
+                    <TableCell align="right">₹{Number(p.riderShare || 0).toFixed(2)}</TableCell>
+                    <TableCell>{p.riderName || '-'}</TableCell>
+                    <TableCell>{p.riderEmail || '-'}</TableCell>
+                    <TableCell>{p.riderMobile || '-'}</TableCell>
+                    <TableCell>{p.status}</TableCell>
+                    <TableCell>{new Date(p.createdAt).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Paper>
+        </Box>
+      )}
+
         {/* Loading/Error */}
         {loading && <Box display="flex" justifyContent="center" mt={4}><CircularProgress /></Box>}
         {error && <Typography color="error" textAlign="center" mt={2}>{error}</Typography>}
 
         {/* Data Tables */}
-        {!loading && data.length > 0 && activeTab !== "overview" && activeTab !== "sos" && (
+        {!loading && data.length > 0 && activeTab !== "overview" && activeTab !== "sos" && activeTab !== "payments" && (
           <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 3, mt: 4, overflowX: "auto" }}>
             <Typography variant="h6" mb={2} fontWeight="bold">{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Details</Typography>
             <Table>
@@ -284,7 +362,7 @@ export default function AdminDashboard() {
                   <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Mobile</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Role</TableCell>
+                  {activeTab !== "rides" && <TableCell sx={{ fontWeight: 600 }}>Role</TableCell>}
                   
                   {/* Additional rider signup fields */}
                   {(activeTab === "riders" || activeTab === "captains" || activeTab === "pending") && (
@@ -304,8 +382,6 @@ export default function AdminDashboard() {
                   {(activeTab === "captains" || activeTab === "pending") && <TableCell sx={{ fontWeight: 600 }}>Documents</TableCell>}
                   {activeTab === "pending" && <TableCell sx={{ fontWeight: 600, textAlign: "center" }}>Actions</TableCell>}
                   {activeTab === "rides" && <>
-                    <TableCell sx={{ fontWeight: 600 }}>Rider</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Captain</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Pickup</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Drop</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
@@ -315,10 +391,12 @@ export default function AdminDashboard() {
               <TableBody>
                 {data.map((item) => (
                   <TableRow key={item._id} hover sx={{ "&:nth-of-type(odd)": { bgcolor: "#fafafa" } }}>
-                    <TableCell>{item.fullName || "-"}</TableCell>
-                    <TableCell>{item.email || "-"}</TableCell>
-                    <TableCell>{item.mobile || "-"}</TableCell>
-                    <TableCell>{item.role || "-"}</TableCell>
+                    <TableCell>{activeTab === "rides" ? (item.riderId?.fullName || "-") : (item.fullName || "-")}</TableCell>
+                    <TableCell>{activeTab === "rides" ? (item.riderId?.email || "-") : (item.email || "-")}</TableCell>
+                    <TableCell>{activeTab === "rides" ? (item.riderId?.mobile || "-") : (item.mobile || "-")}</TableCell>
+                    {activeTab !== "rides" && (
+                      <TableCell>{item.role || "-"}</TableCell>
+                    )}
 
                     {/* Additional rider signup fields */}
                     {(activeTab === "riders" || activeTab === "captains" || activeTab === "pending") && (
@@ -385,8 +463,6 @@ export default function AdminDashboard() {
                     {activeTab === "pending" && <TableCell align="center">{renderActionsCell(item)}</TableCell>}
 
                     {activeTab === "rides" && <>
-                      <TableCell>{item.riderId?.fullName || "-"}</TableCell>
-                      <TableCell>{item.captainId?.fullName || "-"}</TableCell>
                       <TableCell>{item.pickup || "-"}</TableCell>
                       <TableCell>{item.drop || "-"}</TableCell>
                       <TableCell>{item.status || "-"}</TableCell>

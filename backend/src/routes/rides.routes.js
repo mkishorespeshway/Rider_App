@@ -18,6 +18,12 @@ router.post("/:id/accept", authMiddleware, rideController.acceptRide);
 // 🚖 Reject a ride
 router.post("/:id/reject", authMiddleware, rideController.rejectRide);
 
+// 🔐 Verify OTP and start ride
+router.post("/:id/verify-otp", authMiddleware, rideController.verifyOtp);
+
+// ✅ Complete ride (rider triggers when trip ends)
+router.post("/:id/complete", authMiddleware, rideController.completeRide);
+
 // 🔍 Get a single ride by ID
 router.get("/:id", authMiddleware, rideController.getRideById);
 

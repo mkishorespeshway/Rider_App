@@ -1,4 +1,5 @@
 const axios = require('axios');
+const mongoose = require('mongoose');
 const DynamicPricing = require('../models/dynamicPricing');
 const Ride = require('../models/Ride');
 
@@ -140,6 +141,10 @@ class DynamicPricingService {
    */
   async getDemandData(location) {
     try {
+      // If MongoDB is not connected, use mock demand immediately to avoid timeouts
+      if (mongoose.connection.readyState !== 1) {
+        return this.getMockDemandData(location);
+      }
       // In a real app, this would query your database for active riders and drivers
       // in the area to calculate demand/supply ratio
       
@@ -286,6 +291,7 @@ class DynamicPricingService {
    */
   async getZoneMultiplier(zoneId) {
     try {
+      if (mongoose.connection.readyState !== 1) return 1.0;
       // Look back over the last 2 hours of DynamicPricing records in this zone
       const since = new Date(Date.now() - 2 * 60 * 60 * 1000);
       const records = await DynamicPricing.find({ zoneId, createdAt: { $gte: since } }).limit(100).lean();
@@ -306,6 +312,8 @@ class DynamicPricingService {
 
   async savePricingData(location, pricingData) {
     try {
+      // Skip persistence when DB is offline to avoid buffering timeouts in dev
+      if (mongoose.connection.readyState !== 1) return;
       const zoneId = this.computeZoneId(location);
       const zoneBounds = this.getZoneBounds(zoneId);
       const zoneCenter = this.getZoneCenter(zoneId);

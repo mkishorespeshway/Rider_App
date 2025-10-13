@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Ride = require("../models/Ride");
 const User = require("../models/User");
 const dynamicPricingService = require('../services/dynamicPricingService');
@@ -18,6 +19,54 @@ exports.createRide = async (req, res) => {
     const dropZoneId = dropCoords && dropCoords.lat != null && dropCoords.lng != null
       ? dynamicPricingService.computeZoneId({ latitude: dropCoords.lat, longitude: dropCoords.lng })
       : null;
+
+    // 🔒 Single-active-ride guard: block booking if user has one already
+    try {
+      if (mongoose.connection.readyState === 1) {
+        const existing = await Ride.findOne({
+          riderId: req.user._id,
+          status: { $in: ["pending", "accepted", "in_progress"] },
+        });
+        if (existing) {
+          return res.status(409).json({
+            success: false,
+            message: "You already have an active ride. Complete it before booking another.",
+            ride: existing,
+          });
+        }
+      }
+    } catch (guardErr) {
+      console.warn("Active ride guard warning:", guardErr.message);
+    }
+
+    // If DB is not connected, short-circuit with a mock response to avoid timeouts in dev
+    if (mongoose.connection.readyState !== 1) {
+      const mockRide = {
+        _id: new mongoose.Types.ObjectId(),
+        riderId: req.user._id,
+        pickup,
+        drop,
+        pickupCoords,
+        dropCoords,
+        pickupZoneId,
+        dropZoneId,
+        distance,
+        basePrice,
+        finalPrice,
+        pricingFactors,
+        paymentMethod: paymentMethod || "COD",
+        detailedPaymentMethod: detailedPaymentMethod || "",
+        status: "pending",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      // Broadcast to riders so they see this request in real time
+      try {
+        const io = req.app.get("io");
+        io.emit("rideRequest", mockRide);
+      } catch {}
+      return res.status(201).json({ success: true, message: "Ride created (mock, DB offline)", ride: mockRide });
+    }
 
     const ride = new Ride({
       riderId: req.user._id, // user who books
@@ -164,10 +213,49 @@ exports.verifyOtp = async (req, res) => {
     res.status(500).json({ error: "Failed to verify OTP", details: err.message });
   }
 };
- 
+
+// ✅ Complete Ride
+exports.completeRide = async (req, res) => {
+  try {
+    const rideId = req.params.id;
+
+    // Only rider (driver) can complete the ride
+    if (req.user.role !== "rider") {
+      return res.status(403).json({ success: false, message: "Only riders can complete rides" });
+    }
+
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+
+    // Ensure this rider is the one who accepted the ride
+    if (ride.driverId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "You are not assigned to this ride" });
+    }
+
+    // Mark completed
+    ride.status = "completed";
+    await ride.save();
+
+    // Notify the user to proceed to payment
+    const io = req.app.get("io");
+    io.to(ride.riderId.toString()).emit("rideCompleted", ride);
+
+    res.json({ success: true, ride });
+  } catch (err) {
+    console.error("❌ Complete ride error:", err);
+    res.status(500).json({ error: "Failed to complete ride", details: err.message });
+  }
+};
+
 // 🚖 Get all pending rides
 exports.getPendingRides = async (req, res) => {
   try {
+    // When DB is offline, avoid querying and return an empty list
+    if (mongoose.connection.readyState !== 1) {
+      return res.json({ success: true, rides: [] });
+    }
     const rides = await Ride.find({ status: "pending" }).populate("riderId", "fullName mobile");
     res.json({ success: true, rides });
   } catch (err) {

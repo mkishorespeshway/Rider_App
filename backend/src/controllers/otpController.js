@@ -1,8 +1,11 @@
 const Otp = require("../models/Otp");
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 
 const generateOtp = () =>
+
+  
   Math.floor(100000 + Math.random() * 900000).toString();
 
 // 🔹 Send OTP
@@ -13,6 +16,26 @@ exports.send = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Mobile is required" });
+    }
+    // If DB is offline, short-circuit with mock OTP for development
+    if (mongoose.connection.readyState !== 1) {
+      const otp = generateOtp();
+      const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+      const tempUserId = new mongoose.Types.ObjectId();
+      const requestedRole = (req.body && req.body.role) || "user";
+      console.log(`📲 [DEV] OTP for ${mobile}: ${otp} (DB offline, role=${requestedRole})`);
+      return res.json({
+        success: true,
+        message: "OTP sent (mock, DB offline)",
+        otpRecord: {
+          mobile,
+          otp,
+          userId: tempUserId,
+          role: requestedRole,
+          otpExpires,
+          mock: true,
+        },
+      });
     }
 
     const user = await User.findOne({ mobile });
@@ -56,6 +79,29 @@ exports.verify = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Mobile and OTP required" });
+    }
+    // If DB is offline, accept OTP in dev and issue a mock token
+    if (mongoose.connection.readyState !== 1) {
+      const requestedRole = (req.body && req.body.role) || "user";
+      const tempUserId = new mongoose.Types.ObjectId();
+      const token = jwt.sign(
+        { id: tempUserId, role: requestedRole },
+        process.env.JWT_SECRET || "secretkey",
+        { expiresIn: "7d" }
+      );
+      console.log(`✅ [DEV] OTP verified for ${mobile} (DB offline, role=${requestedRole})`);
+      return res.json({
+        success: true,
+        token,
+        user: {
+          _id: tempUserId,
+          fullName: requestedRole === "rider" ? "Dev Rider" : "Dev User",
+          mobile,
+          email: `${mobile}@example.local`,
+          role: requestedRole,
+          approvalStatus: "approved",
+        },
+      });
     }
 
     const record = await Otp.findOne({ mobile });

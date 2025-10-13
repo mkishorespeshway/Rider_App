@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const { MongoMemoryServer } = require("mongodb-memory-server");
 const cors = require("cors");
 const path = require("path");
 const cloudinary = require("cloudinary").v2;
@@ -15,6 +16,9 @@ cloudinary.config({
 
 const app = express();
 const server = http.createServer(app);
+
+// Fail fast when DB is offline to avoid 10s mongoose buffering timeouts
+mongoose.set("bufferCommands", false);
 
 // ✅ Socket.IO setup
 const io = new Server(server, {
@@ -82,51 +86,77 @@ app.use((req, res, next) => {
   next();
 });
 
-// === MongoDB connection ===
-if (!process.env.MONGO_URI) {
-  console.error("❌ MONGO_URI is not defined in .env file");
-  process.exit(1);
+// === MongoDB connection (with in-memory fallback) ===
+async function connectDatabase() {
+  const opts = { useNewUrlParser: true, useUnifiedTopology: true, serverSelectionTimeoutMS: 5000 };
+  const uri = process.env.MONGO_URI;
+  let connected = false;
+  try {
+    if (uri) {
+      await mongoose.connect(uri, opts);
+      connected = true;
+      console.log("✅ MongoDB Connected");
+    } else {
+      throw new Error("MONGO_URI missing");
+    }
+  } catch (err) {
+    console.warn("⚠️ MongoDB connect failed:", err.message);
+    console.warn("➡️ Starting in-memory MongoDB for development");
+    try {
+      const mongod = await MongoMemoryServer.create();
+      const memUri = mongod.getUri();
+      await mongoose.connect(memUri, opts);
+      connected = true;
+      console.log("✅ In-memory MongoDB started");
+      // Gracefully stop memory server on exit
+      process.on("SIGINT", async () => {
+        try { await mongod.stop(); } catch {}
+        process.exit(0);
+      });
+    } catch (memErr) {
+      console.warn("⚠️ In-memory MongoDB failed:", memErr.message);
+      console.warn("➡️ Continuing in DB-offline mode; controllers have safe fallbacks.");
+    }
+  }
+
+  // Expose DB online status for controllers/middleware if needed
+  app.set("dbOnline", connected);
+
+  // If not connected, skip collection ensure step
+  if (!connected) {
+    return;
+  }
+
+  const User = require("./models/User");
+  const Ride = require("./models/Ride");
+  const Vehicle = require("./models/Vehicle");
+  const Payment = require("./models/Payment");
+  const Otp = require("./models/Otp");
+  const Parcel = require("./models/Parcel");
+
+  try {
+    const models = [
+      { model: User, name: "User" },
+      { model: Ride, name: "Ride" },
+      { model: Vehicle, name: "Vehicle" },
+      { model: Payment, name: "Payment" },
+      { model: Otp, name: "Otp" },
+      { model: Parcel, name: "Parcel" },
+    ];
+    for (const { model, name } of models) {
+      if (mongoose.connection.readyState === 1 && model && model.createCollection) {
+        await model.createCollection();
+        console.log(`✅ ${name} collection ensured`);
+      }
+    }
+    console.log("✅ All collections checked/created");
+  } catch (err) {
+    console.warn("⚠️ Error ensuring collections:", err.message);
+  }
 }
 
-mongoose
-  .connect(process.env.MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(async () => {
-    console.log("✅ MongoDB Connected");
-
-    const User = require("./models/User");
-    const Ride = require("./models/Ride");
-    const Vehicle = require("./models/Vehicle");
-    const Payment = require("./models/Payment");
-    const Otp = require("./models/Otp");
-    const Parcel = require("./models/Parcel");
-
-    try {
-      const models = [
-        { model: User, name: "User" },
-        { model: Ride, name: "Ride" },
-        { model: Vehicle, name: "Vehicle" },
-        { model: Payment, name: "Payment" },
-        { model: Otp, name: "Otp" },
-        { model: Parcel, name: "Parcel" },
-      ];
-      for (const { model, name } of models) {
-        if (model && model.createCollection) {
-          await model.createCollection();
-          console.log(`✅ ${name} collection ensured`);
-        }
-      }
-      console.log("✅ All collections checked/created");
-    } catch (err) {
-      console.error("⚠️ Error ensuring collections:", err.message);
-    }
-  })
-  .catch((err) => {
-    console.error("❌ MongoDB connection error:", err.message);
-    process.exit(1);
-  });
+// Kick off DB connection
+connectDatabase().catch((e) => console.error("❌ DB init error:", e));
 
 // === Routes ===
 app.use("/api/auth", require("./routes/authRoutes"));
@@ -138,6 +168,7 @@ app.use("/api/parcels", require("./routes/parcelRoutes"));
 app.use("/api/sos", require("./routes/sosRoutes"));
 app.use("/api/pricing", require("./routes/pricingRoutes"));
 app.use("/api/payments", require("./routes/payments.routes"));
+app.use("/api/wallet", require("./routes/wallet.routes"));
 
 // Uploads folder
 app.use("/uploads", express.static("uploads"));

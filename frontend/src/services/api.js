@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE = "http://localhost:5000"; // dev URL
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
 const AUTH_API = axios.create({
   baseURL: `${API_BASE}/api/auth`,
@@ -27,6 +27,11 @@ const PAYMENTS_API = axios.create({
   baseURL: `${API_BASE}/api/payments`,
   headers: { "Content-Type": "application/json" },
 });
+// Wallet API
+const WALLET_API = axios.create({
+  baseURL: `${API_BASE}/api/wallet`,
+  headers: { "Content-Type": "application/json" },
+});
 
 // helper: get token either from auth object or legacy token key
 const getToken = () => {
@@ -41,7 +46,7 @@ const getToken = () => {
 };
 
 // attach token
-[AUTH_API, OTP_API, RIDER_API, ADMIN_API, RIDES_API, PAYMENTS_API].forEach((inst) => {
+[AUTH_API, OTP_API, RIDER_API, ADMIN_API, RIDES_API, PAYMENTS_API, WALLET_API].forEach((inst) => {
   inst.interceptors.request.use((config) => {
     const token = getToken();
     if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -53,8 +58,9 @@ const getToken = () => {
 export const signupUser = (payload) => AUTH_API.post("/signup-user", payload);
 export const signupRider = (formData) =>
   RIDER_API.post("/signup", formData, { headers: { "Content-Type": "multipart/form-data" } });
-export const sendOtp = (mobile) => OTP_API.post("/send", { mobile });
-export const verifyOtp = (mobile, otp) => OTP_API.post("/verify", { mobile, otp });
+// Pass optional role to help backend dev fallback return correct role
+export const sendOtp = (mobile, role) => OTP_API.post("/send", { mobile, role });
+export const verifyOtp = (mobile, otp, role) => OTP_API.post("/verify", { mobile, otp, role });
 export const getRiderStatus = () => RIDER_API.get("/status");
 export const checkRiderApproval = (mobile) => RIDER_API.get(`/check-approval/${mobile}`);
 
@@ -68,15 +74,25 @@ export const getAllUsers = () => ADMIN_API.get("/users");
 export const getCaptains = () => ADMIN_API.get("/captains");
 export const getOverview = () => ADMIN_API.get("/overview");
 export const getAllRides = () => ADMIN_API.get("/rides");
+export const getPaymentsSummary = () => ADMIN_API.get("/payments/summary");
 
 // --- RIDE APIs ---
 export const createRide = (data) => RIDES_API.post("/create", data);
 export const findDrivers = () => RIDES_API.get("/drivers");
 export const getRideHistory = () => RIDES_API.get("/history");
+export const getRideById = (id) => RIDES_API.get(`/${id}`);
 
 // --- Payments ---
 export const initiatePayment = (data) => PAYMENTS_API.post("/initiate", data);
 export const verifyPayment = (data) => PAYMENTS_API.post("/verify", data);
+export const markCashPayment = (data) => PAYMENTS_API.post("/cash", data);
+
+// --- Wallet ---
+export const getWallet = () => WALLET_API.get("/me");
+export const getWalletTransactions = () => WALLET_API.get("/transactions");
+export const updateBankDetails = (data) => WALLET_API.put("/bank", data);
+export const requestWithdrawal = (amount) => WALLET_API.post("/withdraw", { amount });
+export const creditEarning = (amount, description) => WALLET_API.post("/credit", { amount, description });
 
 // Upload rider documents (legacy usage in DocumentUpload)
 export const uploadRiderDocs = (token, formData) =>
@@ -123,11 +139,19 @@ export default {
   getCaptains,
   getOverview,
   getAllRides,
+  getPaymentsSummary,
   createRide,
   findDrivers,
   getRideHistory,
+  getRideById,
   initiatePayment,
   verifyPayment,
+  markCashPayment,
+  getWallet,
+  getWalletTransactions,
+  updateBankDetails,
+  requestWithdrawal,
+  creditEarning,
   sendSOS,
   getSOSAlerts,
   resolveSOS,

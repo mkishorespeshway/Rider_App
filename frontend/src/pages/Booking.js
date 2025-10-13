@@ -10,25 +10,18 @@ import { useAuth } from "../contexts/AuthContext";
 import { io } from "socket.io-client";
 import MapComponent from "../components/Map";
 import DynamicPricingDisplay from "../components/DynamicPricingDisplay.jsx";
-import { initiatePayment, verifyPayment } from "../services/api";
+// Razorpay removed from booking flow
+// import { initiatePayment, verifyPayment } from "../services/api";
 import PricingService from "../services/pricingService";
 import SOSButton from "../components/SOSButton";
 
-const socket = io("http://localhost:5000");
+const socket = io("http://localhost:3001");
 
-// Load Razorpay Checkout script
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
+// Removed Razorpay loader (no third-party checkout in this flow)
+const loadRazorpayScript = () => Promise.resolve(false);
 
 export default function Booking() {
+  const mapPanelRef = React.useRef(null);
   const [pickup, setPickup] = useState(null);
   const [drop, setDrop] = useState(null);
   const [pickupAddress, setPickupAddress] = useState("");
@@ -301,8 +294,10 @@ export default function Booking() {
   // state additions for payments
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [showDetailedPayments, setShowDetailedPayments] = useState(false);
-  const [detailedPaymentMethod, setDetailedPaymentMethod] = useState("upi");
+  const [detailedPaymentMethod, setDetailedPaymentMethod] = useState("upi");  const [selectedPaymentOption, setSelectedPaymentOption] = useState(null);
   const [createdRide, setCreatedRide] = useState(null);
+  const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState(null);
   
   // 🔥 Create ride request (opens the drawer with payment options)
   const handleFindRiders = async () => {
@@ -311,23 +306,75 @@ export default function Booking() {
       return;
     }
     try {
+      // 🚫 Client-side guard: only one active ride per user
+      const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+      const existingId = localStorage.getItem(activeKey);
+      if (existingId) {
+        try {
+          const chk = await axios.get(`http://localhost:3001/api/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+          const st = chk.data?.ride?.status;
+          if (st && st !== 'completed' && st !== 'cancelled') {
+            alert("You already have an active ride. Please complete it before booking another.");
+            return;
+          } else {
+            localStorage.removeItem(activeKey);
+          }
+        } catch {
+          // If status can't be verified, be conservative and block
+          alert("You already have an active ride. Please complete it before booking another.");
+          return;
+        }
+      }
+      // Lock final price to the selected ride card amount so Payment matches Booking
+      const distanceKm = parseFloat(distance);
+
+      // Derive base rate by selected ride type (same as card display)
+      let rateForCreate = 10; // bike
+      if (selectedRide === "auto") rateForCreate = 15;
+      else if (selectedRide === "car") rateForCreate = 20;
+
+      const baseFare = +(distanceKm * rateForCreate).toFixed(2);
+      // Apply simple traffic/weather multipliers used in the card breakdown
+      const tMult = Math.max(zoneFactors?.trafficMultiplier || 1, 1);
+      const wMult = Math.max(zoneFactors?.weatherMultiplier || 1, 1);
+      const trafficAdd = +(baseFare * (tMult - 1)).toFixed(2);
+      const weatherAdd = +(baseFare * (wMult - 1)).toFixed(2);
+      const selectedFinalPrice = +(baseFare + trafficAdd + weatherAdd).toFixed(2);
+
       const res = await axios.post(
-        "http://localhost:5000/api/rides/create",
-        { pickup: pickupAddress, drop: dropAddress, pickupCoords: pickup, dropCoords: drop },
+        "http://localhost:3001/api/rides/create",
+        {
+          pickup: pickupAddress,
+          drop: dropAddress,
+          pickupCoords: pickup,
+          dropCoords: drop,
+          distance: distanceKm,
+          // Persist the selected booking price so Payment shows the same amount
+          finalPrice: selectedFinalPrice,
+        },
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
       const ride = res.data?.ride;
       if (ride) setCreatedRide(ride);
+      // Mark active ride locally to prevent parallel bookings
+      if (ride?._id) {
+        localStorage.setItem(activeKey, ride._id);
+      }
       socket.emit("newRide", ride);
       setDrawerOpen(true);
     } catch (err) {
       console.error("Failed to create ride request:", err);
-      alert("Failed to create ride request");
+      const msg = err?.response?.data?.message || "Failed to create ride request";
+      alert(msg);
     }
   };
   
   // helper to compute amount for selected ride
   const getSelectedRideAmount = () => {
+    // Prefer server-calculated final price when available
+    if (createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0) {
+      return Number(createdRide.finalPrice);
+    }
     if (!distance || !selectedRide) return null;
     const km = parseFloat(distance);
     let rate = null;
@@ -351,84 +398,14 @@ export default function Booking() {
       return;
     }
   
-    // if online payment selected, process payment before requesting ride
+    // Online payment: do NOT open Razorpay; just proceed with selected option
     if (paymentMethod === "online") {
-      try {
-        const amount = getSelectedRideAmount();
-        if (!amount) {
-          alert("Unable to compute fare. Please select a ride type and ensure distance is calculated.");
-          return;
-        }
-  
-        const initResp = await initiatePayment({
-          rideId: createdRide._id,
-          amount,
-          method: detailedPaymentMethod,
-        });
-        const initData = initResp.data;
-        if (!initData?.ok || !initData?.order?.id || !initData?.key) {
-          alert("Failed to initiate payment. Please try again.");
-          return;
-        }
-  
-        const loaded = await loadRazorpayScript();
-        if (!loaded) {
-          alert("Razorpay SDK failed to load. Please check your connection.");
-          return;
-        }
-  
-        const options = {
-          key: initData.key,
-          amount: initData.order.amount,
-          currency: initData.order.currency,
-          name: "Rider App",
-          description: "Ride Payment",
-          order_id: initData.order.id,
-          notes: { rideId: String(createdRide._id), rideType: selectedRide },
-          theme: { color: "#1976d2" },
-          handler: async function (response) {
-            try {
-              const verifyResp = await verifyPayment({
-                rideId: createdRide._id,
-                orderId: response.razorpay_order_id,
-                paymentId: response.razorpay_payment_id,
-                signature: response.razorpay_signature,
-              });
-              if (verifyResp.data?.ok) {
-                alert("✅ Payment successful and verified! Proceeding to find a rider.");
-                setLookingForRider(true);
-              } else {
-                alert("❌ Payment verification failed. Please contact support.");
-              }
-            } catch (err) {
-              console.error("Verification error:", err);
-              alert("❌ Error verifying payment.");
-            }
-          },
-          modal: {
-            ondismiss: function () {
-              alert("Payment popup closed. You can select Cash or retry online payment.");
-            },
-          },
-          prefill: {
-            name: "Customer",
-            email: "",
-            contact: "",
-          },
-        };
-  
-        const rzp = new window.Razorpay(options);
-        rzp.on("payment.failed", function (resp) {
-          console.error("Payment failed:", resp.error);
-          alert("❌ Payment failed. Please try another method or retry.");
-        });
-        rzp.open();
-        return; // don't proceed to lookingForRider until payment handler sets it
-      } catch (e) {
-        console.error(e);
-        alert("Payment could not be completed. Please try again or choose Cash.");
+      if (!selectedPaymentOption) {
+        alert("Please choose a payment option under Online.");
         return;
       }
+      setLookingForRider(true);
+      return;
     }
   
     // Cash payment: proceed to find rider
@@ -452,6 +429,41 @@ export default function Booking() {
     socket.on("rideRejected", () => {
       setLookingForRider(false);
       alert("❌ All riders rejected your request.");
+      try {
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        localStorage.removeItem(activeKey);
+      } catch {}
+    });
+
+    // ✅ Ride started after OTP verification
+    socket.on("rideStarted", (ride) => {
+      setRideStatus("Ride started ✅");
+      setShowPaymentPrompt(false);
+      setPaymentAmount(null);
+      setRiderPanelOpen(false);
+      try {
+        // Smoothly scroll map into view to focus on the route
+        mapPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {}
+    });
+
+    // ✅ Ride completed by rider → stay on Booking and show Pay Now prompt
+    socket.on("rideCompleted", (ride) => {
+      const computedAmount =
+        (ride && ride.finalPrice != null) ? Number(ride.finalPrice) : (getSelectedRideAmount() ?? null);
+      setRideStatus("Ride Completed — awaiting user payment");
+      setPaymentAmount(computedAmount);
+      // Open the payment prompt in the same screen (Rapido-style)
+      setShowPaymentPrompt(true);
+      setRiderPanelOpen(false);
+      try {
+        // Smoothly scroll to the payment prompt area to avoid perceived reload
+        mapPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {}
+      try {
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        localStorage.removeItem(activeKey);
+      } catch {}
     });
 
     socket.on("riderLocationUpdate", ({ coords }) => {
@@ -459,8 +471,11 @@ export default function Booking() {
     });
 
     return () => {
+      
       socket.off("rideAccepted");
       socket.off("rideRejected");
+      socket.off("rideStarted");
+      socket.off("rideCompleted");
       socket.off("riderLocationUpdate");
     };
   }, []);
@@ -469,6 +484,44 @@ export default function Booking() {
     <Container maxWidth="xl" sx={{ mt: 3 }}>
       {/* 🚨 SOS Button (fixed position) */}
       <SOSButton role="user" />
+
+      {/* ✅ Global payment prompt shown when ride is completed */}
+      {showPaymentPrompt && (
+        <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: '#fff3e0', border: '1px solid #ffe0b2' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#e65100' }}>
+            Ride Completed — Proceed to Payment
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 0.5 }}>
+            Amount due: {
+              (createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0)
+                ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
+                : (paymentAmount != null
+                    ? `₹${Number(paymentAmount).toFixed(2)}`
+                    : (getSelectedRideAmount() != null
+                        ? `₹${Number(getSelectedRideAmount()).toFixed(2)}`
+                        : '—'))
+            }
+          </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            sx={{ mt: 1 }}
+            onClick={() => {
+              const id = createdRide?._id;
+              const amt = (createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0)
+                ? Number(createdRide.finalPrice)
+                : (paymentAmount ?? getSelectedRideAmount());
+              if (id) {
+                navigate(`/payment/${id}`, { state: { amount: amt } });
+              } else {
+                navigate(`/payment`, { state: { amount: amt } });
+              }
+            }}
+          >
+            Pay Now
+          </Button>
+        </Box>
+      )}
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 2 }}>
         {/* Left panel */}
         <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -525,7 +578,7 @@ export default function Booking() {
         </Paper>
 
         {/* Right panel (Map) */}
-        <Paper sx={{ p: 1, borderRadius: 2 }}>
+        <Paper sx={{ p: 1, borderRadius: 2 }} ref={mapPanelRef}>
           <MapComponent
             apiKey={GOOGLE_API_KEY}
             pickup={pickup}
@@ -606,6 +659,9 @@ export default function Booking() {
                 const val = e.target.value;
                 setPaymentMethod(val);
                 setShowDetailedPayments(val === "online");
+                if (val !== "online") {
+                  setSelectedPaymentOption(null);
+                }
               }}
             >
               <FormControlLabel value="cash" control={<Radio />} label="Cash" />
@@ -613,25 +669,107 @@ export default function Booking() {
             </RadioGroup>
 
             {showDetailedPayments && (
-              <Box sx={{ mt: 1, display: "flex", gap: 1, flexWrap: "wrap" }}>
-                <Chip
-                  label="UPI"
-                  color={detailedPaymentMethod === "upi" ? "primary" : "default"}
-                  onClick={() => setDetailedPaymentMethod("upi")}
-                  variant={detailedPaymentMethod === "upi" ? "filled" : "outlined"}
-                />
-                <Chip
-                  label="Card"
-                  color={detailedPaymentMethod === "card" ? "primary" : "default"}
-                  onClick={() => setDetailedPaymentMethod("card")}
-                  variant={detailedPaymentMethod === "card" ? "filled" : "outlined"}
-                />
-                <Chip
-                  label="Wallet"
-                  color={detailedPaymentMethod === "wallet" ? "primary" : "default"}
-                  onClick={() => setDetailedPaymentMethod("wallet")}
-                  variant={detailedPaymentMethod === "wallet" ? "filled" : "outlined"}
-                />
+              <Box sx={{ mt: 1 }}>
+                {/* Selected summary */}
+                {selectedPaymentOption && (
+                  <Chip
+                    label={`Selected: ${(() => {
+                      const labels = {
+                        rapido_wallet: "Rapido Wallet",
+                        amazon_pay: "Amazon Pay",
+                        upi_gpay: "GPay",
+                        upi_phonepe: "PhonePe",
+                        upi_paytm: "Paytm",
+                        upi_any: "Any UPI app",
+                        paylater_phonepe: "PhonePe (Pay Later)",
+                        paylater_upi_any: "Any UPI app (Pay Later)",
+                        pay_at_drop: "Pay at drop",
+                        simpl: "Simpl",
+                      };
+                      return labels[selectedPaymentOption] || selectedPaymentOption;
+                    })()}`}
+                    variant="outlined"
+                    color="primary"
+                    sx={{ mb: 1 }}
+                  />
+                )}
+
+                {/* Wallets */}
+                <Typography variant="subtitle2" sx={{ fontWeight: "bold", mt: 1 }}>Wallets</Typography>
+                <Box sx={{ display: "flex", flexDirection: "column" }}>
+                  <ListItemButton
+                    selected={selectedPaymentOption === "rapido_wallet"}
+                    onClick={() => setSelectedPaymentOption("rapido_wallet")}
+                  >
+                    Rapido Wallet
+                  </ListItemButton>
+                  <ListItemButton
+                    selected={selectedPaymentOption === "amazon_pay"}
+                    onClick={() => setSelectedPaymentOption("amazon_pay")}
+                  >
+                    Amazon Pay
+                  </ListItemButton>
+                </Box>
+                <Box sx={{ mb: 1 }}>
+                  <Chip label="UPI" color="default" variant="outlined" sx={{ mb: 0.5 }} />
+                  <Box sx={{ display: "flex", flexDirection: "column" }}>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "upi_gpay"}
+                      onClick={() => { setSelectedPaymentOption("upi_gpay"); setDetailedPaymentMethod("upi"); }}
+                    >
+                      GPay
+                    </ListItemButton>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "upi_phonepe"}
+                      onClick={() => { setSelectedPaymentOption("upi_phonepe"); setDetailedPaymentMethod("upi"); }}
+                    >
+                      PhonePe
+                    </ListItemButton>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "upi_paytm"}
+                      onClick={() => { setSelectedPaymentOption("upi_paytm"); setDetailedPaymentMethod("upi"); }}
+                    >
+                      Paytm
+                    </ListItemButton>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "upi_any"}
+                      onClick={() => { setSelectedPaymentOption("upi_any"); setDetailedPaymentMethod("upi"); }}
+                    >
+                      Pay by any UPI app
+                    </ListItemButton>
+                  </Box>
+                </Box>
+
+                <Box sx={{ mt: 2 }}>
+                  <Chip label="Pay Later" color="default" variant="outlined" sx={{ mb: 0.5 }} />
+                  <Box sx={{ display: "flex", flexDirection: "column" }}>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "paylater_phonepe"}
+                      onClick={() => setSelectedPaymentOption("paylater_phonepe")}
+                    >
+                      PhonePe
+                    </ListItemButton>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "paylater_upi_any"}
+                      onClick={() => setSelectedPaymentOption("paylater_upi_any")}
+                    >
+                      Pay by any UPI app
+                    </ListItemButton>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "pay_at_drop"}
+                      onClick={() => setSelectedPaymentOption("pay_at_drop")}
+                    >
+                      Pay at drop (scan QR after ride)
+                    </ListItemButton>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "simpl"}
+                      onClick={() => setSelectedPaymentOption("simpl")}
+                    >
+                      Simpl
+                    </ListItemButton>
+                  </Box>
+                </Box>
+                
               </Box>
             )}
           </Box>
@@ -679,7 +817,12 @@ export default function Booking() {
                 })()}
               </Typography>
 
-              <Typography><b>Fare:</b> {rideOptions.find((r) => r.id === selectedRide)?.price}</Typography>
+            <Typography>
+              <b>Fare:</b>{" "}
+              {createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0
+                ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
+                : (rideOptions.find((r) => r.id === selectedRide)?.price || "—")}
+            </Typography>
 
               {/* OTP Display */}
               <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 2, textAlign: 'center' }}>
@@ -695,6 +838,43 @@ export default function Booking() {
                 <Button variant="outlined" color="primary">💬 Chat</Button>
               </Box>
               <Typography variant="body1" sx={{ mt: 2 }}>{rideStatus}</Typography>
+
+              {showPaymentPrompt && (
+                <Box sx={{ mt: 2, p: 2, borderRadius: 2, bgcolor: '#e8f5e9', border: '1px solid #c8e6c9' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
+                    Ride Completed — awaiting user payment
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+      Amount due: {
+        (createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0)
+          ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
+          : (paymentAmount != null
+              ? `₹${paymentAmount.toFixed(2)}`
+              : (getSelectedRideAmount() != null
+                  ? `₹${Number(getSelectedRideAmount()).toFixed(2)}`
+                  : '—'))
+      }
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    sx={{ mt: 1 }}
+                    onClick={() => {
+                      const id = createdRide?._id;
+                      const amt = (createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0)
+                        ? Number(createdRide.finalPrice)
+                        : (paymentAmount ?? getSelectedRideAmount());
+                      if (id) {
+                        navigate(`/payment/${id}` , { state: { amount: amt } });
+                      } else {
+                        navigate(`/payment`, { state: { amount: amt } });
+                      }
+                    }}
+                  >
+                    Pay Now
+                  </Button>
+                </Box>
+              )}
             </>
           )}
         </Box>

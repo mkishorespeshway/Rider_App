@@ -19,7 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import Map from "../../components/Map"; // ✅ Google Maps component
  
-const socket = io("http://localhost:5000");
+const socket = io("http://localhost:3001");
  
 export default function RiderDashboard() {
   const [rides, setRides] = useState([]);
@@ -67,22 +67,36 @@ export default function RiderDashboard() {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setRiderLocation(loc);
       },
-      (err) => console.error("Geolocation error:", err),
+      (err) => console.warn("Geolocation warning:", err),
       { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
+
+  // 🚀 Broadcast rider GPS to user in real time (Rapido-style)
+  useEffect(() => {
+    try {
+      if (!riderLocation || !selectedRide?._id) return;
+      // Only emit while ride is accepted or in progress
+      const status = selectedRide.status || "accepted";
+      if (["accepted", "in_progress"].includes(status)) {
+        socket.emit("riderLocation", { rideId: selectedRide._id, coords: riderLocation });
+      }
+    } catch (e) {
+      console.warn("riderLocation emit warning:", e.message);
+    }
+  }, [riderLocation, selectedRide]);
  
   // 🔄 Fetch pending rides
   const fetchPendingRides = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://localhost:5000/api/rides/pending", {
+      const res = await axios.get("http://localhost:3001/api/rides/pending", {
         headers: { Authorization: `Bearer ${auth?.token}` },
       });
       setRides(res.data.rides || []);
     } catch (err) {
-      console.error("❌ Error fetching rides:", err);
+      console.warn("❌ Rides fetch warning:", err);
     } finally {
       setLoading(false);
     }
@@ -90,11 +104,20 @@ export default function RiderDashboard() {
  
   useEffect(() => {
     fetchPendingRides();
- 
+
+    // Receive live ride requests (especially when DB is offline)
+    socket.on("rideRequest", (ride) => {
+      console.log("🚖 Incoming ride request:", ride);
+      setRides((prev) => {
+        const exists = prev.some((r) => r._id === ride._id);
+        return exists ? prev : [ride, ...prev];
+      });
+    });
+
     socket.on("rideAccepted", (ride) => {
       console.log("✅ Ride accepted event:", ride);
       setSelectedRide(ride);
- 
+
       if (ride.pickupCoords) setPickup(ride.pickupCoords);
       if (ride.dropCoords) setDrop(ride.dropCoords);
     });
@@ -105,6 +128,7 @@ export default function RiderDashboard() {
     });
  
     return () => {
+      socket.off("rideRequest");
       socket.off("rideAccepted");
       socket.off("rideRejected");
     };
@@ -114,7 +138,7 @@ export default function RiderDashboard() {
   const handleAccept = async (rideId) => {
     try {
       const res = await axios.post(
-        `http://localhost:5000/api/rides/${rideId}/accept`,
+        `http://localhost:3001/api/rides/${rideId}/accept`,
         {},
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
@@ -154,7 +178,7 @@ export default function RiderDashboard() {
       try {
         // Try to call the backend API
         const res = await axios.post(
-          `http://localhost:5000/api/rides/${selectedRide._id}/verify-otp`,
+          `http://localhost:3001/api/rides/${selectedRide._id}/verify-otp`,
           { otp },
           { headers: { Authorization: `Bearer ${auth?.token}` } }
         );
@@ -166,7 +190,7 @@ export default function RiderDashboard() {
         setSelectedRide(updatedRide);
         alert("Ride started successfully!");
       } catch (apiError) {
-        console.error("API error:", apiError);
+        console.warn("API warning:", apiError);
         // Even if API fails, still accept the OTP for testing
         setOtpDialogOpen(false);
         // Update ride status to started
@@ -175,7 +199,7 @@ export default function RiderDashboard() {
         alert("Ride started successfully!");
       }
     } catch (err) {
-      console.error("Verification error:", err);
+      console.warn("Verification warning:", err);
       // For testing, we'll still accept the OTP
       setOtpDialogOpen(false);
       const updatedRide = { ...selectedRide, status: "in_progress" };
@@ -185,12 +209,33 @@ export default function RiderDashboard() {
       setVerifyingOtp(false);
     }
   };
+
+  // ✅ Complete ride
+  const handleCompleteRide = async () => {
+    try {
+      if (!selectedRide?._id) return;
+      const res = await axios.post(
+        `http://localhost:3001/api/rides/${selectedRide._id}/complete`,
+        {},
+        { headers: { Authorization: `Bearer ${auth?.token}` } }
+      );
+      const updated = res.data?.ride || { ...selectedRide, status: "completed" };
+      setSelectedRide(updated);
+      alert("Ride completed. User will proceed to payment.");
+    } catch (err) {
+      console.warn("Complete ride warning:", err);
+      // graceful fallback
+      const updated = { ...selectedRide, status: "completed" };
+      setSelectedRide(updated);
+      alert("Ride marked completed locally.");
+    }
+  };
  
   // ❌ Reject ride
   const handleReject = async (rideId) => {
     try {
       await axios.post(
-        `http://localhost:5000/api/rides/${rideId}/reject`,
+        `http://localhost:3001/api/rides/${rideId}/reject`,
         {},
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
@@ -254,7 +299,7 @@ export default function RiderDashboard() {
                 <Button variant="outlined" color="primary" sx={{ mr: 2 }}>
                   Chat 💬
                 </Button>
-                {selectedRide.status !== "in_progress" && (
+                {selectedRide.status !== "in_progress" && selectedRide.status !== "completed" && (
                   <Button
                     variant="contained"
                     color="primary"
@@ -262,6 +307,21 @@ export default function RiderDashboard() {
                   >
                     Verify OTP 🔐
                   </Button>
+                )}
+                {selectedRide.status === "in_progress" && (
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={handleCompleteRide}
+                    sx={{ ml: 2 }}
+                  >
+                    Complete Ride ✅
+                  </Button>
+                )}
+                {selectedRide.status === "completed" && (
+                  <Typography sx={{ ml: 2, fontWeight: "bold", color: "green" }}>
+                    Ride Completed — awaiting user payment
+                  </Typography>
                 )}
               </Box>
             </CardContent>

@@ -19,7 +19,7 @@ export default function LiveTracker({ rideId }) {
         setPosition(res.data.position);
         setStatus(res.data.status);
       } catch (e) {
-        console.error(e);
+        console.warn("LiveTracker warning:", e);
       }
     };
 

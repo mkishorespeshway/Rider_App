@@ -9,6 +9,9 @@ router.post('/initiate', authMiddleware, paymentsCtrl.initiate);
 // Verify checkout (called from frontend after payment success)
 router.post('/verify', authMiddleware, paymentsCtrl.verify);
 
+// Cash payment (mark as completed)
+router.post('/cash', authMiddleware, paymentsCtrl.cash);
+
 // Razorpay webhook (must use raw body middleware in server.js)
 router.post('/webhook', paymentsCtrl.webhook);
 

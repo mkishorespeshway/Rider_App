@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   GoogleMap,
-  Marker,
+  Marker as GoogleMarker,
+  Polyline,
   useJsApiLoader,
 } from "@react-google-maps/api";
+import { MapContainer as LMap, TileLayer, Marker as LMarker, Popup } from "react-leaflet";
+import L from "leaflet";
 import axios from "axios";
 
 const containerStyle = {
@@ -44,6 +47,93 @@ export default function Map({
   const mapRef = useRef(null);
   const directionsRendererRef = useRef(null);
   const [routeColor, setRouteColor] = useState("blue");
+
+  // Leaflet icons (CDN) for pickup/drop when Google key is missing
+  const leafletPickupIcon = L.icon({
+    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+  });
+  const leafletDropIcon = L.icon({
+    iconUrl: "https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png",
+    iconRetinaUrl: "https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png",
+    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+  });
+
+  const nominatimReverse = async (lat, lng) => {
+    try {
+      const { data } = await axios.get("https://nominatim.openstreetmap.org/reverse", {
+        params: { format: "json", lat, lon: lng, zoom: 18, addressdetails: 1 },
+        headers: { "Accept-Language": "en" },
+      });
+      return data?.display_name || "";
+    } catch {
+      return "";
+    }
+  };
+
+  // 🚫 If API key is missing, render a Leaflet map fallback powered by OpenStreetMap
+  if (!apiKey) {
+    const center = normalizeLatLng(pickup) || DEFAULT_PICKUP;
+    return (
+      <LMap
+        center={[center.lat, center.lng]}
+        zoom={14}
+        style={containerStyle}
+        whenCreated={(map) => { mapRef.current = map; }}
+        onclick={(e) => { /* noop for typing */ }}
+      >
+        <TileLayer
+          attribution="&copy; OpenStreetMap contributors"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        {pickup && (
+          <LMarker
+            position={[normalizeLatLng(pickup)?.lat ?? pickup.lat ?? pickup.latitude, normalizeLatLng(pickup)?.lng ?? pickup.lng ?? pickup.longitude]}
+            icon={leafletPickupIcon}
+            draggable={true}
+            eventHandlers={{
+              dragend: async (ev) => {
+                try {
+                  const { lat, lng } = ev.target.getLatLng();
+                  setPickup && setPickup({ lat, lng });
+                  const addr = await nominatimReverse(lat, lng);
+                  setPickupAddress && setPickupAddress(addr);
+                } catch {}
+              },
+            }}
+          >
+            <Popup>Pickup</Popup>
+          </LMarker>
+        )}
+
+        {drop && (
+          <LMarker
+            position={[normalizeLatLng(drop)?.lat ?? drop.lat ?? drop.latitude, normalizeLatLng(drop)?.lng ?? drop.lng ?? drop.longitude]}
+            icon={leafletDropIcon}
+            draggable={true}
+            eventHandlers={{
+              dragend: async (ev) => {
+                try {
+                  const { lat, lng } = ev.target.getLatLng();
+                  setDrop && setDrop({ lat, lng });
+                  const addr = await nominatimReverse(lat, lng);
+                  setDropAddress && setDropAddress(addr);
+                } catch {}
+              },
+            }}
+          >
+            <Popup>Drop</Popup>
+          </LMarker>
+        )}
+      </LMap>
+    );
+  }
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: apiKey,
@@ -159,8 +249,56 @@ export default function Map({
             if (typeof setNormalDuration === "function") {
               setNormalDuration(normalText);
             }
+
+            // 📌 Auto-fit map to the exact route bounds (pickup ↔ drop)
+            try {
+              const bounds = new window.google.maps.LatLngBounds();
+              // include start/end
+              if (leg.start_location) bounds.extend(leg.start_location);
+              if (leg.end_location) bounds.extend(leg.end_location);
+              // include overview path for better fit
+              const path = result.routes[0].overview_path || [];
+              path.forEach((p) => bounds.extend(p));
+              if (!bounds.isEmpty() && mapRef.current) {
+                mapRef.current.fitBounds(bounds, {
+                  top: 60,
+                  right: 60,
+                  bottom: 60,
+                  left: 60,
+                });
+              }
+            } catch (e) {
+              // Fallback: fit to pickup & drop only
+              try {
+                const b = new window.google.maps.LatLngBounds();
+                const o = normalizeLatLng(origin) || origin;
+                const d = normalizeLatLng(destination) || destination;
+                if (o?.lat && o?.lng) b.extend(new window.google.maps.LatLng(o.lat, o.lng));
+                if (d?.lat && d?.lng) b.extend(new window.google.maps.LatLng(d.lat, d.lng));
+                if (!b.isEmpty() && mapRef.current) {
+                  mapRef.current.fitBounds(b, {
+                    top: 60,
+                    right: 60,
+                    bottom: 60,
+                    left: 60,
+                  });
+                }
+              } catch {}
+            }
           } else {
-            console.error("Directions request failed:", status);
+            // Downgrade error to warning to avoid noisy console
+            console.warn("Directions request failed:", status);
+            // Fallback: Attempt to set straight-line bounds if possible
+            try {
+              const o = normalizeLatLng(origin) || origin;
+              const d = normalizeLatLng(destination) || destination;
+              const b = new window.google.maps.LatLngBounds();
+              if (o?.lat && o?.lng) b.extend(new window.google.maps.LatLng(o.lat, o.lng));
+              if (d?.lat && d?.lng) b.extend(new window.google.maps.LatLng(d.lat, d.lng));
+              if (!b.isEmpty() && mapRef.current) {
+                mapRef.current.fitBounds(b, { top: 60, right: 60, bottom: 60, left: 60 });
+              }
+            } catch {}
           }
         }
       );
@@ -213,7 +351,7 @@ export default function Map({
     >
       {/* ✅ Pickup Marker */}
       {pickup && (
-        <Marker
+        <GoogleMarker
           key={`pickup-${(normalizeLatLng(pickup)?.lat ?? pickup.lat ?? pickup.latitude)}-${(normalizeLatLng(pickup)?.lng ?? pickup.lng ?? pickup.longitude)}`}
           position={normalizeLatLng(pickup) || pickup}
           icon={{
@@ -241,7 +379,7 @@ export default function Map({
 
       {/* ✅ Drop Marker */}
       {drop && (
-        <Marker
+        <GoogleMarker
           key={`drop-${(drop.lat ?? drop.latitude)}-${(drop.lng ?? drop.longitude)}`}
           position={normalizeLatLng(drop) || drop}
           icon={{
@@ -267,15 +405,23 @@ export default function Map({
         />
       )}
 
-      {/* ✅ Rider Marker (Blue Car Icon) */}
+      {/* ✅ Rider Marker (Bike Sticker Icon) */}
       {riderLocation && (
-        <Marker
+        <GoogleMarker
           key={`rider-${(riderLocation.lat ?? riderLocation.latitude)}-${(riderLocation.lng ?? riderLocation.longitude)}`}
           position={normalizeLatLng(riderLocation) || riderLocation}
           icon={{
-            url: "https://cdn-icons-png.flaticon.com/512/64/64113.png",
-            scaledSize: new window.google.maps.Size(40, 40),
+            url: "https://cdn-icons-png.flaticon.com/512/2972/2972185.png",
+            scaledSize: new window.google.maps.Size(42, 42),
           }}
+        />
+      )}
+
+      {/* 👉 Simple line from rider to pickup to visualize approach */}
+      {riderLocation && pickup && (
+        <Polyline
+          path={[normalizeLatLng(riderLocation) || riderLocation, normalizeLatLng(pickup) || pickup]}
+          options={{ strokeColor: "#111", strokeOpacity: 0.9, strokeWeight: 4 }}
         />
       )}
     </GoogleMap>

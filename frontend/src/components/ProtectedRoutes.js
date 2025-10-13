@@ -13,7 +13,7 @@ export default function ProtectedRoute({ children, role }) {
 
   if (role && !roles.includes(role)) {
     // 🚀 If role mismatch, send them to correct dashboard
-    if (roles.includes("user")) return <Navigate to="/user-dashboard" replace />;
+    if (roles.includes("user")) return <Navigate to="/booking" replace />;
     if (roles.includes("rider")) return <Navigate to="/rider-dashboard" replace />;
     if (roles.includes("admin")) return <Navigate to="/admin-dashboard" replace />;
     return <Navigate to="/login" replace />;

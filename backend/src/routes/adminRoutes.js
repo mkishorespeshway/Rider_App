@@ -4,7 +4,11 @@ const jwt = require("jsonwebtoken");
 const adminAuth = require("../middleware/adminAuth");
 const User = require("../models/User");
 const Ride = require("../models/Ride");
+const Payment = require("../models/Payment");
 const SOS = require("../models/SOS"); // 🚨 SOS model
+const mongoose = require("mongoose");
+
+const isDbOnline = () => mongoose.connection.readyState === 1;
 
 // 🔹 Static admin credentials
 const ADMIN_USER = {
@@ -32,6 +36,13 @@ router.post("/login", (req, res) => {
 // 🔹 Overview (protected)
 router.get("/overview", adminAuth, async (req, res) => {
   try {
+    if (!isDbOnline()) {
+      return res.json({
+        success: true,
+        data: { users: 0, riders: 0, captains: 0, pendingCaptains: 0, rides: 0 },
+        mock: true,
+      });
+    }
     const [usersCount, ridersCount, pendingCaptainsCount, ridesCount] =
       await Promise.all([
         User.countDocuments({ role: "user" }),
@@ -133,6 +144,9 @@ router.post("/captain/:id/reject", adminAuth, async (req, res) => {
 // 🔹 Get all rides
 router.get("/rides", adminAuth, async (req, res) => {
   try {
+    if (!isDbOnline()) {
+      return res.json({ rides: [], mock: true });
+    }
     const rides = await Ride.find()
       .populate("riderId", "fullName email mobile documents")
       .populate("captainId", "fullName email mobile documents")
@@ -167,6 +181,48 @@ router.put("/sos/:id/resolve", adminAuth, async (req, res) => {
     res.json({ success: true, message: "SOS resolved", data: sos });
   } catch (err) {
     console.error("Resolve SOS error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// ===================== 💰 PAYMENTS SUMMARY =====================
+router.get("/payments/summary", adminAuth, async (req, res) => {
+  try {
+    const payments = await Payment.find({ status: "success" }).sort({ createdAt: -1 }).limit(500);
+
+    // Compute totals
+    const totalAmount = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const adminAmount = Math.round(totalAmount * 0.10);
+    const riderAmount = totalAmount - adminAmount;
+
+    // Fetch related rides with driver/rider info in one shot
+    const rideIds = [...new Set(payments.map((p) => Number(p.rideId)).filter((v) => !Number.isNaN(v)))];
+    const rides = await Ride.find({ _id: { $in: rideIds } })
+      .populate("driverId", "fullName email mobile")
+      .populate("riderId", "fullName email mobile");
+    const rideMap = new Map(rides.map((r) => [Number(r._id), r]));
+
+    const items = payments.map((p) => {
+      const ride = rideMap.get(Number(p.rideId));
+      const driver = ride?.driverId;
+      return {
+        rideId: p.rideId,
+        amount: Number(p.amount || 0),
+        method: p.provider === 'cash' ? 'cash' : 'online',
+        status: p.status,
+        adminShare: Math.round(Number(p.amount || 0) * 0.10),
+        riderShare: Number(p.amount || 0) - Math.round(Number(p.amount || 0) * 0.10),
+        createdAt: p.createdAt,
+        // Rider (driver) info for admin visibility
+        riderName: driver?.fullName || null,
+        riderEmail: driver?.email || null,
+        riderMobile: driver?.mobile || null,
+      };
+    });
+
+    res.json({ success: true, data: { totalAmount, adminAmount, riderAmount, items } });
+  } catch (err) {
+    console.error("Payments summary error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
