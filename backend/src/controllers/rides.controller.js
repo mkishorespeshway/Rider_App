@@ -6,19 +6,85 @@ const dynamicPricingService = require('../services/dynamicPricingService');
 // 🚖 Create Ride
 exports.createRide = async (req, res) => {
   try {
-    const { pickup, drop, pickupCoords, dropCoords, distance, basePrice, finalPrice, pricingFactors, paymentMethod, detailedPaymentMethod } = req.body;
+    const { pickup, drop, pickupCoords, dropCoords, distance, basePrice, finalPrice, pricingFactors, paymentMethod, detailedPaymentMethod, requestedVehicleType } = req.body;
+
+    // Normalize coords to expected { lat, lng } even if frontend sends { latitude, longitude }
+    const normalizeCoords = (c) => {
+      if (!c || typeof c !== "object") return null;
+      const lat = c.lat != null ? c.lat : c.latitude;
+      const lng = c.lng != null ? c.lng : c.longitude;
+      if (lat == null || lng == null) return null;
+      const nLat = Number(lat);
+      const nLng = Number(lng);
+      return {
+        lat: Number.isFinite(nLat) ? nLat : lat,
+        lng: Number.isFinite(nLng) ? nLng : lng,
+      };
+    };
+
+    const safePickupCoords = normalizeCoords(pickupCoords);
+    const safeDropCoords = normalizeCoords(dropCoords);
 
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 
+    // Basic required field validation to avoid schema errors
+    if (!pickup || !drop) {
+      return res.status(400).json({ success: false, message: "Pickup and drop addresses are required" });
+    }
+    if (!safePickupCoords || !safeDropCoords) {
+      return res.status(400).json({ success: false, message: "Pickup and drop coordinates are required" });
+    }
+    if (safePickupCoords.lat == null || safePickupCoords.lng == null || safeDropCoords.lat == null || safeDropCoords.lng == null) {
+      return res.status(400).json({ success: false, message: "Invalid coordinates provided" });
+    }
+
     // Compute zone ids for pickup and drop
-    const pickupZoneId = pickupCoords && pickupCoords.lat != null && pickupCoords.lng != null
-      ? dynamicPricingService.computeZoneId({ latitude: pickupCoords.lat, longitude: pickupCoords.lng })
+    const pickupZoneId = safePickupCoords && safePickupCoords.lat != null && safePickupCoords.lng != null
+      ? dynamicPricingService.computeZoneId({ latitude: safePickupCoords.lat, longitude: safePickupCoords.lng })
       : null;
-    const dropZoneId = dropCoords && dropCoords.lat != null && dropCoords.lng != null
-      ? dynamicPricingService.computeZoneId({ latitude: dropCoords.lat, longitude: dropCoords.lng })
+    const dropZoneId = safeDropCoords && safeDropCoords.lat != null && safeDropCoords.lng != null
+      ? dynamicPricingService.computeZoneId({ latitude: safeDropCoords.lat, longitude: safeDropCoords.lng })
       : null;
+
+    // === Safe defaults for distance and pricing ===
+    const toRad = (v) => (Number(v) * Math.PI) / 180;
+    const haversineKm = (a, b) => {
+      const R = 6371; // Earth radius in km
+      const dLat = toRad(b.lat - a.lat);
+      const dLng = toRad(b.lng - a.lng);
+      const lat1 = toRad(a.lat);
+      const lat2 = toRad(b.lat);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+    };
+
+    let distanceNum = Number(distance);
+    if (!Number.isFinite(distanceNum) || distanceNum <= 0) {
+      distanceNum = Number(haversineKm(safePickupCoords, safeDropCoords).toFixed(2));
+    }
+
+    let safeBasePrice = Number(basePrice);
+    let safeFinalPrice = Number(finalPrice);
+    let safePricingFactors = pricingFactors;
+
+    if (!Number.isFinite(safeBasePrice) || safeBasePrice <= 0 || !Number.isFinite(safeFinalPrice) || safeFinalPrice <= 0) {
+      try {
+        const priceDetails = await dynamicPricingService.calculateDynamicPrice(
+          { latitude: safePickupCoords.lat, longitude: safePickupCoords.lng },
+          distanceNum,
+          Number.isFinite(safeBasePrice) && safeBasePrice > 0 ? safeBasePrice : 25
+        );
+        safeBasePrice = Number(priceDetails.basePrice);
+        safeFinalPrice = Number(priceDetails.finalPrice);
+        safePricingFactors = priceDetails.factors || safePricingFactors;
+      } catch (e) {
+        const fallback = Number((25 + distanceNum * 5).toFixed(2));
+        safeBasePrice = fallback;
+        safeFinalPrice = fallback;
+      }
+    }
 
     // 🔒 Single-active-ride guard: block booking if user has one already
     try {
@@ -46,16 +112,17 @@ exports.createRide = async (req, res) => {
         riderId: req.user._id,
         pickup,
         drop,
-        pickupCoords,
-        dropCoords,
+        pickupCoords: safePickupCoords || pickupCoords,
+        dropCoords: safeDropCoords || dropCoords,
         pickupZoneId,
         dropZoneId,
-        distance,
-        basePrice,
-        finalPrice,
-        pricingFactors,
+        distance: distanceNum,
+        basePrice: safeBasePrice,
+        finalPrice: safeFinalPrice,
+        pricingFactors: safePricingFactors,
         paymentMethod: paymentMethod || "COD",
         detailedPaymentMethod: detailedPaymentMethod || "",
+        requestedVehicleType: requestedVehicleType || "",
         status: "pending",
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -72,16 +139,17 @@ exports.createRide = async (req, res) => {
       riderId: req.user._id, // user who books
       pickup,
       drop,
-      pickupCoords,
-      dropCoords,
+      pickupCoords: safePickupCoords,
+      dropCoords: safeDropCoords,
       pickupZoneId,
       dropZoneId,
-      distance,
-      basePrice,
-      finalPrice,
-      pricingFactors,
+      distance: distanceNum,
+      basePrice: safeBasePrice,
+      finalPrice: safeFinalPrice,
+      pricingFactors: safePricingFactors,
       paymentMethod: paymentMethod || "COD", // Default to COD if not specified
       detailedPaymentMethod: detailedPaymentMethod || "", // Store detailed payment method if provided
+      requestedVehicleType: requestedVehicleType || "",
       status: "pending",
     });
 
@@ -132,6 +200,7 @@ exports.acceptRide = async (req, res) => {
         _id: driver._id,
         fullName: driver.fullName,
         mobile: driver.mobile,
+        profilePicture: driver.profilePicture || null,
         // include rider profile fields needed by booking popup
         preferredLanguage: driver.preferredLanguage || null,
         preferredLanguages: Array.isArray(driver.preferredLanguages) ? driver.preferredLanguages : [],
@@ -256,7 +325,16 @@ exports.getPendingRides = async (req, res) => {
     if (mongoose.connection.readyState !== 1) {
       return res.json({ success: true, rides: [] });
     }
-    const rides = await Ride.find({ status: "pending" }).populate("riderId", "fullName mobile");
+    // Optional filter by rider's vehicleType if rider is logged in
+    let query = { status: "pending" };
+    if (req.user && req.user.role === "rider") {
+      const riderProfile = await User.findById(req.user._id).lean();
+      const vType = riderProfile?.vehicleType || null;
+      if (vType) {
+        query = { ...query, requestedVehicleType: { $in: [vType, "", null] } };
+      }
+    }
+    const rides = await Ride.find(query).populate("riderId", "fullName mobile");
     res.json({ success: true, rides });
   } catch (err) {
     console.error("❌ Pending rides fetch error:", err);
@@ -296,7 +374,8 @@ exports.getRideHistory = async (req, res) => {
 // 🔍 Get ride by ID
 exports.getRideById = async (req, res) => {
   try {
-    const ride = await Ride.findById(req.params.id);
+    const ride = await Ride.findById(req.params.id)
+      .populate("driverId", "fullName email mobile vehicleType vehicleNumber preferredLanguage preferredLanguages profilePicture vehicle");
     if (!ride) {
       return res.status(404).json({ success: false, message: "Ride not found" });
     }

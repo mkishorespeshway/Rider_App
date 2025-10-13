@@ -83,6 +83,12 @@ const rideSchema = new mongoose.Schema(
     },
 
     etaMinutes: { type: Number, default: null },
+
+    requestedVehicleType: {
+      type: String,
+      enum: ["bike", "auto", "car", "suv", "parcel", ""],
+      default: "",
+    },
   },
   { timestamps: true }
 );

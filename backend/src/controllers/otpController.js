@@ -86,7 +86,7 @@ exports.verify = async (req, res) => {
       const tempUserId = new mongoose.Types.ObjectId();
       const token = jwt.sign(
         { id: tempUserId, role: requestedRole },
-        process.env.JWT_SECRET || "secretkey",
+        process.env.JWT_SECRET || "supersecretkey",
         { expiresIn: "7d" }
       );
       console.log(`✅ [DEV] OTP verified for ${mobile} (DB offline, role=${requestedRole})`);
@@ -134,7 +134,7 @@ exports.verify = async (req, res) => {
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
-      process.env.JWT_SECRET || "secretkey",
+      process.env.JWT_SECRET || "supersecretkey",
       { expiresIn: "7d" }
     );
 
@@ -161,3 +161,4 @@ exports.verify = async (req, res) => {
       .json({ success: false, message: "Server error verifying OTP" });
   }
 };
+

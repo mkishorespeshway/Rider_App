@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { getRideHistory } from "../services/api";
+import { getRideHistory, getRiderStatus } from "../services/api";
 import {
   Box,
   Paper,
@@ -24,6 +24,7 @@ export default function HistoryRider() {
   const navigate = useNavigate();
   const { auth } = useAuth();
   const rider = auth?.user || {};
+  const [riderDetails, setRiderDetails] = useState(rider || {});
  
   const formatDate = (iso) => {
     if (!iso) return "";
@@ -61,6 +62,26 @@ export default function HistoryRider() {
     };
     fetch();
   }, []);
+
+  // Fetch rider profile/status to ensure vehicle details are available in header
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await getRiderStatus();
+        // Support multiple backend shapes
+        const data = res?.data?.rider || res?.data?.data || res?.data || {};
+        if (mounted && data && typeof data === "object") {
+          setRiderDetails((prev) => ({ ...prev, ...data }));
+        }
+      } catch (e) {
+        console.warn("HistoryRider: getRiderStatus failed", e);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
  
   if (loading)
     return (
@@ -75,6 +96,28 @@ export default function HistoryRider() {
       </Box>
     );
  
+  // Compute vehicle display values including fallback from latest ride with driver info
+  const withDriver = (Array.isArray(rides) ? rides : []).filter(
+    (r) => r && r.driverId && (r.driverId.vehicleType || r.driverId.vehicleNumber)
+  );
+  const latestDriver = withDriver.length
+    ? [...withDriver].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]?.driverId || {}
+    : {};
+  const vehicleTypeDisplay =
+    riderDetails.vehicleType ||
+    riderDetails.vehicle?.type ||
+    rider.vehicleType ||
+    rider.vehicle?.type ||
+    latestDriver.vehicleType ||
+    "—";
+  const vehicleNumberDisplay =
+    riderDetails.vehicleNumber ||
+    riderDetails.vehicle?.registrationNumber ||
+    rider.vehicleNumber ||
+    rider.vehicle?.registrationNumber ||
+    latestDriver.vehicleNumber ||
+    "—";
+
   return (
     <Box p={3}>
       {/* Centered identity header for rider */}
@@ -86,19 +129,19 @@ export default function HistoryRider() {
           <Box display="flex" justifyContent="center" gap={1} alignItems="center" sx={{ mb: 0.5 }}>
             <PersonIcon fontSize="small" />
             <Typography>
-              <b>Name:</b> {rider.fullName || "—"}
+              <b>Name:</b> {riderDetails.fullName || rider.fullName || "—"}
             </Typography>
           </Box>
           <Box display="flex" justifyContent="center" gap={1} alignItems="center" sx={{ mb: 0.5 }}>
             <LocalPhoneIcon fontSize="small" />
             <Typography>
-              <b>Mobile:</b> {rider.mobile || "—"}
+              <b>Mobile:</b> {riderDetails.mobile || rider.mobile || "—"}
             </Typography>
           </Box>
           <Box display="flex" justifyContent="center" gap={1} alignItems="center">
             <LocalTaxiIcon fontSize="small" />
             <Typography>
-              <b>Vehicle:</b> {(rider.vehicleType || "—")} • {(rider.vehicleNumber || "—")}
+              <b>Vehicle:</b> {vehicleTypeDisplay} • {vehicleNumberDisplay}
             </Typography>
           </Box>
         </Paper>
@@ -146,9 +189,12 @@ export default function HistoryRider() {
                   </Box>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                    {/* Placeholder for rider vehicle if needed */}
-                  </Typography>
+                  <Box display="flex" alignItems="center" gap={1}>
+                    <LocalTaxiIcon fontSize="small" />
+                    <Typography>
+                      <b>Driver Vehicle:</b> {r.driverId?.vehicleType || "-"} • {r.driverId?.vehicleNumber || "-"}
+                    </Typography>
+                  </Box>
                 </Grid>
               </Grid>
             )}

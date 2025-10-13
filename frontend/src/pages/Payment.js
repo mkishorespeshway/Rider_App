@@ -172,6 +172,12 @@ export default function Payment() {
             });
             if (verifyResp.data?.ok) {
               setMessage({ type: "success", text: "Payment successful!" });
+              try {
+                // Clear unpaid lock if present
+                if (effectiveRideId) {
+                  localStorage.removeItem(`unpaid:${effectiveRideId}`);
+                }
+              } catch {}
               setTimeout(() => navigate("/booking"), 1200);
             } else {
               setMessage({ type: "error", text: "Payment verification failed." });
@@ -211,6 +217,10 @@ export default function Payment() {
       const resp = await markCashPayment({ rideId: effectiveRideId, amount: resolvedAmount });
       if (resp.data?.ok) {
         setMessage({ type: "success", text: "Marked as paid (Cash)." });
+        try {
+          // Clear unpaid lock if present
+          localStorage.removeItem(`unpaid:${effectiveRideId}`);
+        } catch {}
         setTimeout(() => navigate("/booking"), 1200);
       } else {
         setMessage({ type: "error", text: "Could not mark cash payment." });

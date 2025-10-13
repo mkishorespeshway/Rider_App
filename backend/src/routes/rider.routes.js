@@ -194,7 +194,7 @@ router.get("/check-approval/:mobile", async (req, res) => {
 // ✅ Added Rider Status Route
 router.get("/status", authMiddleware, async (req, res) => {
   try {
-    const rider = await User.findOne({ _id: req.user.id, role: "rider" });
+    const rider = await User.findOne({ _id: req.user._id, role: "rider" });
     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
     res.json({ success: true, rider });
   } catch (err) {

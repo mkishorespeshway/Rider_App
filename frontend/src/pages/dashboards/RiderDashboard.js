@@ -19,7 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import Map from "../../components/Map"; // ✅ Google Maps component
  
-const socket = io("http://localhost:3001");
+const socket = io("http://localhost:5000");
  
 export default function RiderDashboard() {
   const [rides, setRides] = useState([]);
@@ -91,7 +91,7 @@ export default function RiderDashboard() {
   const fetchPendingRides = async () => {
     try {
       setLoading(true);
-      const res = await axios.get("http://localhost:3001/api/rides/pending", {
+      const res = await axios.get("http://localhost:5000/api/rides/pending", {
         headers: { Authorization: `Bearer ${auth?.token}` },
       });
       setRides(res.data.rides || []);
@@ -108,10 +108,23 @@ export default function RiderDashboard() {
     // Receive live ride requests (especially when DB is offline)
     socket.on("rideRequest", (ride) => {
       console.log("🚖 Incoming ride request:", ride);
-      setRides((prev) => {
-        const exists = prev.some((r) => r._id === ride._id);
-        return exists ? prev : [ride, ...prev];
-      });
+      try {
+        const riderVehicleType = auth?.user?.vehicleType || null;
+        const requestedType = ride?.requestedVehicleType || "";
+        // Only add if matches rider vehicle type, or requestedType is empty (no filter)
+        if (!riderVehicleType || requestedType === "" || requestedType == null || String(requestedType).toLowerCase() === String(riderVehicleType).toLowerCase()) {
+          setRides((prev) => {
+            const exists = prev.some((r) => r._id === ride._id);
+            return exists ? prev : [ride, ...prev];
+          });
+        }
+      } catch {
+        // Fallback: add regardless if filtering fails
+        setRides((prev) => {
+          const exists = prev.some((r) => r._id === ride._id);
+          return exists ? prev : [ride, ...prev];
+        });
+      }
     });
 
     socket.on("rideAccepted", (ride) => {
@@ -138,7 +151,7 @@ export default function RiderDashboard() {
   const handleAccept = async (rideId) => {
     try {
       const res = await axios.post(
-        `http://localhost:3001/api/rides/${rideId}/accept`,
+        `http://localhost:5000/api/rides/${rideId}/accept`,
         {},
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
@@ -178,7 +191,7 @@ export default function RiderDashboard() {
       try {
         // Try to call the backend API
         const res = await axios.post(
-          `http://localhost:3001/api/rides/${selectedRide._id}/verify-otp`,
+          `http://localhost:5000/api/rides/${selectedRide._id}/verify-otp`,
           { otp },
           { headers: { Authorization: `Bearer ${auth?.token}` } }
         );
@@ -215,19 +228,34 @@ export default function RiderDashboard() {
     try {
       if (!selectedRide?._id) return;
       const res = await axios.post(
-        `http://localhost:3001/api/rides/${selectedRide._id}/complete`,
+        `http://localhost:5000/api/rides/${selectedRide._id}/complete`,
         {},
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
       const updated = res.data?.ride || { ...selectedRide, status: "completed" };
       setSelectedRide(updated);
       alert("Ride completed. User will proceed to payment.");
+      // After marking complete, clear current ride and refresh pending list
+      // This allows the booking page to permit next bookings while rider sees new requests
+      try {
+        setTimeout(() => {
+          setSelectedRide(null);
+          fetchPendingRides();
+        }, 500);
+      } catch {}
     } catch (err) {
       console.warn("Complete ride warning:", err);
       // graceful fallback
       const updated = { ...selectedRide, status: "completed" };
       setSelectedRide(updated);
       alert("Ride marked completed locally.");
+      // Even on fallback, reset dashboard to be ready for the next ride
+      try {
+        setTimeout(() => {
+          setSelectedRide(null);
+          fetchPendingRides();
+        }, 500);
+      } catch {}
     }
   };
  
@@ -235,7 +263,7 @@ export default function RiderDashboard() {
   const handleReject = async (rideId) => {
     try {
       await axios.post(
-        `http://localhost:3001/api/rides/${rideId}/reject`,
+        `http://localhost:5000/api/rides/${rideId}/reject`,
         {},
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );

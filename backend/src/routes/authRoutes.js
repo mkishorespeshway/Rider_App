@@ -32,10 +32,12 @@ router.post("/signup-user", async (req, res) => {
     if (!fullName || !email || !mobile) {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
-
-    const existing = await User.findOne({ mobile, role: "user" });
+    // Check duplicates globally by email or mobile
+    const existing = await User.findOne({ $or: [{ mobile }, { email }] });
     if (existing) {
-      return res.status(400).json({ success: false, message: "User already exists" });
+      const byMobile = existing.mobile === mobile;
+      const byEmail = existing.email === email;
+      return res.status(409).json({ success: false, message: byMobile ? "Mobile already registered" : byEmail ? "Email already registered" : "User already exists" });
     }
 
     const user = new User({
@@ -56,6 +58,10 @@ router.post("/signup-user", async (req, res) => {
     });
   } catch (err) {
     console.error("Signup user error:", err);
+    if (err && err.code === 11000) {
+      const dupField = err.keyPattern && Object.keys(err.keyPattern)[0];
+      return res.status(409).json({ success: false, message: `${dupField || "Field"} already registered` });
+    }
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -100,9 +106,13 @@ router.post(
       if (!fullName || !email || !mobile) {
         return res.status(400).json({ success: false, message: "All fields are required" });
       }
-
-      const existing = await User.findOne({ mobile, role: "rider" });
-      if (existing) return res.status(400).json({ success: false, message: "Rider already exists" });
+      // Check duplicates globally by email or mobile
+      const existing = await User.findOne({ $or: [{ mobile }, { email }] });
+      if (existing) {
+        const byMobile = existing.mobile === mobile;
+        const byEmail = existing.email === email;
+        return res.status(409).json({ success: false, message: byMobile ? "Mobile already registered" : byEmail ? "Email already registered" : "Rider already exists" });
+      }
 
       const fields = [
         { key: "aadharFront", name: "Aadhar Front" },
@@ -144,6 +154,10 @@ router.post(
       });
     } catch (err) {
       console.error("Signup rider error:", err);
+      if (err && err.code === 11000) {
+        const dupField = err.keyPattern && Object.keys(err.keyPattern)[0];
+        return res.status(409).json({ success: false, message: `${dupField || "Field"} already registered` });
+      }
       res.status(500).json({ success: false, message: "Server error" });
     }
   }

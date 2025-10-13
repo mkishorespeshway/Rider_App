@@ -2,8 +2,8 @@
   "name": "rider-backend",
   "version": "1.0.0",
   "scripts": {
-    "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "dev": "set PORT=5000 && nodemon src/server.js",
+    "start": "set PORT=5000 && node src/server.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -14,8 +14,8 @@
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^7.8.7",
     "mongodb-memory-server": "^10.1.4",
+    "mongoose": "^7.8.7",
     "multer": "^2.0.2",
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.1",

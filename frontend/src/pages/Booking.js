@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Container, Paper, Typography, TextField, Box,
   Button, Drawer, CircularProgress, ListItemButton,
-  FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, Chip
+  FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, Chip, Avatar
 } from "@mui/material";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -15,13 +15,16 @@ import DynamicPricingDisplay from "../components/DynamicPricingDisplay.jsx";
 import PricingService from "../services/pricingService";
 import SOSButton from "../components/SOSButton";
 
-const socket = io("http://localhost:3001");
+const socket = io("http://localhost:5000");
 
 // Removed Razorpay loader (no third-party checkout in this flow)
 const loadRazorpayScript = () => Promise.resolve(false);
 
 export default function Booking() {
   const mapPanelRef = React.useRef(null);
+  // Initialize auth and navigate before any references in effects
+  const { auth } = useAuth();
+  const navigate = useNavigate();
   const [pickup, setPickup] = useState(null);
   const [drop, setDrop] = useState(null);
   const [pickupAddress, setPickupAddress] = useState("");
@@ -50,9 +53,19 @@ export default function Booking() {
   const [riderPanelOpen, setRiderPanelOpen] = useState(false);
   const [rideStatus, setRideStatus] = useState("Waiting for rider 🚖");
   const [otp, setOtp] = useState("");
+  // Persist OTP per active ride across refreshes
+  useEffect(() => {
+    try {
+      const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+      const existingId = localStorage.getItem(activeKey);
+      if (existingId) {
+        const otpKey = `rideOtp:${existingId}`;
+        const savedOtp = localStorage.getItem(otpKey);
+        if (savedOtp) setOtp(savedOtp);
+      }
+    } catch {}
+  }, [auth]);
 
-  const { auth } = useAuth();
-  const navigate = useNavigate();
 
   const GOOGLE_API_KEY = "AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"; // 🔑 Replace with your real key
 
@@ -61,6 +74,64 @@ export default function Booking() {
     if (auth?.user?._id) {
       socket.emit("join", auth.user._id);
     }
+  }, [auth]);
+
+  // 🔄 Restore active ride and keep popup open across refresh until OTP verification
+  useEffect(() => {
+    const restore = async () => {
+      try {
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        const existingId = localStorage.getItem(activeKey);
+        if (!existingId) return;
+        const resp = await axios.get(`http://localhost:5000/api/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+        const ride = resp.data?.ride;
+        if (!ride) return;
+        // If ride is still pending or accepted, show the drawer with assigned rider (if available)
+        if (ride.status === 'pending' || ride.status === 'accepted') {
+          // Build assignedRider from populated driverId when available
+          const d = ride.driverId || {};
+          const assigned = {
+            _id: d._id,
+            fullName: d.fullName,
+            mobile: d.mobile,
+            profilePicture: d.profilePicture || null,
+            preferredLanguage: d.preferredLanguage || null,
+            preferredLanguages: Array.isArray(d.preferredLanguages) ? d.preferredLanguages : [],
+            vehicleType: d.vehicleType || null,
+            vehicleNumber: d.vehicleNumber || (d.vehicle && d.vehicle.registrationNumber) || null,
+            vehicle: d.vehicle || {},
+          };
+          if (assigned._id) setAssignedRider(assigned);
+          setRiderPanelOpen(true);
+          setRideStatus('Rider en route 🚖');
+
+          // If accepted and OTP not yet set (e.g., after refresh), load or generate it
+          if (ride.status === 'accepted') {
+            try {
+              const otpKey = `rideOtp:${ride._id}`;
+              let saved = localStorage.getItem(otpKey);
+              if (!saved) {
+                saved = Math.floor(1000 + Math.random() * 9000).toString();
+                localStorage.setItem(otpKey, saved);
+              }
+              setOtp(saved);
+            } catch {}
+          }
+        }
+        // If already in progress or completed/cancelled, close and clear
+        if (ride.status === 'in_progress') {
+          setRiderPanelOpen(false);
+          setRideStatus('Ride started ✅');
+        }
+        if (ride.status === 'completed' || ride.status === 'cancelled') {
+          localStorage.removeItem(activeKey);
+          setRiderPanelOpen(false);
+        }
+      } catch (e) {
+        // If fetch fails, keep current state; do not close prematurely
+      }
+    };
+    restore();
   }, [auth]);
 
   // 📍 Get current location for pickup
@@ -298,6 +369,43 @@ export default function Booking() {
   const [createdRide, setCreatedRide] = useState(null);
   const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(null);
+
+  // 🔔 Helper to open payment prompt for an unpaid ride lock
+  const openPaymentPromptForUnpaidRide = async () => {
+    try {
+      const unpaidKeys = Object.keys(localStorage).filter((k) => k.startsWith("unpaid:"));
+      if (unpaidKeys.length === 0) return false;
+      const rideId = unpaidKeys[0].split(":")[1];
+      if (!rideId) return false;
+      const resp = await axios.get(`http://localhost:5000/api/rides/${rideId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+      const ride = resp.data?.ride;
+      if (!ride) return false;
+      setCreatedRide(ride);
+      const computedAmount = (ride.finalPrice != null) ? Number(ride.finalPrice) : null;
+      setPaymentAmount(computedAmount);
+      setShowPaymentPrompt(true);
+      setRiderPanelOpen(false);
+      setDrawerOpen(false);
+      try {
+        mapPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch {}
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // 🔄 On mount/refresh, if there's an unpaid lock, show payment prompt automatically
+  useEffect(() => {
+    (async () => {
+      try {
+        const unpaidKeys = Object.keys(localStorage).filter((k) => k.startsWith("unpaid:"));
+        if (unpaidKeys.length > 0) {
+          await openPaymentPromptForUnpaidRide();
+        }
+      } catch {}
+    })();
+  }, [auth]);
   
   // 🔥 Create ride request (opens the drawer with payment options)
   const handleFindRiders = async () => {
@@ -306,12 +414,23 @@ export default function Booking() {
       return;
     }
     try {
+      // 🚫 Block new booking if there is any unpaid completed ride
+      try {
+        const unpaidKeys = Object.keys(localStorage).filter(k => k.startsWith('unpaid:'));
+        if (unpaidKeys.length > 0) {
+          const opened = await openPaymentPromptForUnpaidRide();
+          if (!opened) {
+            alert("Payment pending for previous ride. Please pay before booking another.");
+          }
+          return;
+        }
+      } catch {}
       // 🚫 Client-side guard: only one active ride per user
       const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
       const existingId = localStorage.getItem(activeKey);
       if (existingId) {
         try {
-          const chk = await axios.get(`http://localhost:3001/api/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+          const chk = await axios.get(`http://localhost:5000/api/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
           const st = chk.data?.ride?.status;
           if (st && st !== 'completed' && st !== 'cancelled') {
             alert("You already have an active ride. Please complete it before booking another.");
@@ -342,7 +461,7 @@ export default function Booking() {
       const selectedFinalPrice = +(baseFare + trafficAdd + weatherAdd).toFixed(2);
 
       const res = await axios.post(
-        "http://localhost:3001/api/rides/create",
+        "http://localhost:5000/api/rides/create",
         {
           pickup: pickupAddress,
           drop: dropAddress,
@@ -351,6 +470,7 @@ export default function Booking() {
           distance: distanceKm,
           // Persist the selected booking price so Payment shows the same amount
           finalPrice: selectedFinalPrice,
+          requestedVehicleType: selectedRide || "",
         },
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
@@ -420,11 +540,25 @@ export default function Booking() {
       setAssignedRider(ride.acceptedBy);
       setRiderPanelOpen(true);
       setRideStatus("Rider en route 🚖");
-    });
+      // Persist active ride id on acceptance to filter GPS updates
+      try {
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        if (ride?._id) localStorage.setItem(activeKey, ride._id);
+      } catch {}
 
-     // Generate a random 4-digit OTP for demonstration
-      const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
-      setOtp(generatedOtp);
+      // Generate/persist OTP for this ride on acceptance
+      try {
+        if (ride?._id) {
+          const otpKey = `rideOtp:${ride._id}`;
+          let saved = localStorage.getItem(otpKey);
+          if (!saved) {
+            saved = Math.floor(1000 + Math.random() * 9000).toString();
+            localStorage.setItem(otpKey, saved);
+          }
+          setOtp(saved);
+        }
+      } catch {}
+    });
 
     socket.on("rideRejected", () => {
       setLookingForRider(false);
@@ -456,18 +590,44 @@ export default function Booking() {
       // Open the payment prompt in the same screen (Rapido-style)
       setShowPaymentPrompt(true);
       setRiderPanelOpen(false);
+      // 🔓 Reset booking state so user can immediately make another booking
+      try {
+        setLookingForRider(false);
+        setAssignedRider(null);
+        setDrawerOpen(false);
+        setCreatedRide(null);
+        setSelectedRide(null);
+      } catch {}
       try {
         // Smoothly scroll to the payment prompt area to avoid perceived reload
         mapPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       } catch {}
       try {
         const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        const rideId = localStorage.getItem(activeKey);
+        if (rideId) {
+          // Keep an unpaid lock to block next booking until payment
+          localStorage.setItem(`unpaid:${rideId}`, "true");
+          // Clear per-ride OTP when completed; it will be shown until rider starts
+          localStorage.removeItem(`rideOtp:${rideId}`);
+        }
         localStorage.removeItem(activeKey);
       } catch {}
     });
 
-    socket.on("riderLocationUpdate", ({ coords }) => {
-      setRiderLocation(coords);
+    socket.on("riderLocationUpdate", ({ rideId, coords }) => {
+      try {
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        const activeId = localStorage.getItem(activeKey);
+        const currentId = activeId || (createdRide && createdRide._id) || null;
+        if (!currentId) return;
+        if (String(rideId) === String(currentId)) {
+          setRiderLocation(coords);
+        }
+      } catch {
+        // Fallback: update if filtering fails
+        setRiderLocation(coords);
+      }
     });
 
     return () => {
@@ -795,9 +955,17 @@ export default function Booking() {
         <Box sx={{ p: 3 }}>
           {assignedRider && (
             <>
-              <Typography variant="h6" sx={{ fontWeight: "bold", mb: 1 }}>
-                Your Rider is on the way 🚗
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
+                <Avatar
+                  src={assignedRider.profilePicture || undefined}
+                  alt={assignedRider.fullName || 'Rider'}
+                  sx={{ width: 56, height: 56, bgcolor: '#eee' }}
+                />
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: "bold" }}>Your Rider is on the way 🚗</Typography>
+                  <Typography variant="body2" color="text.secondary">Please share the OTP when rider arrives</Typography>
+                </Box>
+              </Box>
               <Typography><b>Name:</b> {assignedRider.fullName}</Typography>
               <Typography><b>Mobile:</b> {assignedRider.mobile}</Typography>
               <Typography>
