@@ -15,7 +15,9 @@ import DynamicPricingDisplay from "../components/DynamicPricingDisplay.jsx";
 import PricingService from "../services/pricingService";
 import SOSButton from "../components/SOSButton";
 
-const socket = io("http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_URL = `${API_BASE}/api`;
+const socket = io(API_BASE);
 
 // Removed Razorpay loader (no third-party checkout in this flow)
 const loadRazorpayScript = () => Promise.resolve(false);
@@ -23,7 +25,7 @@ const loadRazorpayScript = () => Promise.resolve(false);
 export default function Booking() {
   const mapPanelRef = React.useRef(null);
   // Initialize auth and navigate before any references in effects
-  const { auth } = useAuth();
+  const { auth, logout } = useAuth();
   const navigate = useNavigate();
   const [pickup, setPickup] = useState(null);
   const [drop, setDrop] = useState(null);
@@ -46,6 +48,17 @@ export default function Booking() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rideOptions, setRideOptions] = useState([]);
   const [selectedRide, setSelectedRide] = useState(null);
+  const [createdRide, setCreatedRide] = useState(null);
+  const [mapOnlyView, setMapOnlyView] = useState(() => {
+    try {
+      const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+      const rideId = localStorage.getItem(activeKey);
+      if (rideId) {
+        return localStorage.getItem(`rideMapOnly:${rideId}`) === 'true';
+      }
+    } catch {}
+    return false;
+  });
 
   const [lookingForRider, setLookingForRider] = useState(false);
   const [assignedRider, setAssignedRider] = useState(null);
@@ -53,6 +66,7 @@ export default function Booking() {
   const [riderPanelOpen, setRiderPanelOpen] = useState(false);
   const [rideStatus, setRideStatus] = useState("Waiting for rider 🚖");
   const [otp, setOtp] = useState("");
+  const [userLiveCoords, setUserLiveCoords] = useState(null);
   // Persist OTP per active ride across refreshes
   useEffect(() => {
     try {
@@ -83,9 +97,35 @@ export default function Booking() {
         const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
         const existingId = localStorage.getItem(activeKey);
         if (!existingId) return;
-        const resp = await axios.get(`http://localhost:5000/api/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+        // If the ride was already started (OTP verified), persist map-only view across refresh
+        const mapOnlyKey = `rideMapOnly:${existingId}`;
+        const persistedMapOnly = localStorage.getItem(mapOnlyKey) === 'true';
+        if (persistedMapOnly) {
+          // Set map-only immediately to avoid flicker before API returns
+          setMapOnlyView(true);
+        }
+        const resp = await axios.get(
+            `http://localhost:5000/api/rides/${existingId}`,
+              { headers: { Authorization: `Bearer ${auth?.token}` } }
+            );
+
         const ride = resp.data?.ride;
         if (!ride) return;
+        // ✅ Restore pickup/drop to the exact ride coordinates to keep map identical
+        try {
+          if (ride.pickupCoords && ride.pickupCoords.lat && ride.pickupCoords.lng) {
+            setPickup({ lat: ride.pickupCoords.lat, lng: ride.pickupCoords.lng });
+          }
+          if (typeof ride.pickup === 'string' && ride.pickup.length > 0) {
+            setPickupAddress(ride.pickup);
+          }
+          if (ride.dropCoords && ride.dropCoords.lat && ride.dropCoords.lng) {
+            setDrop({ lat: ride.dropCoords.lat, lng: ride.dropCoords.lng });
+          }
+          if (typeof ride.drop === 'string' && ride.drop.length > 0) {
+            setDropAddress(ride.drop);
+          }
+        } catch {}
         // If ride is still pending or accepted, show the drawer with assigned rider (if available)
         if (ride.status === 'pending' || ride.status === 'accepted') {
           // Build assignedRider from populated driverId when available
@@ -104,6 +144,20 @@ export default function Booking() {
           if (assigned._id) setAssignedRider(assigned);
           setRiderPanelOpen(true);
           setRideStatus('Rider en route 🚖');
+          // Ensure compact map view before OTP verification, unless started flag persisted
+          if (!persistedMapOnly) {
+            setMapOnlyView(false);
+          }
+
+          // Restore last known rider location immediately after refresh
+          try {
+            const lastKey = `riderLocation:last:${ride._id}`;
+            const savedLoc = localStorage.getItem(lastKey);
+            if (savedLoc) {
+              const parsed = JSON.parse(savedLoc);
+              if (parsed && typeof parsed === 'object') setRiderLocation(parsed);
+            }
+          } catch {}
 
           // If accepted and OTP not yet set (e.g., after refresh), load or generate it
           if (ride.status === 'accepted') {
@@ -115,6 +169,16 @@ export default function Booking() {
                 localStorage.setItem(otpKey, saved);
               }
               setOtp(saved);
+              // Persist OTP to backend so rider can verify even after refresh
+              try {
+                await axios.post(
+                  `http://localhost:5000/api/rides/${ride._id}/set-otp`,
+                  { otp: saved },
+                  { headers: { Authorization: `Bearer ${auth?.token}` } }
+                );
+              } catch (e) {
+                console.warn("Restore: failed to persist ride OTP:", e?.message || e);
+              }
             } catch {}
           }
         }
@@ -122,9 +186,29 @@ export default function Booking() {
         if (ride.status === 'in_progress') {
           setRiderPanelOpen(false);
           setRideStatus('Ride started ✅');
+          // Switch to full map-only view after OTP verification
+          setMapOnlyView(true);
+          // Ensure vehicle image and type are available to Map in map-only view
+          try {
+            const d = ride.driverId || {};
+            const assigned = {
+              _id: d._id,
+              fullName: d.fullName,
+              mobile: d.mobile,
+              profilePicture: d.profilePicture || null,
+              preferredLanguage: d.preferredLanguage || null,
+              preferredLanguages: Array.isArray(d.preferredLanguages) ? d.preferredLanguages : [],
+              vehicleType: d.vehicleType || null,
+              vehicleNumber: d.vehicleNumber || (d.vehicle && d.vehicle.registrationNumber) || null,
+              vehicle: d.vehicle || {},
+            };
+            if (assigned._id) setAssignedRider(assigned);
+          } catch {}
         }
         if (ride.status === 'completed' || ride.status === 'cancelled') {
           localStorage.removeItem(activeKey);
+          // Clear persisted map-only flag if ride no longer active
+          try { localStorage.removeItem(mapOnlyKey); } catch {}
           setRiderPanelOpen(false);
         }
       } catch (e) {
@@ -134,8 +218,20 @@ export default function Booking() {
     restore();
   }, [auth]);
 
-  // 📍 Get current location for pickup
+
+
+   // 📍 Get current location for pickup (skip when ride has started to keep view unchanged)
   useEffect(() => {
+    try {
+      const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+      const rideId = localStorage.getItem(activeKey);
+      const persistedStarted = rideId && localStorage.getItem(`rideMapOnly:${rideId}`) === 'true';
+      if (mapOnlyView || persistedStarted) {
+        // Do not override pickup while an in-progress ride is active
+        return;
+      }
+    } catch {}
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
@@ -145,7 +241,40 @@ export default function Booking() {
       },
       (err) => console.error("Geolocation error:", err.message)
     );
-  }, []);
+  }, [mapOnlyView, auth]);
+
+  // 🚀 Emit user's live GPS while ride is accepted or in progress
+  useEffect(() => {
+    let watchId = null;
+    const startWatch = () => {
+      if (watchId != null) return;
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setUserLiveCoords(coords);
+            try {
+              const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+              const rideId = localStorage.getItem(activeKey) || (createdRide && createdRide._id) || null;
+              if (rideId) {
+                socket.emit("userLocation", { rideId, coords });
+              }
+            } catch {}
+          },
+          (err) => console.warn("user watchPosition warning:", err?.message || err),
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 }
+        );
+      } catch {}
+    };
+
+    const shouldWatch = !!assignedRider || riderPanelOpen || (rideStatus && /started|en route/i.test(rideStatus));
+    if (shouldWatch) startWatch();
+
+    return () => {
+      try { if (watchId != null) navigator.geolocation.clearWatch(watchId); } catch {}
+    };
+  }, [assignedRider, riderPanelOpen, rideStatus, createdRide, auth]);
+
 
   // 🌍 Reverse geocode helper
   const getAddressFromCoords = async (lat, lng) => {
@@ -366,7 +495,7 @@ export default function Booking() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [showDetailedPayments, setShowDetailedPayments] = useState(false);
   const [detailedPaymentMethod, setDetailedPaymentMethod] = useState("upi");  const [selectedPaymentOption, setSelectedPaymentOption] = useState(null);
-  const [createdRide, setCreatedRide] = useState(null);
+  
   const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(null);
 
@@ -377,7 +506,7 @@ export default function Booking() {
       if (unpaidKeys.length === 0) return false;
       const rideId = unpaidKeys[0].split(":")[1];
       if (!rideId) return false;
-      const resp = await axios.get(`http://localhost:5000/api/rides/${rideId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+      const resp = await axios.get(`${API_URL}/rides/${rideId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
       const ride = resp.data?.ride;
       if (!ride) return false;
       setCreatedRide(ride);
@@ -413,6 +542,11 @@ export default function Booking() {
       alert("Please select pickup and drop");
       return;
     }
+    if (!auth?.token) {
+      alert("Please log in to book a ride.");
+      navigate("/login-user");
+      return;
+    }
     try {
       // 🚫 Block new booking if there is any unpaid completed ride
       try {
@@ -430,7 +564,7 @@ export default function Booking() {
       const existingId = localStorage.getItem(activeKey);
       if (existingId) {
         try {
-          const chk = await axios.get(`http://localhost:5000/api/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+          const chk = await axios.get(`${API_URL}/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
           const st = chk.data?.ride?.status;
           if (st && st !== 'completed' && st !== 'cancelled') {
             alert("You already have an active ride. Please complete it before booking another.");
@@ -444,31 +578,36 @@ export default function Booking() {
           return;
         }
       }
-      // Lock final price to the selected ride card amount so Payment matches Booking
+      // Always use backend dynamic pricing before creating the ride
       const distanceKm = parseFloat(distance);
 
-      // Derive base rate by selected ride type (same as card display)
-      let rateForCreate = 10; // bike
-      if (selectedRide === "auto") rateForCreate = 15;
+      // Provide hint rate by vehicle for backend pricing
+      let rateForCreate = null;
+      if (selectedRide === "bike") rateForCreate = 10;
+      else if (selectedRide === "auto") rateForCreate = 15;
       else if (selectedRide === "car") rateForCreate = 20;
 
-      const baseFare = +(distanceKm * rateForCreate).toFixed(2);
-      // Apply simple traffic/weather multipliers used in the card breakdown
-      const tMult = Math.max(zoneFactors?.trafficMultiplier || 1, 1);
-      const wMult = Math.max(zoneFactors?.weatherMultiplier || 1, 1);
-      const trafficAdd = +(baseFare * (tMult - 1)).toFixed(2);
-      const weatherAdd = +(baseFare * (wMult - 1)).toFixed(2);
-      const selectedFinalPrice = +(baseFare + trafficAdd + weatherAdd).toFixed(2);
+      const price = await PricingService.calculatePrice(
+        { latitude: pickup?.lat ?? pickup?.latitude, longitude: pickup?.lng ?? pickup?.longitude },
+        { latitude: drop?.lat ?? drop?.latitude, longitude: drop?.lng ?? drop?.longitude },
+        distanceKm,
+        25,
+        selectedRide || "",
+        rateForCreate
+      );
+      const selectedFinalPrice = Number(price?.finalPrice ?? 0);
+      const selectedBasePrice = Number(price?.basePrice ?? 0);
 
       const res = await axios.post(
-        "http://localhost:5000/api/rides/create",
+        `${API_URL}/rides/create`,
         {
           pickup: pickupAddress,
           drop: dropAddress,
           pickupCoords: pickup,
           dropCoords: drop,
           distance: distanceKm,
-          // Persist the selected booking price so Payment shows the same amount
+          // Persist backend-calculated dynamic price values
+          basePrice: selectedBasePrice,
           finalPrice: selectedFinalPrice,
           requestedVehicleType: selectedRide || "",
         },
@@ -484,7 +623,13 @@ export default function Booking() {
       setDrawerOpen(true);
     } catch (err) {
       console.error("Failed to create ride request:", err);
-      const msg = err?.response?.data?.message || "Failed to create ride request";
+      const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to create ride request";
+      if (msg === "Invalid token" || msg === "Authorization token missing") {
+        alert("Session expired. Please log in again.");
+        try { logout(); } catch {}
+        navigate("/login-user");
+        return;
+      }
       alert(msg);
     }
   };
@@ -517,7 +662,25 @@ export default function Booking() {
       navigate("/parcel");
       return;
     }
-  
+
+    if (!selectedRide) {
+      alert("Please choose a ride type (Bike/Auto/Car) before requesting.");
+      return;
+    }
+
+    // Persist the requested vehicle type and notify matching riders
+    try {
+      const res = await axios.post(
+       `http://localhost:5000/api/rides/${createdRide._id}/request-type`,
+        { requestedVehicleType: selectedRide },
+        { headers: { Authorization: `Bearer ${auth?.token}` } }
+      );
+      const updated = res?.data?.ride;
+      if (updated) setCreatedRide(updated);
+    } catch (e) {
+      console.warn("set requested vehicle type warning:", e?.message || e);
+    }
+
     // Online payment: do NOT open Razorpay; just proceed with selected option
     if (paymentMethod === "online") {
       if (!selectedPaymentOption) {
@@ -532,6 +695,35 @@ export default function Booking() {
     setLookingForRider(true);
   };
 
+  // 🔄 Auto-broadcast to matching riders when type is selected after creation
+  useEffect(() => {
+    try {
+      if (!createdRide || !createdRide._id) return;
+      if (!selectedRide || selectedRide === "parcel") return;
+      const currentType = String(createdRide.requestedVehicleType || "").trim().toLowerCase();
+      const sel = String(selectedRide).trim().toLowerCase();
+      if (sel && sel !== currentType) {
+        axios
+          .post(
+            `http://localhost:5000/api/rides/${createdRide._id}/request-type`,
+            { requestedVehicleType: sel },
+            { headers: { Authorization: `Bearer ${auth?.token}` } }
+          )
+          .then((res) => {
+            const updated = res?.data?.ride;
+            if (updated) setCreatedRide(updated);
+          })
+          .catch((e) => {
+            console.warn("auto set requested vehicle type warning:", e?.message || e);
+          });
+      }
+    } catch (e) {
+      console.warn("auto-broadcast effect warning:", e?.message || e);
+    }
+  }, [selectedRide, createdRide]);
+
+
+
   // 🚖 Socket listeners
   useEffect(() => {
     socket.on("rideAccepted", (ride) => {
@@ -540,6 +732,8 @@ export default function Booking() {
       setAssignedRider(ride.acceptedBy);
       setRiderPanelOpen(true);
       setRideStatus("Rider en route 🚖");
+       // Show compact map until OTP verification
+      setMapOnlyView(false);
       // Persist active ride id on acceptance to filter GPS updates
       try {
         const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
@@ -556,8 +750,46 @@ export default function Booking() {
             localStorage.setItem(otpKey, saved);
           }
           setOtp(saved);
-        }
+          // Persist OTP to backend so rider can only verify with this code
+          const persistOtp = async () => {
+          try {
+            await axios.post(
+              `http://localhost:5000/api/rides/${ride._id}/set-otp`,
+              { otp: saved },
+              { headers: { Authorization: `Bearer ${auth?.token}` } }
+            );
+          } catch (e) {
+            console.warn("Failed to persist ride OTP:", e?.message || e);
+          }
+
+        }}
       } catch {}
+    });
+
+    // Fallback: respond to rider's OTP request and persist it before replying
+    socket.on("requestRideOtp", async ({ rideId, replyTo }) => {
+      try {
+        if (!rideId || !replyTo) return;
+        const otpKey = `rideOtp:${rideId}`;
+        let saved = localStorage.getItem(otpKey);
+        if (!saved) {
+          saved = Math.floor(1000 + Math.random() * 9000).toString();
+          localStorage.setItem(otpKey, saved);
+          setOtp(saved);
+        }
+        try {
+          await axios.post(
+            `http://localhost:5000/api/rides/${rideId}/set-otp`,
+            { otp: saved },
+            { headers: { Authorization: `Bearer ${auth?.token}` } }
+          );
+        } catch (e) {
+          console.warn("Failed to persist ride OTP on rider request:", e?.message || e);
+        }
+        socket.emit("rideOtpForRider", { replyTo, rideId, otp: saved });
+      } catch (e) {
+        console.warn("requestRideOtp handler error:", e?.message || e);
+      }
     });
 
     socket.on("rideRejected", () => {
@@ -575,6 +807,17 @@ export default function Booking() {
       setShowPaymentPrompt(false);
       setPaymentAmount(null);
       setRiderPanelOpen(false);
+      setMapOnlyView(true);
+      // Close any open selection drawer once the ride starts
+      try { setDrawerOpen(false); } catch {}
+      // Persist map-only state for this active ride to survive refresh
+      try {
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        const rideId = ride?._id || localStorage.getItem(activeKey);
+        if (rideId) {
+          localStorage.setItem(`rideMapOnly:${rideId}`, 'true');
+        }
+      } catch {}
       try {
         // Smoothly scroll map into view to focus on the route
         mapPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -623,10 +866,12 @@ export default function Booking() {
         if (!currentId) return;
         if (String(rideId) === String(currentId)) {
           setRiderLocation(coords);
+          try { localStorage.setItem(`riderLocation:last:${rideId}`, JSON.stringify(coords)); } catch {}
         }
       } catch {
         // Fallback: update if filtering fails
         setRiderLocation(coords);
+        try { if (createdRide?._id) localStorage.setItem(`riderLocation:last:${createdRide._id}`, JSON.stringify(coords)); } catch {}
       }
     });
 
@@ -674,7 +919,7 @@ export default function Booking() {
               if (id) {
                 navigate(`/payment/${id}`, { state: { amount: amt } });
               } else {
-                navigate(`/payment`, { state: { amount: amt } });
+                navigate('/payment', { state: { amount: amt } });
               }
             }}
           >
@@ -682,8 +927,9 @@ export default function Booking() {
           </Button>
         </Box>
       )}
-      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 2 }}>
-        {/* Left panel */}
+      <Box sx={{ display: "grid", gridTemplateColumns: mapOnlyView ? "1fr" : "1fr 2fr", gap: 2 }}>
+        {/* Left panel (hidden after OTP verification) */}
+        {!mapOnlyView && (
         <Paper sx={{ p: 3, borderRadius: 2 }}>
           <Typography variant="h6" sx={{ mb: 2 }}>Find a trip</Typography>
 
@@ -736,6 +982,7 @@ export default function Booking() {
             Find Riders
           </Button>
         </Paper>
+        )}
 
         {/* Right panel (Map) */}
         <Paper sx={{ p: 1, borderRadius: 2 }} ref={mapPanelRef}>
@@ -753,6 +1000,14 @@ export default function Booking() {
             setDistance={setDistance}
             setDuration={setDuration}
             setNormalDuration={setNormalDuration}
+            // Show rider's exact location + pickup ONLY once a rider is assigned (accepted),
+            // and switch to full route view after OTP (mapOnlyView)
+            showRiderOnly={Boolean(assignedRider) && !mapOnlyView}
+            // After OTP verification, keep map in started state
+            rideStarted={mapOnlyView}
+            vehicleType={assignedRider?.vehicleType || assignedRider?.vehicle?.type}
+            vehicleImage={assignedRider?.vehicle?.images?.[0] || assignedRider?.vehicleImage}
+
           />
         </Paper>
       </Box>
@@ -767,7 +1022,7 @@ export default function Booking() {
               <Chip label="High Traffic" color="warning" icon={<span>⚡</span>} />
             )}
             {zoneFactors?.currentWeather && zoneFactors.currentWeather !== "clear" && (
-              <Chip label="Bad Weather" color="error" icon={<span>🌧️</span>} />
+              <Chip label="Bad Weather" color="error" icon={<span>🌧</span>} />
             )}
           </Box>
           {rideOptions.map((opt) => (
@@ -969,10 +1224,13 @@ export default function Booking() {
               <Typography><b>Name:</b> {assignedRider.fullName}</Typography>
               <Typography><b>Mobile:</b> {assignedRider.mobile}</Typography>
               <Typography>
-                <b>Vehicle:</b> {
+                <b>Vehicle:</b>{" "}
+                {
                   (assignedRider.vehicleType || assignedRider.vehicle?.type)
                     ? `${assignedRider.vehicleType || assignedRider.vehicle?.type} (${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber || 'N/A'})`
-                    : (assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber ? `(${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber})` : 'N/A')
+                    : (assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber
+                        ? `(${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber})`
+                        : 'N/A')
                 }
               </Typography>
               <Typography>
@@ -1033,9 +1291,9 @@ export default function Booking() {
                         ? Number(createdRide.finalPrice)
                         : (paymentAmount ?? getSelectedRideAmount());
                       if (id) {
-                        navigate(`/payment/${id}` , { state: { amount: amt } });
+                        navigate(`/payment/${id}`, { state: { amount: amt } });
                       } else {
-                        navigate(`/payment`, { state: { amount: amt } });
+                        navigate('/payment', { state: { amount: amt } });
                       }
                     }}
                   >
@@ -1048,5 +1306,5 @@ export default function Booking() {
         </Box>
       </Drawer>
     </Container>
-  );
+  );
 }

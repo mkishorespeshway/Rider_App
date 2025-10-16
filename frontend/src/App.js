@@ -1,11 +1,11 @@
 import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
-
-
+ 
+ 
 // Pages
 import ForceLogout from "./pages/ForceLogout";  // ✅ add at top
-
+ 
 import UserLogin from "./pages/UserLogin";
 import UserRegister from "./pages/UserRegister";
 import RiderLogin from "./pages/RiderLogin";
@@ -16,7 +16,7 @@ import RiderWallet from "./pages/RiderWallet";
 import UserDashboard from "./pages/dashboards/UserDashboard";
 import DocumentUpload from "./pages/DocumentUpload";
 import Booking from "./pages/Booking";
-import Payment from "./pages/Payment";
+import Payment from "./pages/Payment.backup";
 import RideTrack from "./pages/RideTrack";
 import History from "./pages/History";
 import Profile from "./pages/Profile";
@@ -24,25 +24,26 @@ import Navbar from "./components/Navbar";
 import Parcel from "./pages/Parcel";
 import Activity from "./pages/Activity";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminBank from "./pages/admin/AdminBank";
 import CaptainDetails from "./pages/CaptainDetails";
 import RiderDetails from "./pages/RiderDetails";
-
+ 
 // Wrapper
 import ProtectedRoute from "./components/ProtectedRoutes";
-
+ 
 export default function App() {
   const { auth } = useAuth();
   const token = auth?.token || null;
   const roles = auth?.roles || [];
   const isAuth = Boolean(token);
-
+ 
   const redirectByRole = () => {
     if (roles.includes("user")) return "/booking";
     if (roles.includes("rider")) return "/rider-dashboard";
     if (roles.includes("admin")) return "/admin-dashboard";
     return "/login";
   };
-
+ 
   return (
     <>
       <Navbar />
@@ -53,10 +54,10 @@ export default function App() {
             path="/"
             element={<Navigate to={isAuth ? redirectByRole() : "/login"} />}
           />
-
+ 
           {/* USER */}
           <Route path="/force-logout" element={<ForceLogout />} />
-
+ 
           <Route
             path="/login"
             element={isAuth ? <Navigate to={redirectByRole()} /> : <UserLogin />}
@@ -97,7 +98,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
+ 
           {/* RIDER */}
           <Route
             path="/rider-login"
@@ -131,18 +132,26 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
+ 
           {/* ADMIN */}
           <Route
             path="/admin"
             element={isAuth ? <Navigate to={redirectByRole()} /> : <AdminLogin />}
           />
-          
+         
           <Route
             path="/admin-dashboard/*"
             element={
               <ProtectedRoute role="admin">
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/bank"
+            element={
+              <ProtectedRoute role="admin">
+                <AdminBank />
               </ProtectedRoute>
             }
           />
@@ -162,7 +171,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
+ 
           {/* COMMON */}
           <Route
             path="/ride/:id"
@@ -196,7 +205,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
+ 
           {/* 404 */}
           <Route path="*" element={<div>404 Not Found</div>} />
         </Routes>
@@ -204,3 +213,5 @@ export default function App() {
     </>
   );
 }
+ 
+ 

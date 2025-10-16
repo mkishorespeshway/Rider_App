@@ -7,7 +7,7 @@ class PricingController {
   // Calculate price based on distance and real-time factors
   async calculatePrice(req, res) {
     try {
-      const { pickup, destination, distance, basePrice } = req.body;
+      const { pickup, destination, distance, basePrice, vehicleType, ratePerKm } = req.body;
       
       if (!pickup || !destination || !distance) {
         return res.status(400).json({ 
@@ -20,7 +20,9 @@ class PricingController {
       const priceDetails = await dynamicPricingService.calculateDynamicPrice(
         { latitude: pickup.latitude || pickup.lat, longitude: pickup.longitude || pickup.lng },
         Number(distance),
-        basePrice || 25
+        basePrice || 25,
+        vehicleType || '',
+        ratePerKm != null ? Number(ratePerKm) : null
       );
       
       return res.json(priceDetails);

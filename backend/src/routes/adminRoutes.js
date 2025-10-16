@@ -5,6 +5,7 @@ const adminAuth = require("../middleware/adminAuth");
 const User = require("../models/User");
 const Ride = require("../models/Ride");
 const Payment = require("../models/Payment");
+const AdminSettings = require("../models/AdminSettings");
 const SOS = require("../models/SOS"); // 🚨 SOS model
 const mongoose = require("mongoose");
 
@@ -63,6 +64,32 @@ router.get("/overview", adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error("Overview error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// ===================== 🏦 ADMIN BANK SETTINGS =====================
+router.get("/bank", adminAuth, async (req, res) => {
+  try {
+    let settings = await AdminSettings.findOne({ key: "admin" });
+    if (!settings) settings = await AdminSettings.create({ key: "admin", bankDetails: {} });
+    return res.json({ success: true, bankDetails: settings.bankDetails || {} });
+  } catch (err) {
+    console.error("Admin bank get error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.put("/bank", adminAuth, async (req, res) => {
+  try {
+    const { holderName = "", bankName = "", accountNumber = "", ifsc = "", upiVpa = "" } = req.body || {};
+    let settings = await AdminSettings.findOne({ key: "admin" });
+    if (!settings) settings = await AdminSettings.create({ key: "admin", bankDetails: {} });
+    settings.bankDetails = { holderName, bankName, accountNumber, ifsc, upiVpa };
+    await settings.save();
+    return res.json({ success: true, bankDetails: settings.bankDetails });
+  } catch (err) {
+    console.error("Admin bank update error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -227,4 +254,4 @@ router.get("/payments/summary", adminAuth, async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router;

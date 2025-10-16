@@ -1,18 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import DynamicPricingDisplay from './DynamicPricingDisplay';
-import { createRide, initiatePayment, verifyPayment } from '../services/api';
-
-// Load Razorpay Checkout script
-const loadRazorpayScript = () => {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-    const script = document.createElement('script');
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-};
+import { createRide } from '../services/api';
 
 const BookRide = () => {
   const [pickup, setPickup] = useState(null);
@@ -70,7 +58,7 @@ const BookRide = () => {
     // Try Google Distance Matrix API if key is provided
     if (GOOGLE_API_KEY && origin.lat != null && origin.lng != null && dest.lat != null && dest.lng != null) {
       try {
-        const url = `https://maps.googleapis.com/maps/api/distancematrix/json?units=metric&mode=driving&origins=${origin.lat},${origin.lng}&destinations=${dest.lat},${dest.lng}&departure_time=now&key=${GOOGLE_API_KEY}`;
+        const url = https://maps.googleapis.com/maps/api/distancematrix/json?units=metric&mode=driving&origins=${origin.lat},${origin.lng}&destinations=${dest.lat},${dest.lng}&departure_time=now&key=${GOOGLE_API_KEY};
         const resp = await fetch(url);
         const data = await resp.json();
         const element = data?.rows?.[0]?.elements?.[0];
@@ -145,64 +133,12 @@ const BookRide = () => {
       const createdRide = data.ride;
 
       if (paymentMethod === 'online') {
-        const amount = priceDetails.finalPrice;
-        const initResp = await initiatePayment({ rideId: createdRide._id, amount, method: detailedPaymentMethod });
-        const initData = initResp.data;
-        if (!initData?.ok || !initData?.order?.id || !initData?.key) {
-          throw new Error('Failed to initiate payment');
+        // Redirect to the Payment page to complete via UPI/SMS flow (no Razorpay)
+        try {
+          window.location.href = /payment/${createdRide._id};
+        } catch {
+          alert('Ride created. Please complete payment on the Payment screen.');
         }
-
-        const loaded = await loadRazorpayScript();
-        if (!loaded) {
-          alert('Razorpay SDK failed to load. Please check your connection.');
-          return;
-        }
-
-        const options = {
-          key: initData.key,
-          amount: initData.order.amount, // in paise
-          currency: initData.order.currency,
-          name: 'Rider App',
-          description: 'Ride Payment',
-          order_id: initData.order.id,
-          notes: { rideId: String(createdRide._id) },
-          theme: { color: '#4f46e5' },
-          handler: async function (response) {
-            try {
-              const verifyResp = await verifyPayment({
-                rideId: createdRide._id,
-                orderId: response.razorpay_order_id,
-                paymentId: response.razorpay_payment_id,
-                signature: response.razorpay_signature,
-              });
-              if (verifyResp.data?.ok) {
-                alert('✅ Payment successful and verified! Your ride is confirmed.');
-              } else {
-                alert('❌ Payment verification failed. Please contact support.');
-              }
-            } catch (err) {
-              console.warn('Verification warning:', err);
-              alert('❌ Error verifying payment.');
-            }
-          },
-          modal: {
-            ondismiss: function () {
-              alert('Payment popup closed. You can retry from the booking screen.');
-            },
-          },
-          prefill: {
-            name: 'Customer',
-            email: '',
-            contact: '',
-          },
-        };
-
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', function (resp) {
-          console.warn('Payment failed:', resp.error);
-          alert('❌ Payment failed. Please try another method or retry.');
-        });
-        rzp.open();
       } else {
         alert('Ride booked successfully! Pay with Cash on Delivery at the end of your ride.');
       }
@@ -256,9 +192,9 @@ const BookRide = () => {
           <div className="mb-4 text-gray-600">
             <span className="font-medium">Route:</span>
             <span className="ml-2">
-              {distance ? `${distance} km` : ''}
+              {distance ? ${distance} km : ''}
               {(distance && (durationMins || normalDurationMins)) ? ' • ' : ''}
-              {durationMins ? `ETA ${durationMins} mins` : ''}
+              {durationMins ? ETA ${durationMins} mins : ''}
               {(durationMins && normalDurationMins) ? ` • Normal ${normalDurationMins} mins • +${Math.max(durationMins - normalDurationMins, 0)} mins` : ''}
             </span>
           </div>
@@ -269,7 +205,7 @@ const BookRide = () => {
           <h3 className="font-bold text-md mb-3 text-indigo-700">Select Payment Method</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div 
-              className={`flex items-center p-3 rounded-lg cursor-pointer border-2 ${paymentMethod === 'cash' ? 'border-indigo-500 bg-indigo-100' : 'border-gray-200'}`}
+              className={flex items-center p-3 rounded-lg cursor-pointer border-2 ${paymentMethod === 'cash' ? 'border-indigo-500 bg-indigo-100' : 'border-gray-200'}}
               onClick={() => {
                 setPaymentMethod('cash');
                 setShowDetailedPayments(false);
@@ -292,7 +228,7 @@ const BookRide = () => {
               </label>
             </div>
             <div 
-              className={`flex items-center p-3 rounded-lg cursor-pointer border-2 ${paymentMethod === 'online' ? 'border-indigo-500 bg-indigo-100' : 'border-gray-200'}`}
+              className={flex items-center p-3 rounded-lg cursor-pointer border-2 ${paymentMethod === 'online' ? 'border-indigo-500 bg-indigo-100' : 'border-gray-200'}}
               onClick={() => {
                 setPaymentMethod('online');
                 setShowDetailedPayments(true);
@@ -322,7 +258,7 @@ const BookRide = () => {
               <h4 className="font-medium text-sm mb-3 text-indigo-700">Choose Payment Option</h4>
               <div className="grid grid-cols-1 gap-2">
                 <div 
-                  className={`flex items-center p-3 rounded-lg cursor-pointer border ${detailedPaymentMethod === 'upi' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}
+                  className={flex items-center p-3 rounded-lg cursor-pointer border ${detailedPaymentMethod === 'upi' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}}
                   onClick={() => setDetailedPaymentMethod('upi')}
                 >
                   <input
@@ -341,7 +277,7 @@ const BookRide = () => {
                 </div>
                 
                 <div 
-                  className={`flex items-center p-3 rounded-lg cursor-pointer border ${detailedPaymentMethod === 'card' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}
+                  className={flex items-center p-3 rounded-lg cursor-pointer border ${detailedPaymentMethod === 'card' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}}
                   onClick={() => setDetailedPaymentMethod('card')}
                 >
                   <input
@@ -360,7 +296,7 @@ const BookRide = () => {
                 </div>
                 
                 <div 
-                  className={`flex items-center p-3 rounded-lg cursor-pointer border ${detailedPaymentMethod === 'wallet' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}
+                  className={flex items-center p-3 rounded-lg cursor-pointer border ${detailedPaymentMethod === 'wallet' ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}}
                   onClick={() => setDetailedPaymentMethod('wallet')}
                 >
                   <input
@@ -396,7 +332,7 @@ const BookRide = () => {
         
         {/* Book button with detailed payment method info */}
         <button 
-          className={`w-full py-3 px-4 rounded-md font-medium text-white ${priceDetails ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}`}
+          className={w-full py-3 px-4 rounded-md font-medium text-white ${priceDetails ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-gray-400 cursor-not-allowed'}}
           disabled={!priceDetails}
           onClick={handleBookRide}
         >
@@ -420,4 +356,4 @@ const BookRide = () => {
   );
 };
 
-export default BookRide;
+export default BookRide;

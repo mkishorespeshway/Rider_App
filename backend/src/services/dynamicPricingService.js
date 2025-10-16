@@ -16,10 +16,12 @@ class DynamicPricingService {
    * Calculate the final price based on various factors
    * @param {Object} location - { latitude, longitude }
    * @param {Number} distance - Distance in kilometers
-   * @param {Number} basePrice - Base price for the ride
+   * @param {Number} basePrice - Base price for the ride (fallback)
+   * @param {String} vehicleType - Selected vehicle type (bike|auto|car|suv|parcel)
+   * @param {Number|null} ratePerKm - Optional explicit per-km rate
    * @returns {Object} - Final price details
    */
-  async calculateDynamicPrice(location, distance, basePrice = 25) {
+  async calculateDynamicPrice(location, distance, basePrice = 25, vehicleType = "", ratePerKm = null) {
     try {
       // Get real-time data
       const weatherData = await this.getWeatherData(location);
@@ -42,9 +44,16 @@ class DynamicPricingService {
         3.0 // Max surge multiplier
       );
 
-      // Calculate final price
-      const distancePrice = basePrice + (distance * 5); // ₹5 per km
-      const finalPrice = Math.round(distancePrice * combinedMultiplier);
+      // Resolve per-km rate by vehicle type when provided
+      const resolvedPerKm = (ratePerKm != null && Number(ratePerKm) > 0)
+        ? Number(ratePerKm)
+        : this.resolveRatePerKm(vehicleType);
+
+      // Calculate base price according to selected vehicle type when available
+      const distancePrice = Number(
+        (resolvedPerKm ? (distance * resolvedPerKm) : (basePrice + (distance * 5)))
+      .toFixed(2));
+      const finalPrice = Number((distancePrice * combinedMultiplier).toFixed(2));
 
       // Save pricing data for analytics
       await this.savePricingData(location, {
@@ -70,9 +79,15 @@ class DynamicPricingService {
     } catch (error) {
       console.error('Error calculating dynamic price:', error);
       // Fallback to base price calculation if APIs fail
+      const resolvedPerKm = (ratePerKm != null && Number(ratePerKm) > 0)
+        ? Number(ratePerKm)
+        : this.resolveRatePerKm(vehicleType);
+      const distancePrice = Number(
+        (resolvedPerKm ? (distance * resolvedPerKm) : (basePrice + (distance * 5)))
+      .toFixed(2));
       return {
-        basePrice: basePrice + (distance * 5),
-        finalPrice: basePrice + (distance * 5),
+        basePrice: distancePrice,
+        finalPrice: distancePrice,
         surgeMultiplier: 1.0,
         factors: {
           weather: 'Normal (fallback)',
@@ -81,6 +96,23 @@ class DynamicPricingService {
           time: 'Normal (fallback)'
         }
       };
+    }
+  }
+
+  // Resolve per-km rate based on vehicle type
+  resolveRatePerKm(vehicleType) {
+    switch ((vehicleType || '').toLowerCase()) {
+      case 'bike':
+        return 10;
+      case 'auto':
+        return 15;
+      case 'car':
+      case 'suv':
+        return 20;
+      case 'parcel':
+        return 12;
+      default:
+        return null; // fall back to basePrice + 5/km
     }
   }
 

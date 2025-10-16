@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   getOverview,
   getAllUsers,
@@ -11,6 +12,7 @@ import {
   getSOSAlerts,
   resolveSOS,
   getPaymentsSummary,
+  getAdminBankDetails,
 } from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -63,6 +65,7 @@ export default function AdminDashboard() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adminBank, setAdminBank] = useState(null);
 
   const [openDocsModal, setOpenDocsModal] = useState(false);
   const [selectedDocuments, setSelectedDocuments] = useState({});
@@ -87,6 +90,14 @@ export default function AdminDashboard() {
         ...prev,
         sos: sosRes.data?.data?.filter((s) => s.status === "active").length || 0,
       }));
+
+      try {
+        const bankRes = await getAdminBankDetails();
+        setAdminBank(bankRes?.data?.bankDetails || null);
+      } catch (e) {
+        // silently ignore bank fetch error for overview
+        setAdminBank(null);
+      }
     } catch (err) {
       console.error(err);
       setError("Failed to load overview");
@@ -232,6 +243,11 @@ export default function AdminDashboard() {
       </AppBar>
 
       <Box maxWidth="1300px" mx="auto" px={3} pb={5}>
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            Need to update bank details? <Link to="/admin/bank">Go to Admin Bank Settings</Link>
+          </Typography>
+        </Box>
         {/* Tabs */}
         <Paper elevation={3} sx={{ borderRadius: 3, mb: 4 }}>
           <Tabs
@@ -257,33 +273,57 @@ export default function AdminDashboard() {
           </Tabs>
         </Paper>
 
-        {/* Overview Cards */}
+        {/* Overview */}
         {activeTab === "overview" && (
-          <Grid container spacing={3}>
-            {cards.map((card) => (
-              <Grid item xs={12} sm={6} md={3} key={card.label}>
-                <Card
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    p: 2,
-                    borderRadius: 3,
-                    boxShadow: 3,
-                    transition: "0.3s",
-                    "&:hover": { boxShadow: 6, transform: "translateY(-5px)" },
-                  }}
-                  onClick={() => card.type !== "overview" && fetchData(card.type)}
-                >
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight="bold" color={card.color}>{card.label}</Typography>
-                    <Typography variant="h4" fontWeight="bold" color={card.color}>{card.value}</Typography>
-                  </Box>
-                  <Box sx={{ fontSize: 50, color: card.color }}>{card.icon}</Box>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+          <Box>
+            <Grid container spacing={3}>
+              {cards.map((card) => (
+                <Grid item xs={12} sm={6} md={3} key={card.label}>
+                  <Card
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      p: 2,
+                      borderRadius: 3,
+                      boxShadow: 3,
+                      transition: "0.3s",
+                      "&:hover": { boxShadow: 6, transform: "translateY(-5px)" },
+                    }}
+                    onClick={() => card.type !== "overview" && fetchData(card.type)}
+                  >
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold" color={card.color}>{card.label}</Typography>
+                      <Typography variant="h4" fontWeight="bold" color={card.color}>{card.value}</Typography>
+                    </Box>
+                    <Box sx={{ fontSize: 50, color: card.color }}>{card.icon}</Box>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+
+            {/* Admin Bank Details */}
+            <Paper sx={{ p: 3, borderRadius: 3, boxShadow: 3, mt: 4 }}>
+              <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>Admin Bank Details</Typography>
+              {adminBank ? (
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6} md={4}><Typography variant="body2" sx={{ fontWeight: 600 }}>Account Holder</Typography><Typography>{adminBank.holderName || '-'}</Typography></Grid>
+                  <Grid item xs={12} sm={6} md={4}><Typography variant="body2" sx={{ fontWeight: 600 }}>Bank Name</Typography><Typography>{adminBank.bankName || '-'}</Typography></Grid>
+                  <Grid item xs={12} sm={6} md={4}><Typography variant="body2" sx={{ fontWeight: 600 }}>Account Number</Typography><Typography>{adminBank.accountNumber || '-'}</Typography></Grid>
+                  <Grid item xs={12} sm={6} md={4}><Typography variant="body2" sx={{ fontWeight: 600 }}>IFSC</Typography><Typography>{adminBank.ifsc || '-'}</Typography></Grid>
+                  <Grid item xs={12} sm={6} md={4}><Typography variant="body2" sx={{ fontWeight: 600 }}>UPI VPA</Typography><Typography>{adminBank.upiVpa || '-'}</Typography></Grid>
+                  <Grid item xs={12} md={4}>
+                    <Button variant="outlined" onClick={() => (window.location.href = "/admin/bank")}>Edit Bank Details</Button>
+                  </Grid>
+                </Grid>
+              ) : (
+                <Box>
+                  <Typography sx={{ mb: 1 }}>No bank details saved.</Typography>
+                  <Button variant="contained" onClick={() => (window.location.href = "/admin/bank")}>Add Bank Details</Button>
+                </Box>
+              )}
+            </Paper>
+          </Box>
         )}
 
         {/* Payments Summary */}
@@ -414,7 +454,7 @@ export default function AdminDashboard() {
                         <TableCell>
                            {item.emergencyContactName && item.emergencyContactNumber
                                ? `${item.emergencyContactName} (${item.emergencyContactNumber})`
-                                   : "-"}
+                               : "-"}
                         </TableCell>
 
                        <TableCell>{item.address || "-"}</TableCell>

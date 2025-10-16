@@ -1,17 +1,21 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Ensure env base (e.g., http://localhost:5002) is always prefixed with '/api'
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_URL = `${API_BASE}/api`;
 
 // Service to handle pricing calculations
 const PricingService = {
   // Calculate ride price based on pickup, destination and distance
-  calculatePrice: async (pickup, destination, distance, basePrice) => {
+  calculatePrice: async (pickup, destination, distance, basePrice, vehicleType = '', ratePerKm = null) => {
     try {
       const response = await axios.post(`${API_URL}/pricing/calculate`, {
         pickup,
         destination,
         distance,
-        basePrice
+        basePrice,
+        vehicleType,
+        ratePerKm
       });
       
       return response.data;

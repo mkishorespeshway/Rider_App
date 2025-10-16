@@ -2,7 +2,26 @@ const Payment = require('../models/Payment');
 const Ride = require('../models/Ride');
 const Wallet = require('../models/Wallet');
 const WalletTransaction = require('../models/WalletTransaction');
+const AdminSettings = require('../models/AdminSettings');
 const { createOrder, verifyCheckoutSignature, verifyWebhookSignature, isMockMode, isTestKey } = require('../services/payment.service');
+
+// Public: expose merchant UPI details for user payments
+exports.merchant = async (req, res) => {
+  try {
+    let settings = await AdminSettings.findOne({ key: 'admin' });
+    const bank = settings?.bankDetails || {};
+    return res.json({
+      success: true,
+      bankDetails: {
+        holderName: bank.holderName || null,
+        upiVpa: bank.upiVpa || null,
+      },
+    });
+  } catch (err) {
+    console.error('Get merchant details error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
 
 exports.initiate = async (req, res, next) => {
   try {
@@ -146,6 +165,68 @@ exports.verify = async (req, res, next) => {
   }
 };
 
+// Manual confirmation: mark payment completed as ONLINE without Razorpay verification
+// This is useful for flows like UPI intent/collect where the rider confirms completion.
+exports.manualOnline = async (req, res, next) => {
+  try {
+    const { rideId, amount } = req.body;
+    if (!rideId) {
+      return res.status(400).json({ ok: false, message: 'rideId is required' });
+    }
+
+    // Update ride payment status and method
+    const ride = await Ride.findByIdAndUpdate(
+      rideId,
+      { $set: { paymentStatus: 'completed', paymentMethod: 'online', detailedPaymentMethod: 'upi' } },
+      { new: true }
+    );
+
+    // Record a payment entry for audit purposes
+    try {
+      const gross = Number(amount || ride?.finalPrice || 0);
+      await Payment.create({
+        rideId,
+        amount: gross,
+        currency: 'INR',
+        provider: 'manual',
+        method: 'upi',
+        status: 'success',
+        orderId: `manual-${rideId}-${Date.now()}`,
+      });
+    } catch (pErr) {
+      console.warn('Manual online payment record error:', pErr.message);
+    }
+
+    // Credit rider wallet with 90% (admin 10% cut)
+    try {
+      const gross = Number(amount || ride?.finalPrice || 0);
+      const adminShare = Math.round(gross * 0.10);
+      const riderShare = gross - adminShare;
+      const riderUserId = ride?.driverId || ride?.captainId || null;
+      if (riderUserId && riderShare > 0) {
+        let wallet = await Wallet.findOne({ riderId: riderUserId });
+        if (!wallet) wallet = await Wallet.create({ riderId: riderUserId, balance: 0, lockedBalance: 0, bankDetails: {} });
+        wallet.balance += riderShare;
+        await wallet.save();
+        await WalletTransaction.create({
+          riderId: riderUserId,
+          type: 'credit',
+          amount: riderShare,
+          description: 'Ride earning (manual online) after 10% admin cut',
+          meta: { rideId, gross, adminShare }
+        });
+      }
+    } catch (walletErr) {
+      console.error('Wallet credit error (manual online):', walletErr.message);
+    }
+
+    return res.json({ ok: true, ride });
+  } catch (err) {
+    console.error('Manual online confirm error:', err.message);
+    return res.status(500).json({ ok: false, message: 'Server error' });
+  }
+};
+
 // Razorpay webhook handler (uses raw body)
 exports.webhook = async (req, res, next) => {
   try {
@@ -174,6 +255,6 @@ exports.webhook = async (req, res, next) => {
     return res.json({ ok: true });
   } catch (err) {
     console.error('Webhook error:', err.message);
-    return res.status(400).json({ ok: false, message: 'Webhook processing failed' });
-  }
+    return res.status(400).json({ ok: false, message: 'Webhook processing failed' });
+  }
 };

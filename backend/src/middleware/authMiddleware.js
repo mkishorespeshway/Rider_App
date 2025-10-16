@@ -11,7 +11,19 @@ const authMiddleware = async (req, res, next) => {
         .json({ success: false, message: "Authorization token missing" });
     }
 
-    const token = authHeader.split(" ")[1];
+    const token = (authHeader.split(" ")[1] || "").trim();
+    if (!token || token === "null" || token === "undefined") {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authorization token missing" });
+    }
+
+    // Minimal logging for debugging in development without leaking full token
+    try {
+      const preview = token.length > 12 ? token.slice(0, 12) + "…" : token;
+      console.log(`🔐 Auth header OK, token preview: ${preview}`);
+    } catch {}
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "supersecretkey");
 
     let user = null;
@@ -39,7 +51,8 @@ const authMiddleware = async (req, res, next) => {
 
     next();
   } catch (err) {
-    console.error("❌ Auth error:", err.message);
+    console.error("❌ Auth error:", err && err.message ? err.message : err);
+    // Provide a slightly clearer hint for the client while preserving 401 semantics
     res.status(401).json({ success: false, message: "Invalid token" });
   }
 };

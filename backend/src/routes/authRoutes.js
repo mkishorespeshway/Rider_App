@@ -3,9 +3,9 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const router = express.Router();
 const multer = require("multer");
-const bcrypt = require("bcrypt"); 
-const { uploadBufferToCloudinary } = require("../controllers/authController"); 
-
+const bcrypt = require("bcrypt");
+const { uploadBufferToCloudinary } = require("../controllers/authController");
+ 
 // ================== HELPER ==================
 const generateToken = (user) => {
   return jwt.sign(
@@ -14,7 +14,7 @@ const generateToken = (user) => {
     { expiresIn: "12h" }
   );
 };
-
+ 
 const buildUserResponse = (user) => ({
   _id: user._id,
   fullName: user.fullName,
@@ -22,13 +22,14 @@ const buildUserResponse = (user) => ({
   mobile: user.mobile,
   role: user.role,
   approvalStatus: user.approvalStatus || undefined,
+  vehicleType: user.vehicleType || undefined,
 });
-
+ 
 // ================== USER SIGNUP ==================
 router.post("/signup-user", async (req, res) => {
   try {
     const { fullName, email, mobile } = req.body; // removed password
-
+ 
     if (!fullName || !email || !mobile) {
       return res.status(400).json({ success: false, message: "All fields are required" });
     }
@@ -39,17 +40,17 @@ router.post("/signup-user", async (req, res) => {
       const byEmail = existing.email === email;
       return res.status(409).json({ success: false, message: byMobile ? "Mobile already registered" : byEmail ? "Email already registered" : "User already exists" });
     }
-
+ 
     const user = new User({
       fullName,
       email,
       mobile,
       role: "user",
     });
-
+ 
     await user.save();
     const token = generateToken(user);
-
+ 
     res.json({
       success: true,
       token,
@@ -65,17 +66,17 @@ router.post("/signup-user", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
+ 
 // ================== USER LOGIN ==================
 router.post("/login-user", async (req, res) => {
   try {
     const { mobile } = req.body; // password not used at login for user
-
+ 
     const user = await User.findOne({ mobile, role: "user" });
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
-
+ 
     const token = generateToken(user);
-
+ 
     res.json({
       success: true,
       token,
@@ -87,7 +88,7 @@ router.post("/login-user", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
+ 
 // ================== RIDER SIGNUP ==================
 router.post(
   "/signup-rider",
@@ -102,7 +103,7 @@ router.post(
     try {
       const { fullName, email, mobile } = req.body;
       const files = req.files || {};
-
+ 
       if (!fullName || !email || !mobile) {
         return res.status(400).json({ success: false, message: "All fields are required" });
       }
@@ -113,7 +114,7 @@ router.post(
         const byEmail = existing.email === email;
         return res.status(409).json({ success: false, message: byMobile ? "Mobile already registered" : byEmail ? "Email already registered" : "Rider already exists" });
       }
-
+ 
       const fields = [
         { key: "aadharFront", name: "Aadhar Front" },
         { key: "aadharBack", name: "Aadhar Back" },
@@ -121,7 +122,7 @@ router.post(
         { key: "panCard", name: "PAN Card" },
         { key: "rc", name: "RC" },
       ];
-
+ 
       const documents = [];
       for (const f of fields) {
         if (files[f.key] && files[f.key][0]) {
@@ -133,7 +134,7 @@ router.post(
           }
         }
       }
-
+ 
       const rider = new User({
         fullName,
         email,
@@ -142,10 +143,10 @@ router.post(
         approvalStatus: "pending",
         documents,
       });
-
+ 
       await rider.save();
       const token = generateToken(rider);
-
+ 
       res.json({
         success: true,
         token,
@@ -162,24 +163,24 @@ router.post(
     }
   }
 );
-
+ 
 // ================== RIDER LOGIN ==================
 router.post("/login-rider", async (req, res) => {
   try {
     const { mobile, password } = req.body;
-
+ 
     const rider = await User.findOne({ mobile, role: "rider" });
     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
-
+ 
     if (rider.approvalStatus !== "approved") {
       return res.status(403).json({ success: false, message: "Account not approved yet" });
     }
-
+ 
     const validPassword = await bcrypt.compare(password, rider.password);
     if (!validPassword) return res.status(401).json({ success: false, message: "Invalid credentials" });
-
+ 
     const token = generateToken(rider);
-
+ 
     res.json({
       success: true,
       token,
@@ -191,5 +192,7 @@ router.post("/login-rider", async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
-
+ 
 module.exports = router;
+ 
+ 

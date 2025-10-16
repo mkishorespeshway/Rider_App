@@ -136,7 +136,9 @@ export default function Parcel() {
     const dropData = drop || { lat: null, lng: null };
 
     try {
-      const res = await axios.post("http://localhost:5000/api/parcels", {
+      const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+      const API_URL = `${API_BASE}/api`;
+      const res = await axios.post(`${API_URL}/parcels`, {
         ...form,
         pickup: pickupData,
         drop: dropData,

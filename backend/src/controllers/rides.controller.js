@@ -68,13 +68,19 @@ exports.createRide = async (req, res) => {
     let safeBasePrice = Number(basePrice);
     let safeFinalPrice = Number(finalPrice);
     let safePricingFactors = pricingFactors;
+    // Sanitize requested vehicle type for consistent storage and matching
+    const safeRequestedType = (requestedVehicleType != null && requestedVehicleType !== "")
+      ? String(requestedVehicleType).trim().toLowerCase()
+      : "";
 
     if (!Number.isFinite(safeBasePrice) || safeBasePrice <= 0 || !Number.isFinite(safeFinalPrice) || safeFinalPrice <= 0) {
       try {
         const priceDetails = await dynamicPricingService.calculateDynamicPrice(
           { latitude: safePickupCoords.lat, longitude: safePickupCoords.lng },
           distanceNum,
-          Number.isFinite(safeBasePrice) && safeBasePrice > 0 ? safeBasePrice : 25
+          Number.isFinite(safeBasePrice) && safeBasePrice > 0 ? safeBasePrice : 25,
+          requestedVehicleType || '',
+          null
         );
         safeBasePrice = Number(priceDetails.basePrice);
         safeFinalPrice = Number(priceDetails.finalPrice);
@@ -127,13 +133,17 @@ exports.createRide = async (req, res) => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      // Broadcast to riders so they see this request in real time
+      // Broadcast only when a vehicle type is explicitly chosen
       try {
         const io = req.app.get("io");
-        io.emit("rideRequest", mockRide);
+        const vType = String(mockRide.requestedVehicleType || "").trim().toLowerCase();
+        if (vType) {
+          io.to(`vehicle:${vType}`).emit("rideRequest", mockRide);
+        }
       } catch {}
       return res.status(201).json({ success: true, message: "Ride created (mock, DB offline)", ride: mockRide });
     }
+
 
     const ride = new Ride({
       riderId: req.user._id, // user who books
@@ -149,22 +159,26 @@ exports.createRide = async (req, res) => {
       pricingFactors: safePricingFactors,
       paymentMethod: paymentMethod || "COD", // Default to COD if not specified
       detailedPaymentMethod: detailedPaymentMethod || "", // Store detailed payment method if provided
-      requestedVehicleType: requestedVehicleType || "",
+      requestedVehicleType: safeRequestedType,
       status: "pending",
     });
 
     await ride.save();
 
-    // 🔥 notify all riders who can accept rides
+     // 🔥 notify only riders of the requested vehicle type when set
     const io = req.app.get("io");
-    io.emit("rideRequest", ride);
-
+    const vType = String(ride.requestedVehicleType || "").trim().toLowerCase();
+    if (vType) {
+      io.to(`vehicle:${vType}`).emit("rideRequest", ride);
+    }
+ 
     res.json({ success: true, ride });
   } catch (err) {
     console.error("❌ Error creating ride:", err);
     res.status(500).json({ error: "Failed to create ride" });
   }
 };
+
 
 // 🚖 Accept Ride
 exports.acceptRide = async (req, res) => {
@@ -173,6 +187,24 @@ exports.acceptRide = async (req, res) => {
 
     if (req.user.role !== "rider") {
       return res.status(403).json({ success: false, message: "Only riders can accept rides" });
+    }
+
+     // Ensure rider vehicle type matches ride requested vehicle type
+    const riderProfile = await User.findById(req.user._id).lean();
+    const riderType = riderProfile?.vehicleType || riderProfile?.vehicle?.type || null;
+    const rideForType = await Ride.findById(rideId).lean();
+    if (!rideForType) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+    if (rideForType.status !== "pending") {
+      return res.status(400).json({ success: false, message: "Ride already handled" });
+    }
+    if (
+      riderType &&
+      rideForType.requestedVehicleType &&
+      String(riderType).trim().toLowerCase() !== String(rideForType.requestedVehicleType).trim().toLowerCase()
+    ) {
+      return res.status(403).json({ success: false, message: "Ride type does not match your vehicle" });
     }
 
     const ride = await Ride.findOneAndUpdate(
@@ -257,17 +289,28 @@ exports.verifyOtp = async (req, res) => {
       });
     }
  
-    const ride = await Ride.findById(rideId);
-    if (!ride) {
-      return res.status(404).json({
-        success: false,
-        message: "Ride not found",
-      });
+  const ride = await Ride.findById(rideId);
+  if (!ride) {
+    return res.status(404).json({
+      success: false,
+      message: "Ride not found",
+    });
+  }
+  // Validate OTP must match the one stored on the ride
+  if (!ride.rideOtp) {
+    // Fallback: allow assigned rider to set OTP if user persistence is delayed
+    const isAssignedRider = req.user && req.user.role === "rider" && ride.driverId?.toString() === req.user._id.toString();
+    const isStatusAcceptable = ["accepted", "pending"].includes(String(ride.status));
+    if (isAssignedRider && isStatusAcceptable) {
+      ride.rideOtp = String(otp);
+      await ride.save();
+    } else {
+      return res.status(400).json({ success: false, message: "OTP not set for this ride" });
     }
- 
-    // For this implementation, we're accepting any OTP
-    // This ensures the OTP verification always succeeds
-    console.log(`OTP verification attempt for ride ${rideId}: ${otp}`);
+  }
+    if (String(ride.rideOtp) !== String(otp)) {
+      return res.status(400).json({ success: false, message: "Invalid OTP" });
+    }
    
     // Update ride status to in_progress
     ride.status = "in_progress";
@@ -280,6 +323,84 @@ exports.verifyOtp = async (req, res) => {
   } catch (err) {
     console.error("❌ Verify OTP error:", err);
     res.status(500).json({ error: "Failed to verify OTP", details: err.message });
+  }
+};
+ 
+// 📝 Persist per-ride OTP from Booking page
+exports.setRideOtp = async (req, res) => {
+  try {
+    const rideId = req.params.id;
+    const { otp } = req.body;
+    if (!otp) {
+      return res.status(400).json({ success: false, message: "OTP is required" });
+    }
+ 
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+ 
+    // Only the booking user can set OTP
+    if (ride.riderId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized to set OTP for this ride" });
+    }
+ 
+    // Allow setting only while accepted/pending
+    if (!["pending", "accepted"].includes(ride.status)) {
+      return res.status(400).json({ success: false, message: "Cannot set OTP after ride has started" });
+    }
+ 
+    ride.rideOtp = String(otp);
+    await ride.save();
+    res.json({ success: true, ride });
+  } catch (err) {
+    console.error("❌ Set ride OTP error:", err);
+    res.status(500).json({ error: "Failed to set ride OTP", details: err.message });
+  }
+};
+ 
+// 🏷️ Set requested vehicle type and notify matching riders
+exports.setRequestedVehicleType = async (req, res) => {
+  try {
+    const rideId = req.params.id;
+    const rawType = req.body?.requestedVehicleType;
+    const type = String(rawType || "").trim().toLowerCase();
+    if (!type) {
+      return res.status(400).json({ success: false, message: "Requested vehicle type is required" });
+    }
+ 
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+ 
+    // Only allow setting while ride is pending
+    if (ride.status !== "pending") {
+      return res.status(400).json({ success: false, message: "Cannot change type after ride is handled" });
+    }
+ 
+    // Only the booking user can set requested type
+    if (ride.riderId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized to set type for this ride" });
+    }
+ 
+    ride.requestedVehicleType = type;
+    await ride.save();
+ 
+    // Notify only riders of the selected vehicle type
+    try {
+      const io = req.app.get("io");
+      if (io && type) {
+        io.to(`vehicle:${type}`).emit("rideRequest", ride);
+      }
+    } catch (e) {
+      console.warn("setRequestedVehicleType emit warning:", e.message);
+    }
+ 
+    res.json({ success: true, ride });
+  } catch (err) {
+    console.error("❌ Set requested vehicle type error:", err);
+    res.status(500).json({ error: "Failed to set requested vehicle type", details: err.message });
   }
 };
 
@@ -329,10 +450,12 @@ exports.getPendingRides = async (req, res) => {
     let query = { status: "pending" };
     if (req.user && req.user.role === "rider") {
       const riderProfile = await User.findById(req.user._id).lean();
-      const vType = riderProfile?.vehicleType || null;
+      const vType = riderProfile?.vehicleType || riderProfile?.vehicle?.type || null;
       if (vType) {
-        query = { ...query, requestedVehicleType: { $in: [vType, "", null] } };
+        const vLower = String(vType).trim().toLowerCase();
+        query = { ...query, requestedVehicleType: vLower };
       }
+
     }
     const rides = await Ride.find(query).populate("riderId", "fullName mobile");
     res.json({ success: true, rides });

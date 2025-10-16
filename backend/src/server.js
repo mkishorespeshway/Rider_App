@@ -4,7 +4,24 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 const cors = require("cors");
 const path = require("path");
 const cloudinary = require("cloudinary").v2;
-require("dotenv").config();
+const fs = require("fs");
+const dotenv = require("dotenv");
+// Load env from multiple possible locations to avoid "MONGO_URI missing" issues
+// 1) backend/.env, 2) backend/.env.local, 3) repo-root .env/.env.local
+dotenv.config();
+const envCandidates = [
+  path.resolve(__dirname, "../.env.local"),
+  path.resolve(__dirname, "../.env"),
+  path.resolve(__dirname, "../../.env.local"),
+  path.resolve(__dirname, "../../.env"),
+];
+for (const p of envCandidates) {
+  try {
+    if (fs.existsSync(p)) {
+      dotenv.config({ path: p });
+    }
+  } catch {}
+}
 const http = require("http");
 const { Server } = require("socket.io");
 
@@ -183,17 +200,29 @@ app.get("/api/protected", authMiddleware, (req, res) => {
   });
 });
 
-// === Serve React Frontend ===
-const frontendPath = path.join(__dirname, "../frontend/build");
-app.use(express.static(frontendPath));
-app.get("*", (req, res) => {
-  if (req.url.startsWith("/api")) {
-    return res
-      .status(404)
-      .json({ success: false, message: "API route not found" });
-  }
-  res.sendFile(path.join(frontendPath, "index.html"));
-});
+// === Serve React Frontend (only if build exists) ===
+const frontendPath = path.resolve(__dirname, "../../frontend/build");
+if (fs.existsSync(frontendPath)) {
+  app.use(express.static(frontendPath));
+  app.get("*", (req, res) => {
+    if (req.url.startsWith("/api")) {
+      return res
+        .status(404)
+        .json({ success: false, message: "API route not found" });
+    }
+    res.sendFile(path.join(frontendPath, "index.html"));
+  });
+} else {
+  // In development without a frontend build, avoid ENOENT
+  app.get("*", (req, res) => {
+    if (req.url.startsWith("/api")) {
+      return res
+        .status(404)
+        .json({ success: false, message: "API route not found" });
+    }
+    res.status(404).send("Frontend build not found");
+  });
+}
 
 // === Start server ===
 const PORT = process.env.PORT || 5000;

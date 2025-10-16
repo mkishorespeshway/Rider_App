@@ -17,9 +17,12 @@ import axios from "axios";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
-import Map from "../../components/Map"; // ✅ Google Maps component
+import Map from "../../components/Map"; //  Google Maps component
+import { getMerchantDetails, confirmOnlinePayment, markCashPayment } from "../../services/api";
  
-const socket = io("http://localhost:5000");
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_URL = `${API_BASE}/api`;
+const socket = io(API_BASE);
  
 export default function RiderDashboard() {
   const [rides, setRides] = useState([]);
@@ -27,6 +30,9 @@ export default function RiderDashboard() {
   const [loading, setLoading] = useState(false);
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
+  // Admin UPI info for scanner display
+  const [merchantVpa, setMerchantVpa] = useState(process.env.REACT_APP_MERCHANT_VPA || null);
+  const [merchantName, setMerchantName] = useState("Rider App");
  
   // OTP verification states
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
@@ -40,16 +46,22 @@ export default function RiderDashboard() {
   const [drop, setDrop] = useState(null);
   const [dropAddress, setDropAddress] = useState("");
   const [riderLocation, setRiderLocation] = useState(null);
+  const [userLiveCoords, setUserLiveCoords] = useState(null);
   const [distance, setDistance] = useState("");
   const [duration, setDuration] = useState("");
  
-  // ✅ Logout
+  // Payment confirmation states
+  const [paymentMsg, setPaymentMsg] = useState("");
+  const [confirmingCash, setConfirmingCash] = useState(false);
+  const [confirmingOnline, setConfirmingOnline] = useState(false);
+ 
+  //  Logout
   const handleLogout = () => {
     logout();
     navigate("/rider-login");
   };
  
-  // ✅ Get rider's live location (updates every 5s)
+  //  Get rider's live location (updates every 5s)
   useEffect(() => {
     // First try to get position with getCurrentPosition for initial location
     navigator.geolocation.getCurrentPosition(
@@ -73,7 +85,40 @@ export default function RiderDashboard() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // 🚀 Broadcast rider GPS to user in real time (Rapido-style)
+  // 🔒 Restore active ride on reload so dashboard stays on same page
+  useEffect(() => {
+    const activeId = typeof window !== "undefined" && localStorage.getItem("riderActiveRideId");
+    if (!activeId || !auth?.token) return;
+    (async () => {
+      try {
+        const res = await axios.get(
+  `http://localhost:5000/api/rides/${activeId}`,
+  {
+    headers: {
+      Authorization: `Bearer ${auth?.token}`
+    }
+  }
+);
+
+        const ride = res?.data?.ride;
+        const status = String(ride?.status || "");
+        if (ride && ["accepted", "in_progress"].includes(status)) {
+          setSelectedRide(ride);
+          if (ride.pickupCoords) setPickup(ride.pickupCoords);
+          if (ride.dropCoords) setDrop(ride.dropCoords);
+        } else {
+          localStorage.removeItem("riderActiveRideId");
+        }
+      } catch (e) {
+        // If fetch fails, keep normal dashboard flow
+        console.warn("restore active ride warning:", e?.message || e);
+      }
+    })();
+  }, [auth?.token]);
+
+
+
+  //  Broadcast rider GPS to user in real time (Rapido-style)
   useEffect(() => {
     try {
       if (!riderLocation || !selectedRide?._id) return;
@@ -94,32 +139,36 @@ export default function RiderDashboard() {
       const res = await axios.get("http://localhost:5000/api/rides/pending", {
         headers: { Authorization: `Bearer ${auth?.token}` },
       });
-      setRides(res.data.rides || []);
+      const data = res.data.rides || [];
+      // Frontend safety filter: ensure only rides matching this rider's vehicle type are shown
+      const riderVehicleType = String(
+        auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
+      ).trim().toLowerCase();
+      const filtered = riderVehicleType
+        ? data.filter((r) => String(r?.requestedVehicleType || "").trim().toLowerCase() === riderVehicleType)
+        : data;
+      setRides(filtered);
     } catch (err) {
       console.warn("❌ Rides fetch warning:", err);
     } finally {
       setLoading(false);
     }
   };
+
  
   useEffect(() => {
     fetchPendingRides();
 
     // Receive live ride requests (especially when DB is offline)
     socket.on("rideRequest", (ride) => {
-      console.log("🚖 Incoming ride request:", ride);
-      try {
-        const riderVehicleType = auth?.user?.vehicleType || null;
-        const requestedType = ride?.requestedVehicleType || "";
-        // Only add if matches rider vehicle type, or requestedType is empty (no filter)
-        if (!riderVehicleType || requestedType === "" || requestedType == null || String(requestedType).toLowerCase() === String(riderVehicleType).toLowerCase()) {
-          setRides((prev) => {
-            const exists = prev.some((r) => r._id === ride._id);
-            return exists ? prev : [ride, ...prev];
-          });
-        }
-      } catch {
-        // Fallback: add regardless if filtering fails
+      console.log(" 🚖 Incoming ride request:", ride);
+      const riderVehicleType = String(
+        auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
+      ).trim().toLowerCase();
+      const requestedType = String(ride?.requestedVehicleType || "").trim().toLowerCase();
+
+       // Strict filter: show only rides that match this rider's vehicle type
+      if (requestedType && riderVehicleType && requestedType === riderVehicleType) {
         setRides((prev) => {
           const exists = prev.some((r) => r._id === ride._id);
           return exists ? prev : [ride, ...prev];
@@ -130,6 +179,7 @@ export default function RiderDashboard() {
     socket.on("rideAccepted", (ride) => {
       console.log("✅ Ride accepted event:", ride);
       setSelectedRide(ride);
+      try { localStorage.setItem("riderActiveRideId", ride._id); } catch {}
 
       if (ride.pickupCoords) setPickup(ride.pickupCoords);
       if (ride.dropCoords) setDrop(ride.dropCoords);
@@ -146,6 +196,52 @@ export default function RiderDashboard() {
       socket.off("rideRejected");
     };
   }, []);
+
+  // Register rider into vehicle-type socket room
+  useEffect(() => {
+    try {
+      const vType = String(
+        auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
+      ).trim().toLowerCase();
+      if (vType) {
+        socket.emit("registerRiderVehicleType", vType);
+      }
+    } catch (e) {
+      console.warn("registerRiderVehicleType emit warning:", e.message);
+    }
+  }, [auth?.user?.vehicleType, auth?.user?.vehicle?.type]);
+
+  // 👂 Listen for user's live GPS updates and display on map for accepted/in-progress ride
+  useEffect(() => {
+    const handler = ({ rideId, coords }) => {
+      try {
+        if (!selectedRide?._id) return;
+        if (String(rideId) === String(selectedRide._id)) {
+          setUserLiveCoords(coords);
+        }
+      } catch {
+        setUserLiveCoords(coords);
+      }
+    };
+    socket.on("userLocationUpdate", handler);
+    return () => {
+      socket.off("u2serLocationUpdate", handler);
+    };
+  }, [selectedRide]);
+
+  // Fetch Admin UPI settings for QR scanner
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await getMerchantDetails();
+        const bd = res?.data?.bankDetails;
+        if (bd?.upiVpa) setMerchantVpa(bd.upiVpa);
+        if (bd?.holderName) setMerchantName(bd.holderName);
+      } catch (e) {
+        // ignore; fallback to env
+      }
+    })();
+  }, []);
  
   // 🚖 Accept ride
   const handleAccept = async (rideId) => {
@@ -153,9 +249,10 @@ export default function RiderDashboard() {
       const res = await axios.post(
         `http://localhost:5000/api/rides/${rideId}/accept`,
         {},
-        { headers: { Authorization: `Bearer ${auth?.token}` } }
+        {headers: { Authorization: `Bearer ${auth?.token}` }, }
       );
       setSelectedRide(res.data.ride);
+      try { localStorage.setItem("riderActiveRideId", res.data.ride._id); } catch {}
  
       if (res.data.ride.pickupCoords) setPickup(res.data.ride.pickupCoords);
       if (res.data.ride.dropCoords) setDrop(res.data.ride.dropCoords);
@@ -174,96 +271,213 @@ export default function RiderDashboard() {
     console.log("Ride accepted, waiting for user to share OTP");
   };
  
-  // Verify OTP
+ // Verify OTP
   const handleVerifyOtp = async () => {
-    if (!otp) {
-      setOtpError("Please enter OTP");
+    // Basic input validation
+    if (!otp || otp.length !== 4) {
+      setOtpError("Please enter the 4-digit OTP");
       return;
     }
  
     setVerifyingOtp(true);
     setOtpError("");
- 
+
     try {
-      // Always accept any OTP for testing purposes
-      console.log("Accepting OTP:", otp);
-     
-      try {
-        // Try to call the backend API
-        const res = await axios.post(
-          `http://localhost:5000/api/rides/${selectedRide._id}/verify-otp`,
-          { otp },
-          { headers: { Authorization: `Bearer ${auth?.token}` } }
-        );
-       
-        // OTP verified successfully
-        setOtpDialogOpen(false);
-        // Update ride status to started
-        const updatedRide = { ...selectedRide, status: "in_progress" };
-        setSelectedRide(updatedRide);
-        alert("Ride started successfully!");
-      } catch (apiError) {
-        console.warn("API warning:", apiError);
-        // Even if API fails, still accept the OTP for testing
-        setOtpDialogOpen(false);
-        // Update ride status to started
-        const updatedRide = { ...selectedRide, status: "in_progress" };
-        setSelectedRide(updatedRide);
-        alert("Ride started successfully!");
+      // 1) Fetch ride to compare locally with stored OTP
+      const rideRes = await axios.get(
+  `http://localhost:5000/api/rides/${selectedRide._id}`,
+  {
+    headers: {
+      Authorization: `Bearer ${auth?.token}`
+    }
+  }
+);
+
+      const serverRide = rideRes?.data?.ride;
+      let serverOtp = serverRide?.rideOtp ? String(serverRide.rideOtp) : null;
+
+      if (!serverOtp) {
+        // OTP may be in-flight from user's booking page; wait and retry a few times
+        let fetchedOtp = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await new Promise((r) => setTimeout(r, 700));
+          try {
+            const retryRes = await axios.get(
+  `http://localhost:5000/api/rides/${selectedRide._id}`,
+  {
+    headers: {
+      Authorization: `Bearer ${auth?.token}`
+    }
+  }
+);
+
+            const retryRide = retryRes?.data?.ride;
+            const retryOtp = retryRide?.rideOtp ? String(retryRide.rideOtp) : null;
+            if (retryOtp) {
+              fetchedOtp = retryOtp;
+              break;
+            }
+          } catch {}
+        }
+        if (!fetchedOtp) {
+          // Socket fallback: request OTP from the booking user and wait briefly
+          try {
+            const userId =
+              (serverRide && serverRide.riderId && serverRide.riderId._id) ||
+              (serverRide && serverRide.riderId) ||
+              (selectedRide && selectedRide.riderId && selectedRide.riderId._id) ||
+              (selectedRide && selectedRide.riderId) ||
+              null;
+            if (userId) {
+              fetchedOtp = await new Promise((resolve) => {
+                const handler = ({ rideId, otp }) => {
+                  if (String(rideId) === String(selectedRide._id) && otp) {
+                    socket.off("rideOtpForRider", handler);
+                    resolve(String(otp));
+                  }
+                };
+                const timeout = setTimeout(() => {
+                  socket.off("rideOtpForRider", handler);
+                  resolve(null);
+                }, 2000);
+                socket.on("rideOtpForRider", handler);
+                socket.emit("requestRideOtp", { userId, rideId: selectedRide._id });
+              });
+            }
+          } catch {}
+          if (!fetchedOtp) {
+            // Final fallback: attempt backend verification which safely persists OTP when allowed
+            try {
+              const res = await axios.post(
+  `http://localhost:5000/api/rides/${selectedRide._id}/verify-otp`,
+  { otp },
+  {
+    headers: {
+      Authorization: `Bearer ${auth?.token}`
+    }
+  }
+);
+
+              const ok = res.data?.success && res.data?.ride?.status === "in_progress";
+              if (ok) {
+                setOtpDialogOpen(false);
+                const updatedRide = { ...selectedRide, status: "in_progress" };
+                setSelectedRide(updatedRide);
+                setVerifyingOtp(false);
+                setOtpError("");
+                return;
+              }
+            } catch (e) {
+              // continue to show guidance below
+            }
+            setOtpError("OTP not set yet by user. Ask user to share.");
+            return;
+          }
+        }
+        // Use fetched OTP for subsequent checks
+        serverOtp = fetchedOtp;
       }
-    } catch (err) {
-      console.warn("Verification warning:", err);
-      // For testing, we'll still accept the OTP
-      setOtpDialogOpen(false);
-      const updatedRide = { ...selectedRide, status: "in_progress" };
-      setSelectedRide(updatedRide);
-      alert("Ride started successfully despite error!");
+      if (String(otp) !== serverOtp) {
+        setOtpError("Invalid OTP. Please enter the code shared by user.");
+        return;
+      }
+
+      // 2) Call server to start ride after local match
+      const res = await axios.post(
+  `http://localhost:5000/api/rides/${selectedRide._id}/verify-otp`,
+  { otp },
+  {
+    headers: {
+      Authorization: `Bearer ${auth?.token}`
+    }
+  }
+);
+
+
+      const serverStatusOk = res.data?.success && res.data?.ride?.status === "in_progress";
+      const serverOtpEcho = res.data?.ride?.rideOtp ? String(res.data.ride.rideOtp) : null;
+      const serverOtpMatches = serverOtpEcho && serverOtpEcho === String(otp);
+
+      if (serverStatusOk && serverOtpMatches) {
+        setOtpDialogOpen(false);
+        const updatedRide = { ...selectedRide, status: "in_progress" };
+        setSelectedRide(updatedRide);
+        try { localStorage.setItem("riderActiveRideId", selectedRide._id); } catch {}
+      } else {
+        setOtpError(res.data?.message || "Invalid OTP");
+      }
+    } catch (apiError) {
+      const msg = apiError?.response?.data?.message || "Invalid OTP";
+      setOtpError(msg);
     } finally {
       setVerifyingOtp(false);
     }
   };
 
-  // ✅ Complete ride
+
+    
+  //  Complete ride
   const handleCompleteRide = async () => {
     try {
       if (!selectedRide?._id) return;
       const res = await axios.post(
-        `http://localhost:5000/api/rides/${selectedRide._id}/complete`,
+        `${API_URL}/rides/${selectedRide._id}/complete`,
         {},
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
       const updated = res.data?.ride || { ...selectedRide, status: "completed" };
       setSelectedRide(updated);
       alert("Ride completed. User will proceed to payment.");
-      // After marking complete, clear current ride and refresh pending list
-      // This allows the booking page to permit next bookings while rider sees new requests
-      try {
-        setTimeout(() => {
-          setSelectedRide(null);
-          fetchPendingRides();
-        }, 500);
-      } catch {}
+      // Keep selected ride visible so scanner appears here after completion
     } catch (err) {
       console.warn("Complete ride warning:", err);
       // graceful fallback
       const updated = { ...selectedRide, status: "completed" };
       setSelectedRide(updated);
       alert("Ride marked completed locally.");
-      // Even on fallback, reset dashboard to be ready for the next ride
-      try {
-        setTimeout(() => {
-          setSelectedRide(null);
-          fetchPendingRides();
-        }, 500);
-      } catch {}
+      // Keep selected ride so scanner can be shown
     }
   };
  
-  // ❌ Reject ride
+  // Confirm payment as Online (manual confirmation by rider)
+  const handleConfirmOnline = async () => {
+    try {
+      if (!selectedRide?._id) return;
+      setConfirmingOnline(true);
+      const amount = Number(selectedRide?.finalPrice || selectedRide?.estimatedPrice || 0);
+      await confirmOnlinePayment({ rideId: selectedRide._id, amount });
+      setPaymentMsg("Online payment confirmed.");
+      setSelectedRide((prev) => ({ ...prev, paymentStatus: "completed", paymentMethod: "online" }));
+    } catch (err) {
+      console.warn("Confirm online payment warning:", err);
+      alert("Failed to confirm online payment");
+    } finally {
+      setConfirmingOnline(false);
+    }
+  };
+ 
+  // Confirm payment as Cash (COD)
+  const handleConfirmCash = async () => {
+    try {
+      if (!selectedRide?._id) return;
+      setConfirmingCash(true);
+      const amount = Number(selectedRide?.finalPrice || selectedRide?.estimatedPrice || 0);
+      await markCashPayment({ rideId: selectedRide._id, amount });
+      setPaymentMsg("Cash payment confirmed.");
+      setSelectedRide((prev) => ({ ...prev, paymentStatus: "completed", paymentMethod: "COD" }));
+    } catch (err) {
+      console.warn("Confirm cash payment warning:", err);
+      alert("Failed to confirm cash payment");
+    } finally {
+      setConfirmingCash(false);
+    }
+  };
+ 
+  //  Reject ride
   const handleReject = async (rideId) => {
     try {
       await axios.post(
-        `http://localhost:5000/api/rides/${rideId}/reject`,
+        `${API_URL}/rides/${rideId}/reject`,
         {},
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
@@ -318,7 +532,7 @@ export default function RiderDashboard() {
                 <b>ETA:</b> {duration}
               </Typography>
               <Typography>
-                <b>Status:</b> {selectedRide.status === "in_progress" ? "Ride in Progress" : "Waiting for OTP Verification"}
+                <b>Status:</b> {selectedRide.status === "in_progress" ? "Ride in Progress" : selectedRide.status === "completed" ? "Ride Completed" : "Waiting for OTP Verification"}
               </Typography>
               <Box mt={2}>
                 <Button variant="contained" color="success" sx={{ mr: 2 }}>
@@ -347,15 +561,70 @@ export default function RiderDashboard() {
                   </Button>
                 )}
                 {selectedRide.status === "completed" && (
-                  <Typography sx={{ ml: 2, fontWeight: "bold", color: "green" }}>
-                    Ride Completed — awaiting user payment
-                  </Typography>
+                  <Box sx={{ ml: 2, mt: 2 }}>
+                    <Typography sx={{ fontWeight: "bold", color: "green", mb: 1 }}>
+                      Ride Completed � show this scanner to the user
+                    </Typography>
+                    {(() => {
+                      const amount = Number(selectedRide?.finalPrice || 0);
+                      if (!merchantVpa || !amount) return (
+                        <Typography variant="caption" color="text.secondary">
+                          Admin UPI not configured.
+                        </Typography>
+                      );
+                      const qrParams = new URLSearchParams({
+                        pa: merchantVpa,
+                        pn: merchantName || 'Rider App',
+                        am: String(amount.toFixed(2)),
+                        cu: 'INR',
+                        tn: 'Ride Payment',
+                      });
+                      const qrUpiUrl = `upi://pay?${qrParams.toString()}`;
+                      const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrUpiUrl)}`;
+                      return (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, border: '1px solid #eee', borderRadius: 2 }}>
+                          <img src={qrImg} alt="Admin UPI QR" style={{ width: 180, height: 180 }} />
+                          <Box>
+                            <Typography variant="body2">Payee: {merchantName || 'Rider App'}</Typography>
+                            <Typography variant="body2">UPI: {merchantVpa}</Typography>
+                            <Typography variant="body2">Amount: ?{amount.toFixed(2)}</Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                              Ask user to scan and pay. Payment status updates on their side.
+                            </Typography>
+                          </Box>
+                        </Box>
+                      );
+                    })()}
+                    {paymentMsg && (
+                      <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+                        {paymentMsg}
+                      </Typography>
+                    )}
+                    <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={handleConfirmOnline}
+                        disabled={confirmingOnline}
+                      >
+                        {confirmingOnline ? "Confirming..." : "Confirm Paid (Online)"}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="success"
+                        onClick={handleConfirmCash}
+                        disabled={confirmingCash}
+                      >
+                        {confirmingCash ? "Confirming..." : "Confirm Paid (Cash)"}
+                      </Button>
+                    </Box>
+                  </Box>
                 )}
               </Box>
             </CardContent>
           </Card>
  
-          {/* ✅ Google Map */}
+          {/*  Google Map */}
           <Paper sx={{ p: 1 }}>
             <Map
               apiKey="AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"
@@ -368,6 +637,11 @@ export default function RiderDashboard() {
               riderLocation={riderLocation}
               setDistance={setDistance}
               setDuration={setDuration}
+              // Show post-OTP route and vehicle overlays using ride status
+              rideStarted={selectedRide?.status === "in_progress"}
+              vehicleType={auth?.user?.vehicleType || auth?.user?.vehicle?.type}
+              vehicleImage={auth?.user?.vehicle?.images?.[0]}
+
             />
           </Paper>
         </>
@@ -395,7 +669,7 @@ export default function RiderDashboard() {
                       color="success"
                       onClick={() => handleAccept(ride._id)}
                     >
-                      Accept ✅
+                      Accept  ✅
                     </Button>
                     <Button
                       variant="contained"
@@ -444,7 +718,7 @@ export default function RiderDashboard() {
       onClick={handleVerifyOtp}
       variant="contained"
       color="primary"
-      disabled={verifyingOtp}
+      disabled={verifyingOtp || (otp || "").length !== 4}
     >
       {verifyingOtp ? <CircularProgress size={24} /> : "Verify & Start Ride"}
     </Button>
@@ -454,5 +728,4 @@ export default function RiderDashboard() {
     </Box>
   );
 }
- 
  
