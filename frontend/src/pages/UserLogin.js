@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { sendOtp, verifyOtp } from "../services/api";
+import axios from "axios"; // ✅ Added axios
 import { useAuth } from "../contexts/AuthContext";
 import {
   Box,
@@ -24,15 +24,22 @@ export default function UserLogin() {
 
   const isValidMobile = (num) => /^[0-9]{10}$/.test(num);
 
+  // ✅ Send OTP Function (Direct API Call)
   const handleSendOtp = async () => {
     setMessage({ type: "", text: "" });
+
     if (!mobile || !isValidMobile(mobile)) {
       setMessage({ type: "error", text: "Enter a valid 10-digit mobile number" });
       return;
     }
+
     try {
       setLoading(true);
-      const res = await sendOtp(mobile, "user");
+      const res = await axios.post("http://192.168.0.106:5000/api/otp/send", {
+        mobile: mobile,
+        role: "user",
+      });
+
       if (res.data.success) {
         setStep(2);
         setMessage({ type: "success", text: "OTP sent! Check your mobile." });
@@ -40,27 +47,36 @@ export default function UserLogin() {
         setMessage({ type: "error", text: res.data.message || "Failed to send OTP" });
       }
     } catch (err) {
-      const msg = err?.response?.data?.message || "Server error while sending OTP";
+      const msg =
+        err?.response?.data?.message || "Server error while sending OTP";
       setMessage({ type: "error", text: msg });
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ Verify OTP Function (Direct API Call)
   const handleVerifyOtp = async () => {
     setMessage({ type: "", text: "" });
+
     if (!otp || otp.length < 4) {
       setMessage({ type: "error", text: "Enter a valid OTP" });
       return;
     }
+
     try {
       setLoading(true);
-      const res = await verifyOtp(mobile, otp, "user");
+      const res = await axios.post("http://192.168.0.106:5000/api/otp/verify", {
+        mobile: mobile,
+        otp: otp,
+        role: "user",
+      });
+
       if (res.data.success) {
         login({
           token: res.data.token,
           user: res.data.user,
-          roles: [res.data.role || res.data.user?.role || "user"], // ✅ FIX
+          roles: [res.data.role || res.data.user?.role || "user"],
         });
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
         navigate("/booking");
@@ -68,7 +84,8 @@ export default function UserLogin() {
         setMessage({ type: "error", text: res.data.message || "Invalid OTP" });
       }
     } catch (err) {
-      const msg = err?.response?.data?.message || "Server error while verifying OTP";
+      const msg =
+        err?.response?.data?.message || "Server error while verifying OTP";
       setMessage({ type: "error", text: msg });
     } finally {
       setLoading(false);

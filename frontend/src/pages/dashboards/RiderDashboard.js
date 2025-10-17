@@ -149,7 +149,7 @@ export default function RiderDashboard() {
         : data;
       setRides(filtered);
     } catch (err) {
-      console.warn("âŒ Rides fetch warning:", err);
+      console.warn("Rides fetch warning:", err);
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ export default function RiderDashboard() {
 
     // Receive live ride requests (especially when DB is offline)
     socket.on("rideRequest", (ride) => {
-      console.log(" ðŸš– Incoming ride request:", ride);
+      console.log(" – Incoming ride request:", ride);
       const riderVehicleType = String(
         auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
       ).trim().toLowerCase();
@@ -177,7 +177,7 @@ export default function RiderDashboard() {
     });
 
     socket.on("rideAccepted", (ride) => {
-      console.log("âœ… Ride accepted event:", ride);
+      console.log("Ride accepted event:", ride);
       setSelectedRide(ride);
       try { localStorage.setItem("riderActiveRideId", ride._id); } catch {}
 
@@ -186,7 +186,7 @@ export default function RiderDashboard() {
     });
  
     socket.on("rideRejected", () => {
-      console.log("âŒ Ride rejected event");
+      console.log("Ride rejected event");
       fetchPendingRides();
     });
  
@@ -512,7 +512,7 @@ export default function RiderDashboard() {
         <>
           <Card sx={{ mb: 3 }}>
             <CardContent>
-              <Typography variant="h6">ðŸš– Ride Accepted</Typography>
+              <Typography variant="h6"> Ride Accepted</Typography>
               <Typography>
                 <b>User:</b> {selectedRide.riderId?.fullName}
               </Typography>
@@ -536,10 +536,10 @@ export default function RiderDashboard() {
               </Typography>
               <Box mt={2}>
                 <Button variant="contained" color="success" sx={{ mr: 2 }}>
-                  Call ðŸ“ž
+                  Call 
                 </Button>
                 <Button variant="outlined" color="primary" sx={{ mr: 2 }}>
-                  Chat ðŸ’¬
+                  Chat 
                 </Button>
                 {selectedRide.status !== "in_progress" && selectedRide.status !== "completed" && (
                   <Button
@@ -547,7 +547,7 @@ export default function RiderDashboard() {
                     color="primary"
                     onClick={() => setOtpDialogOpen(true)}
                   >
-                    Verify OTP ðŸ”
+                    Verify OTP 
                   </Button>
                 )}
                 {selectedRide.status === "in_progress" && (
@@ -557,13 +557,13 @@ export default function RiderDashboard() {
                     onClick={handleCompleteRide}
                     sx={{ ml: 2 }}
                   >
-                    Complete Ride âœ…
+                    Complete Ride 
                   </Button>
                 )}
                 {selectedRide.status === "completed" && (
                   <Box sx={{ ml: 2, mt: 2 }}>
                     <Typography sx={{ fontWeight: "bold", color: "green", mb: 1 }}>
-                      Ride Completed ï¿½ show this scanner to the user
+                      Ride Completed show this scanner to the user
                     </Typography>
                     {(() => {
                       const amount = Number(selectedRide?.finalPrice || 0);
@@ -669,7 +669,7 @@ export default function RiderDashboard() {
                       color="success"
                       onClick={() => handleAccept(ride._id)}
                     >
-                      Accept  âœ…
+                      Accept  
                     </Button>
                     <Button
                       variant="contained"
@@ -677,7 +677,7 @@ export default function RiderDashboard() {
                       sx={{ ml: 2 }}
                       onClick={() => handleReject(ride._id)}
                     >
-                      Reject âŒ
+                      Reject 
                     </Button>
                   </Box>
                 </CardContent>
