@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import {
   Box,
   Card,
@@ -85,7 +85,7 @@ export default function RiderDashboard() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // 🔒 Restore active ride on reload so dashboard stays on same page
+  // ðŸ”’ Restore active ride on reload so dashboard stays on same page
   useEffect(() => {
     const activeId = typeof window !== "undefined" && localStorage.getItem("riderActiveRideId");
     if (!activeId || !auth?.token) return;
@@ -132,7 +132,7 @@ export default function RiderDashboard() {
     }
   }, [riderLocation, selectedRide]);
  
-  // 🔄 Fetch pending rides
+  // ðŸ”„ Fetch pending rides
   const fetchPendingRides = async () => {
     try {
       setLoading(true);
@@ -149,7 +149,7 @@ export default function RiderDashboard() {
         : data;
       setRides(filtered);
     } catch (err) {
-      console.warn("❌ Rides fetch warning:", err);
+      console.warn("âŒ Rides fetch warning:", err);
     } finally {
       setLoading(false);
     }
@@ -161,7 +161,7 @@ export default function RiderDashboard() {
 
     // Receive live ride requests (especially when DB is offline)
     socket.on("rideRequest", (ride) => {
-      console.log(" 🚖 Incoming ride request:", ride);
+      console.log(" ðŸš– Incoming ride request:", ride);
       const riderVehicleType = String(
         auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
       ).trim().toLowerCase();
@@ -177,7 +177,7 @@ export default function RiderDashboard() {
     });
 
     socket.on("rideAccepted", (ride) => {
-      console.log("✅ Ride accepted event:", ride);
+      console.log("âœ… Ride accepted event:", ride);
       setSelectedRide(ride);
       try { localStorage.setItem("riderActiveRideId", ride._id); } catch {}
 
@@ -186,7 +186,7 @@ export default function RiderDashboard() {
     });
  
     socket.on("rideRejected", () => {
-      console.log("❌ Ride rejected event");
+      console.log("âŒ Ride rejected event");
       fetchPendingRides();
     });
  
@@ -211,7 +211,7 @@ export default function RiderDashboard() {
     }
   }, [auth?.user?.vehicleType, auth?.user?.vehicle?.type]);
 
-  // 👂 Listen for user's live GPS updates and display on map for accepted/in-progress ride
+  // ðŸ‘‚ Listen for user's live GPS updates and display on map for accepted/in-progress ride
   useEffect(() => {
     const handler = ({ rideId, coords }) => {
       try {
@@ -243,7 +243,7 @@ export default function RiderDashboard() {
     })();
   }, []);
  
-  // 🚖 Accept ride
+  // ðŸš– Accept ride
   const handleAccept = async (rideId) => {
     try {
       const res = await axios.post(
@@ -512,7 +512,7 @@ export default function RiderDashboard() {
         <>
           <Card sx={{ mb: 3 }}>
             <CardContent>
-              <Typography variant="h6">🚖 Ride Accepted</Typography>
+              <Typography variant="h6">ðŸš– Ride Accepted</Typography>
               <Typography>
                 <b>User:</b> {selectedRide.riderId?.fullName}
               </Typography>
@@ -536,10 +536,10 @@ export default function RiderDashboard() {
               </Typography>
               <Box mt={2}>
                 <Button variant="contained" color="success" sx={{ mr: 2 }}>
-                  Call 📞
+                  Call ðŸ“ž
                 </Button>
                 <Button variant="outlined" color="primary" sx={{ mr: 2 }}>
-                  Chat 💬
+                  Chat ðŸ’¬
                 </Button>
                 {selectedRide.status !== "in_progress" && selectedRide.status !== "completed" && (
                   <Button
@@ -547,7 +547,7 @@ export default function RiderDashboard() {
                     color="primary"
                     onClick={() => setOtpDialogOpen(true)}
                   >
-                    Verify OTP 🔐
+                    Verify OTP ðŸ”
                   </Button>
                 )}
                 {selectedRide.status === "in_progress" && (
@@ -557,13 +557,13 @@ export default function RiderDashboard() {
                     onClick={handleCompleteRide}
                     sx={{ ml: 2 }}
                   >
-                    Complete Ride ✅
+                    Complete Ride âœ…
                   </Button>
                 )}
                 {selectedRide.status === "completed" && (
                   <Box sx={{ ml: 2, mt: 2 }}>
                     <Typography sx={{ fontWeight: "bold", color: "green", mb: 1 }}>
-                      Ride Completed � show this scanner to the user
+                      Ride Completed ï¿½ show this scanner to the user
                     </Typography>
                     {(() => {
                       const amount = Number(selectedRide?.finalPrice || 0);
@@ -587,7 +587,7 @@ export default function RiderDashboard() {
                           <Box>
                             <Typography variant="body2">Payee: {merchantName || 'Rider App'}</Typography>
                             <Typography variant="body2">UPI: {merchantVpa}</Typography>
-                            <Typography variant="body2">Amount: ?{amount.toFixed(2)}</Typography>
+                            <Typography variant="body2">Amount: ₹{amount.toFixed(2)}</Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                               Ask user to scan and pay. Payment status updates on their side.
                             </Typography>
@@ -669,7 +669,7 @@ export default function RiderDashboard() {
                       color="success"
                       onClick={() => handleAccept(ride._id)}
                     >
-                      Accept  ✅
+                      Accept  âœ…
                     </Button>
                     <Button
                       variant="contained"
@@ -677,7 +677,7 @@ export default function RiderDashboard() {
                       sx={{ ml: 2 }}
                       onClick={() => handleReject(ride._id)}
                     >
-                      Reject ❌
+                      Reject âŒ
                     </Button>
                   </Box>
                 </CardContent>
@@ -729,3 +729,4 @@ export default function RiderDashboard() {
   );
 }
  
+

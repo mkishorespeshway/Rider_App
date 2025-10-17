@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Container, Paper, Typography, Button, Box, CircularProgress, Alert, Divider, TextField, ToggleButton, ToggleButtonGroup, Chip } from "@mui/material";
 import { getRideById, markCashPayment, getRideHistory, getMerchantDetails } from "../services/api";
@@ -133,7 +133,7 @@ export default function Payment() {
       return;
     }
     if (Number(resolvedAmount) <= 0) {
-      setMessage({ type: "error", text: "Amount must be greater than ?0." });
+      setMessage({ type: "error", text: "Amount must be greater than ₹0." });
       return;
     }
     if (upiFlow === "collect") {
@@ -224,9 +224,9 @@ export default function Payment() {
         <Typography variant="h5" sx={{ fontWeight: "bold", mb: 2 }}>
           Complete Payment
         </Typography>
-        <Typography variant="body1">Ride ID: {effectiveRideId || "�"}</Typography>
+        <Typography variant="body1">Ride ID: {effectiveRideId || "ï¿½"}</Typography>
         <Typography variant="h6" sx={{ my: 1 }}>
-          Amount: {resolvedAmount != null ? `?${Number(resolvedAmount).toFixed(2)}` : "�"}
+          Amount: {resolvedAmount != null ? `₹${Number(resolvedAmount).toFixed(2)}` : "—"}
         </Typography>
         {ride && (
           <Box sx={{ my: 2 }}>
@@ -236,7 +236,7 @@ export default function Payment() {
             <Typography variant="body2">Ride Date: {ride?.createdAt ? new Date(ride.createdAt).toLocaleString() : "-"}</Typography>
             <Typography variant="body2">Status: {ride.status}</Typography>
             <Typography variant="body2">Distance: {ride.distance} km</Typography>
-            <Typography variant="body2">Fare: ?{Number(ride.finalPrice || 0).toFixed(2)}</Typography>
+            <Typography variant="body2">Fare: ₹{Number(ride.finalPrice || 0).toFixed(2)}</Typography>
             <Divider sx={{ my: 1 }} />
           </Box>
         )}
@@ -295,3 +295,5 @@ export default function Payment() {
     </Container>
   );
 }
+
+
