@@ -23,6 +23,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import Map from "../components/Map";
 
 export default function Parcel() {
   const [form, setForm] = useState({
@@ -39,6 +40,14 @@ export default function Parcel() {
   const [pickup, setPickup] = useState(null);
   const [drop, setDrop] = useState(null);
   const [currentLocation, setCurrentLocation] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  // clear documents when category doesn't require uploads
+  useEffect(() => {
+    const cat = String(form.parcelCategory || "").trim().toLowerCase();
+    if (cat !== "xerox" && cat !== "documents" && documents.length > 0) {
+      setDocuments([]);
+    }
+  }, [form.parcelCategory]);
 
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropSuggestions, setDropSuggestions] = useState([]);
@@ -71,6 +80,12 @@ export default function Parcel() {
       console.error("❌ Reverse geocode failed:", err);
       return "";
     }
+  };
+
+  // 📤 Document change handler
+  const handleDocsChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    setDocuments(files);
   };
 
   // 📍 Suggestions search (within ~30km radius)
@@ -138,68 +153,32 @@ export default function Parcel() {
     try {
       const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
       const API_URL = `${API_BASE}/api`;
-      const res = await axios.post(`${API_URL}/parcels`, {
-        ...form,
-        pickup: pickupData,
-        drop: dropData,
-      });
 
-      // 👉 Navigate to Activity Page with parcel & rider info
+      const formData = new FormData();
+      Object.entries(form).forEach(([key, val]) => formData.append(key, val ?? ""));
+      formData.append("pickup", JSON.stringify(pickupData));
+      formData.append("drop", JSON.stringify(dropData));
+      documents.forEach((file) => formData.append("documents", file));
+
+      const res = await axios.post(`${API_URL}/parcels`, formData);
+
       navigate("/activity", {
         state: {
           parcel: res.data.parcel,
-          rider: res.data.rider,
           distance,
         },
       });
     } catch (err) {
-      console.error("❌ Error submitting parcel:", err);
-      alert("Error submitting parcel!");
+      console.error("❌ Error submitting parcel:", err?.response?.data || err.message);
+      alert(err?.response?.data?.message || "Error submitting parcel!");
     }
   };
 
   // 📍 Drop marker by map click
-  function LocationMarker({ type }) {
-    useMapEvents({
-      async click(e) {
-        if (type === "drop") {
-          setDrop(e.latlng);
-          const address = await getAddressFromCoords(
-            e.latlng.lat,
-            e.latlng.lng
-          );
-          setForm((prev) => ({ ...prev, dropAddress: address }));
-        }
-      },
-    });
-    return null;
-  }
+  // (Handled inside Map component now)
 
   // 📍 Draggable Pickup Marker
-  function DraggablePickupMarker() {
-    return (
-      pickup && (
-        <Marker
-          position={pickup}
-          icon={pickupIcon}
-          draggable={true}
-          eventHandlers={{
-            dragend: async (e) => {
-              const newPos = e.target.getLatLng();
-              setPickup(newPos);
-              const addr = await getAddressFromCoords(
-                newPos.lat,
-                newPos.lng
-              );
-              setForm((prev) => ({ ...prev, pickupAddress: addr }));
-            },
-          }}
-        >
-          <Popup>Sender (Pickup)</Popup>
-        </Marker>
-      )
-    );
-  }
+  // (Handled via address suggestions + Map component)
 
   // 🛣️ Fetch real route when pickup & drop set
   useEffect(() => {
@@ -220,32 +199,7 @@ export default function Parcel() {
     fetchRoute();
   }, [pickup, drop]);
 
-  // ✅ Custom marker icons
-  const pickupIcon = new L.Icon({
-    iconUrl: "https://cdn-icons-png.flaticon.com/512/32/32339.png",
-    iconSize: [25, 25],
-    iconAnchor: [12, 12],
-  });
-
-  const dropIcon = new L.Icon({
-    iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
-    iconSize: [35, 35],
-    iconAnchor: [17, 34],
-  });
-
-  const currentIcon = new L.DivIcon({
-    className: "custom-blue-dot",
-    html: `<div style="
-      width: 16px;
-      height: 16px;
-      background: blue;
-      border-radius: 50%;
-      border: 2px solid white;
-      box-shadow: 0 0 5px rgba(0,0,0,0.3);
-    "></div>`,
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
-  });
+  // ✅ Custom marker icons (only used for legacy Leaflet map, kept for reference)
 
   return (
     <Container maxWidth="lg">
@@ -261,7 +215,7 @@ export default function Parcel() {
         <Box
           sx={{
             display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+            gridTemplateColumns: "1fr 1fr",
             gap: 3,
           }}
         >
@@ -280,31 +234,37 @@ export default function Parcel() {
               label="Sender Name"
               value={form.senderName}
               onChange={handleChange}
+              fullWidth
               required
             />
+
+            {/* Sender Mobile */}
             <TextField
               name="senderMobile"
               label="Sender Mobile"
               value={form.senderMobile}
               onChange={handleChange}
-              type="tel"
               inputProps={{ pattern: "[6-9][0-9]{9}", maxLength: 10 }}
               helperText="Enter 10-digit mobile starting with 6-9"
               required
             />
+
+            {/* Receiver Name */}
             <TextField
               name="receiverName"
               label="Receiver Name"
               value={form.receiverName}
               onChange={handleChange}
+              fullWidth
               required
             />
+
+            {/* Receiver Mobile */}
             <TextField
               name="receiverMobile"
               label="Receiver Mobile"
               value={form.receiverMobile}
               onChange={handleChange}
-              type="tel"
               inputProps={{ pattern: "[6-9][0-9]{9}", maxLength: 10 }}
               helperText="Enter 10-digit mobile starting with 6-9"
               required
@@ -321,6 +281,7 @@ export default function Parcel() {
               sx={{ gridColumn: "1/3" }}
             >
               <MenuItem value="Documents">Documents</MenuItem>
+              <MenuItem value="Xerox">Xerox</MenuItem>
               <MenuItem value="Food">Food</MenuItem>
               <MenuItem value="Electronics">Electronics</MenuItem>
               <MenuItem value="Clothes">Clothes</MenuItem>
@@ -390,6 +351,7 @@ export default function Parcel() {
               )}
             </Box>
 
+            {/* Parcel Details */}
             <TextField
               name="parcelDetails"
               label="Parcel Details"
@@ -400,6 +362,14 @@ export default function Parcel() {
               rows={2}
               sx={{ gridColumn: "1/3" }}
             />
+
+            {/* Upload Documents (only for Xerox/Documents) */}
+            {(["xerox" ].includes(String(form.parcelCategory || "").trim().toLowerCase())) && (
+              <Box sx={{ gridColumn: "1/3" }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>Upload Document(s)</Typography>
+                <input type="file" multiple onChange={handleDocsChange} />
+              </Box>
+            )}
 
             <Button
               type="submit"
@@ -415,47 +385,22 @@ export default function Parcel() {
             </Button>
           </Box>
 
-          {/* --- RIGHT: Map --- */}
+          {/* --- RIGHT: Map (Google Maps with fallback) --- */}
           <Box sx={{ height: "100%", minHeight: "500px", borderRadius: 2, overflow: "hidden" }}>
-            {currentLocation && (
-              <MapContainer
-                center={currentLocation}
-                zoom={13}
-                style={{ height: "100%", width: "100%" }}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/">OSM</a>'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
-
-                {/* Current Location */}
-                <Marker position={currentLocation} icon={currentIcon}>
-                  <Popup>You are here</Popup>
-                </Marker>
-
-                {/* Pickup */}
-                <DraggablePickupMarker />
-
-                {/* Drop */}
-                {drop && (
-                  <Marker position={drop} icon={dropIcon}>
-                    <Popup>
-                      Receiver (Drop) <br />
-                      {distance ? `Distance: ${distance} km` : ""}
-                    </Popup>
-                  </Marker>
-                )}
-                <LocationMarker type="drop" />
-
-                {/* 🛣️ Actual Route */}
-                {route && (
-                  <Polyline
-                    positions={route}
-                    pathOptions={{ color: "black", weight: 4 }}
-                  />
-                )}
-              </MapContainer>
-            )}
+            <Map
+              apiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
+              pickup={pickup}
+              setPickup={setPickup}
+              setPickupAddress={(addr) => setForm((prev) => ({ ...prev, pickupAddress: addr }))}
+              drop={drop}
+              setDrop={setDrop}
+              setDropAddress={(addr) => setForm((prev) => ({ ...prev, dropAddress: addr }))}
+              setDistance={setDistance}
+              setDuration={() => {}}
+              setNormalDuration={() => {}}
+              showRiderOnly={false}
+              rideStarted={false}
+            />
           </Box>
         </Box>
       </Paper>

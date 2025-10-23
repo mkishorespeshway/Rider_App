@@ -28,7 +28,6 @@ const authMiddleware = async (req, res, next) => {
 
     let user = null;
     try {
-      
       user = await User.findById(decoded.id).lean();
     } catch (dbErr) {
       console.warn("⚠️ Auth DB lookup failed, using token payload:", dbErr.message);
@@ -40,6 +39,7 @@ const authMiddleware = async (req, res, next) => {
       return next();
     }
 
+    // Include vehicle fields needed by parcel acceptance logic
     req.user = {
       _id: user._id,
       fullName: user.fullName,
@@ -47,6 +47,9 @@ const authMiddleware = async (req, res, next) => {
       email: user.email,
       role: user.role,
       approvalStatus: user.approvalStatus,
+      vehicleType: user.vehicleType || (user.vehicle && user.vehicle.type) || undefined,
+      vehicleNumber: user.vehicleNumber || (user.vehicle && user.vehicle.number) || undefined,
+      vehicle: user.vehicle || undefined,
     };
 
     next();

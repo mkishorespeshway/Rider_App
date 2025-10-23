@@ -8,6 +8,7 @@ import {
 import { MapContainer as LMap, TileLayer, Marker as LMarker, Popup } from "react-leaflet";
 import L from "leaflet";
 import axios from "axios";
+import "leaflet/dist/leaflet.css";
 
 const containerStyle = {
   width: "100%",
@@ -168,7 +169,7 @@ export default function Map({
           </LMarker>
         )}
 
-        {drop && rideStarted && (
+        {drop && (
           <LMarker
             position={[normalizeLatLng(drop)?.lat ?? drop.lat ?? drop.latitude, normalizeLatLng(drop)?.lng ?? drop.lng ?? drop.longitude]}
             icon={leafletDropIcon}
@@ -520,7 +521,7 @@ export default function Map({
           }}
         />
       )}
-      {drop && rideStarted && (
+      {drop && (
         <GoogleMarker
           key={`drop-${drop.lat ?? drop.latitude}-${drop.lng ?? drop.longitude}`}
           position={normalizeLatLng(drop) || drop}

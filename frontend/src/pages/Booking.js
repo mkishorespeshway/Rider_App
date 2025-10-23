@@ -16,8 +16,8 @@ import PricingService from "../services/pricingService";
 import SOSButton from "../components/SOSButton";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
-const API_URL = `${API_BASE}/api`;
-const socket = io(API_BASE);
+  const API_URL = `${API_BASE}/api`;
+  const socket = io(API_BASE);
 
 // Removed Razorpay loader (no third-party checkout in this flow)
 const loadRazorpayScript = () => Promise.resolve(false);
@@ -105,7 +105,7 @@ export default function Booking() {
           setMapOnlyView(true);
         }
         const resp = await axios.get(
-            `http://localhost:5000/api/rides/${existingId}`,
+            `${API_URL}/rides/${existingId}`,
               { headers: { Authorization: `Bearer ${auth?.token}` } }
             );
 
@@ -172,7 +172,7 @@ export default function Booking() {
               // Persist OTP to backend so rider can verify even after refresh
               try {
                 await axios.post(
-                  `http://localhost:5000/api/rides/${ride._id}/set-otp`,
+                  `${API_URL}/rides/${ride._id}/set-otp`,
                   { otp: saved },
                   { headers: { Authorization: `Bearer ${auth?.token}` } }
                 );
@@ -410,7 +410,7 @@ export default function Booking() {
             return m ? parseInt(m[1], 10) : null;
           };
           const curMins = parseMinsLocal(duration || "");
-          const normMins = parseMinsLocal(normalDuration || duration || "");
+          const normMins = parseMinsLocal(normalDuration || currentEta);
           if (curMins && normMins && normMins > 0) {
             const ratio = curMins / normMins;
             const durAdj = Math.max(1, 1 + (ratio - 1) * 0.6); // scale impact to avoid extreme surges
@@ -671,7 +671,7 @@ export default function Booking() {
     // Persist the requested vehicle type and notify matching riders
     try {
       const res = await axios.post(
-       `http://localhost:5000/api/rides/${createdRide._id}/request-type`,
+       `${API_URL}/rides/${createdRide._id}/request-type`,
         { requestedVehicleType: selectedRide },
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
@@ -705,7 +705,7 @@ export default function Booking() {
       if (sel && sel !== currentType) {
         axios
           .post(
-            `http://localhost:5000/api/rides/${createdRide._id}/request-type`,
+            `${API_URL}/rides/${createdRide._id}/request-type`,
             { requestedVehicleType: sel },
             { headers: { Authorization: `Bearer ${auth?.token}` } }
           )
@@ -754,7 +754,7 @@ export default function Booking() {
           const persistOtp = async () => {
           try {
             await axios.post(
-              `http://localhost:5000/api/rides/${ride._id}/set-otp`,
+              `${API_URL}/rides/${ride._id}/set-otp`,
               { otp: saved },
               { headers: { Authorization: `Bearer ${auth?.token}` } }
             );
@@ -779,7 +779,7 @@ export default function Booking() {
         }
         try {
           await axios.post(
-            `http://localhost:5000/api/rides/${rideId}/set-otp`,
+            `${API_URL}/rides/${rideId}/set-otp`,
             { otp: saved },
             { headers: { Authorization: `Bearer ${auth?.token}` } }
           );
