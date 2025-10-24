@@ -24,6 +24,23 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const API_URL = `${API_BASE}/api`;
 
 const socket = io(API_BASE);
+
+// Rapido-style 50 km radius filtering (user pickup ↔ rider location)
+const RIDE_RADIUS_KM = 50;
+const toRad = (v) => (Number(v) * Math.PI) / 180;
+const haversineKm = (a, b) => {
+  try {
+    const R = 6371; // Earth radius (km)
+    const dLat = toRad(Number(b.lat) - Number(a.lat));
+    const dLng = toRad(Number(b.lng) - Number(a.lng));
+    const lat1 = toRad(Number(a.lat));
+    const lat2 = toRad(Number(b.lat));
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+  } catch {
+    return Infinity;
+  }
+};
  
 export default function RiderDashboard() {
   const [rides, setRides] = useState([]);
@@ -58,6 +75,42 @@ export default function RiderDashboard() {
   // Parcel states
   const [parcels, setParcels] = useState([]);
   const [selectedParcel, setSelectedParcel] = useState(null);
+
+  // Online/Offline toggle state
+  const [isOnline, setIsOnline] = useState(() => {
+    try { return localStorage.getItem("riderOnline") === "true"; } catch {}
+    return true; // default online to preserve current behavior
+  });
+  useEffect(() => {
+    try { localStorage.setItem("riderOnline", String(isOnline)); } catch {}
+  }, [isOnline]);
+
+  // Emit rider availability to server (online/offline + vehicle type)
+  useEffect(() => {
+    try {
+      const vehicleType = String(
+        auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
+      ).trim().toLowerCase();
+      const riderId = auth?.user?._id || auth?.user?.id;
+      socket.emit("riderAvailability", { isOnline, vehicleType, riderId });
+    } catch (e) {
+      console.warn("Failed to emit riderAvailability:", e);
+    }
+  }, [isOnline, auth?.user?.vehicleType, auth?.user?.vehicle?.type, auth?.user?._id]);
+
+  // Emit rider current available location to server when online
+  useEffect(() => {
+    if (!isOnline || !riderLocation || riderLocation.lat == null || riderLocation.lng == null) return;
+    try {
+      const vehicleType = String(
+        auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
+      ).trim().toLowerCase();
+      const riderId = auth?.user?._id || auth?.user?.id;
+      socket.emit("riderAvailableLocation", { coords: riderLocation, vehicleType, riderId });
+    } catch (e) {
+      console.warn("Failed to emit riderAvailableLocation:", e);
+    }
+  }, [riderLocation, isOnline]);
   
   // Parcel OTP verification states
   const [parcelOtpDialogOpen, setParcelOtpDialogOpen] = useState(false);
@@ -188,45 +241,63 @@ export default function RiderDashboard() {
   }, []);
 
   useEffect(() => {
-    fetchPendingRides();
+    if (isOnline) {
+      fetchPendingRides();
+      // Receive live ride requests (especially when DB is offline)
+      const handleRideRequest = (ride) => {
+        console.log(" – Incoming ride request:", ride);
+        const riderVehicleType = String(
+          auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
+        ).trim().toLowerCase();
+        const requestedType = String(ride?.requestedVehicleType || "").trim().toLowerCase();
 
-    // Receive live ride requests (especially when DB is offline)
-    socket.on("rideRequest", (ride) => {
-      console.log(" – Incoming ride request:", ride);
-      const riderVehicleType = String(
-        auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
-      ).trim().toLowerCase();
-      const requestedType = String(ride?.requestedVehicleType || "").trim().toLowerCase();
+        // Radius gate: only consider rides within 50 km of rider's current location
+        let withinRadius = true;
+        try {
+          const p = ride?.pickupCoords;
+          if (p && riderLocation && riderLocation.lat != null && riderLocation.lng != null && p.lat != null && p.lng != null) {
+            const d = haversineKm(
+              { lat: Number(riderLocation.lat), lng: Number(riderLocation.lng) },
+              { lat: Number(p.lat), lng: Number(p.lng) }
+            );
+            withinRadius = Number.isFinite(d) ? d <= RIDE_RADIUS_KM : true; // keep if cannot compute
+          }
+        } catch (e) {
+          withinRadius = true;
+        }
 
-       // Strict filter: show only rides that match this rider's vehicle type
-      if (requestedType && riderVehicleType && requestedType === riderVehicleType) {
-        setRides((prev) => {
-          const exists = prev.some((r) => r._id === ride._id);
-          return exists ? prev : [ride, ...prev];
-        });
-      }
-    });
+        // Strict filter: show only rides that match this rider's vehicle type AND within radius
+        if (withinRadius && requestedType && riderVehicleType && requestedType === riderVehicleType) {
+          setRides((prev) => {
+            const exists = prev.some((r) => r._id === ride._id);
+            return exists ? prev : [ride, ...prev];
+          });
+        }
+      };
+      socket.on("rideRequest", handleRideRequest);
+    } else {
+      socket.off("rideRequest");
+    }
 
     socket.on("rideAccepted", (ride) => {
       console.log("Ride accepted event:", ride);
       setSelectedRide(ride);
       try { localStorage.setItem("riderActiveRideId", ride._id); } catch {}
-
       if (ride.pickupCoords) setPickup(ride.pickupCoords);
       if (ride.dropCoords) setDrop(ride.dropCoords);
     });
- 
+
     socket.on("rideRejected", () => {
       console.log("Ride rejected event");
-      fetchPendingRides();
+      if (isOnline) fetchPendingRides();
     });
- 
+
     return () => {
       socket.off("rideRequest");
       socket.off("rideAccepted");
       socket.off("rideRejected");
     };
-  }, []);
+  }, [isOnline, riderLocation]);
 
   // Register rider into vehicle-type socket room
   useEffect(() => {
@@ -322,6 +393,10 @@ export default function RiderDashboard() {
       if (ok) {
         setOtpDialogOpen(false);
         const updatedRide = res.data?.ride || { ...selectedRide, status: "in_progress" };
+        // Preserve rider details if missing in response
+        if (!updatedRide?.riderId && selectedRide?.riderId) {
+          updatedRide.riderId = selectedRide.riderId;
+        }
         setSelectedRide(updatedRide);
         alert("Ride started successfully!");
       } else {
@@ -479,6 +554,10 @@ export default function RiderDashboard() {
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
       const updated = res.data?.ride || { ...selectedRide, status: "completed" };
+      // Preserve rider details if missing in response
+      if (!updated?.riderId && selectedRide?.riderId) {
+        updated.riderId = selectedRide.riderId;
+      }
       setSelectedRide(updated);
       alert("Ride completed. User will proceed to payment.");
       // Keep selected ride visible so scanner appears here after completion
@@ -540,6 +619,27 @@ export default function RiderDashboard() {
     }
   };
  
+  // Memo: display only rides within 50 km of rider's location; keep rides without coords
+  const displayedRides = React.useMemo(() => {
+    try {
+      if (!Array.isArray(rides)) return [];
+      const loc = riderLocation;
+      const haveLoc = !!(loc && loc.lat != null && loc.lng != null);
+      if (!haveLoc) return rides;
+      return rides.filter((r) => {
+        const p = r && r.pickupCoords;
+        if (!p || p.lat == null || p.lng == null) return true; // keep if missing coords
+        const d = haversineKm(
+          { lat: Number(loc.lat), lng: Number(loc.lng) },
+          { lat: Number(p.lat), lng: Number(p.lng) }
+        );
+        return Number.isFinite(d) && d <= RIDE_RADIUS_KM;
+      });
+    } catch {
+      return rides;
+    }
+  }, [rides, riderLocation]);
+
   return (
     <Box p={4}>
       <Typography variant="h4" gutterBottom>
@@ -558,6 +658,23 @@ export default function RiderDashboard() {
       >
         Logout
       </Button>
+
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+        <Button
+          variant="contained"
+          onClick={() => setIsOnline((prev) => !prev)}
+          sx={{
+            bgcolor: isOnline ? "success.main" : "error.main",
+            "&:hover": { bgcolor: isOnline ? "success.dark" : "error.dark" },
+            fontWeight: 700,
+          }}
+        >
+          {isOnline ? "Online" : "Offline"}
+        </Button>
+        <Typography variant="body2" color={isOnline ? "success.main" : "text.secondary"}>
+          {isOnline ? "You are available for new rides." : "You are offline."}
+        </Typography>
+      </Box>
  
       {loading ? (
         <CircularProgress />

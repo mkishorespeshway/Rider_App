@@ -428,11 +428,16 @@ exports.completeRide = async (req, res) => {
     ride.status = "completed";
     await ride.save();
 
+    // Populate rider and driver before returning/broadcasting
+    const populatedRide = await Ride.findById(ride._id)
+      .populate("riderId", "fullName email mobile")
+      .populate("driverId", "fullName email mobile vehicleType vehicleNumber preferredLanguage preferredLanguages profilePicture vehicle");
+
     // Notify the user to proceed to payment
     const io = req.app.get("io");
-    io.to(ride.riderId.toString()).emit("rideCompleted", ride);
+    io.to(ride.riderId.toString()).emit("rideCompleted", populatedRide);
 
-    res.json({ success: true, ride });
+    res.json({ success: true, ride: populatedRide });
   } catch (err) {
     console.error("❌ Complete ride error:", err);
     res.status(500).json({ error: "Failed to complete ride", details: err.message });

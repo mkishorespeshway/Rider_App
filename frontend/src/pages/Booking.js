@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import {
   Container, Paper, Typography, TextField, Box,
   Button, Drawer, CircularProgress, ListItemButton,
-  FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, Chip, Avatar
+  FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, Chip, Avatar,
+  Dialog, DialogTitle, DialogContent, DialogActions
 } from "@mui/material";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +18,7 @@ import SOSButton from "../components/SOSButton";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
   const API_URL = `${API_BASE}/api`;
+  const MAX_RIDE_DISTANCE_KM = 50;
   const socket = io(API_BASE);
 
 // Removed Razorpay loader (no third-party checkout in this flow)
@@ -67,6 +69,10 @@ export default function Booking() {
   const [rideStatus, setRideStatus] = useState("Waiting for rider 🚖");
   const [otp, setOtp] = useState("");
   const [userLiveCoords, setUserLiveCoords] = useState(null);
+  // Show a popup when a rider accepts the ride
+  const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
+  const [serviceLimitOpen, setServiceLimitOpen] = useState(false);
+  const [acceptBannerOpen, setAcceptBannerOpen] = useState(false);
   // Persist OTP per active ride across refreshes
   useEffect(() => {
     try {
@@ -494,7 +500,8 @@ export default function Booking() {
   // state additions for payments
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [showDetailedPayments, setShowDetailedPayments] = useState(false);
-  const [detailedPaymentMethod, setDetailedPaymentMethod] = useState("upi");  const [selectedPaymentOption, setSelectedPaymentOption] = useState(null);
+  const [detailedPaymentMethod, setDetailedPaymentMethod] = useState("upi");
+  const [selectedPaymentOption, setSelectedPaymentOption] = useState(null);
   
   const [showPaymentPrompt, setShowPaymentPrompt] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(null);
@@ -580,6 +587,12 @@ export default function Booking() {
       }
       // Always use backend dynamic pricing before creating the ride
       const distanceKm = parseFloat(distance);
+
+      // 🚧 Service area limit: block rides beyond 50 km from pickup
+      if (Number.isFinite(distanceKm) && distanceKm > MAX_RIDE_DISTANCE_KM) {
+        setServiceLimitOpen(true);
+        return;
+      }
 
       // Provide hint rate by vehicle for backend pricing
       let rateForCreate = null;
@@ -734,7 +747,7 @@ export default function Booking() {
       setRideStatus("Rider en route 🚖");
        // Show compact map until OTP verification
       setMapOnlyView(false);
-      // Persist active ride id on acceptance to filter GPS updates
+       // Persist active ride id on acceptance to filter GPS updates
       try {
         const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
         if (ride?._id) localStorage.setItem(activeKey, ride._id);
@@ -890,6 +903,21 @@ export default function Booking() {
       {/* 🚨 SOS Button (fixed position) */}
       <SOSButton role="user" />
 
+
+      {/* Service area limit popup */}
+      <Dialog open={serviceLimitOpen} onClose={() => setServiceLimitOpen(false)}>
+        <DialogTitle>Service Area Limit</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            We currently support rides up to 50 km from your pickup location.
+            Please adjust your drop location or consider splitting the journey.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setServiceLimitOpen(false)} variant="contained">OK</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* ✅ Global payment prompt shown when ride is completed */}
       {showPaymentPrompt && (
         <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: '#fff3e0', border: '1px solid #ffe0b2' }}>
@@ -931,56 +959,124 @@ export default function Booking() {
         {/* Left panel (hidden after OTP verification) */}
         {!mapOnlyView && (
         <Paper sx={{ p: 3, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2 }}>Find a trip</Typography>
+          {assignedRider && riderPanelOpen ? (
+            <>
+              {acceptBannerOpen && (
+                <Paper elevation={3} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
+                    Your OTP Code
+                  </Typography>
+                  <Typography variant="h3" sx={{ letterSpacing: 2, fontWeight: 'bold', color: 'primary.main', textAlign: 'center' }}>
+                    {otp}
+                  </Typography>
+                  <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
+                    Share this code with your rider to start the trip
+                  </Typography>
+                </Paper>
+              )}
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
+                <Avatar
+                  src={assignedRider.profilePicture || undefined}
+                  alt={assignedRider.fullName || 'Rider'}
+                  sx={{ width: 56, height: 56, bgcolor: '#eee' }}
+                />
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: "bold" }}>Your Rider is on the way 🚗</Typography>
+                  <Typography variant="body2" color="text.secondary">Please share the OTP when rider arrives</Typography>
+                </Box>
+              </Box>
+              <Typography><b>Name:</b> {assignedRider.fullName}</Typography>
+              <Typography><b>Mobile:</b> {assignedRider.mobile}</Typography>
+              <Typography>
+                <b>Vehicle:</b>{" "}
+                { (assignedRider.vehicleType || assignedRider.vehicle?.type)
+                  ? `${assignedRider.vehicleType || assignedRider.vehicle?.type} (${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber || 'N/A'})`
+                  : (assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber
+                      ? `(${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber})`
+                      : 'N/A') }
+              </Typography>
+              <Typography>
+                <b>Preferred Languages:</b> {(() => {
+                  const list = Array.isArray(assignedRider.preferredLanguages)
+                    ? assignedRider.preferredLanguages
+                    : [];
+                  if (list.length) return list.join(', ');
+                  return assignedRider.preferredLanguage || '—';
+                })()}
+              </Typography>
+              <Typography>
+                <b>Fare:</b>{" "}
+                {createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0
+                  ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
+                  : (rideOptions.find((r) => r.id === selectedRide)?.price || "—")}
+              </Typography>
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 2, textAlign: 'center' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Your OTP Code</Typography>
+                <Typography variant="h4" sx={{ letterSpacing: 2, fontWeight: 'bold', color: '#FF5722' }}>
+                  {otp}
+                </Typography>
+                <Typography variant="caption">Share this code with your rider to start the trip</Typography>
+              </Box>
+              <Box sx={{ mt: 2, display: "flex", gap: 2 }}>
+                <Button variant="contained" color="success">📞 Call</Button>
+                <Button variant="outlined" color="primary">💬 Chat</Button>
+              </Box>
+              <Typography variant="body1" sx={{ mt: 2 }}>{rideStatus}</Typography>
+            </>
+          ) : (
+            <>
+              <Typography variant="h6" sx={{ mb: 2 }}>Find a trip</Typography>
 
-          {/* ✅ Pickup Input with Suggestions */}
-          <TextField
-            fullWidth
-            label="Pickup Address"
-            value={pickupAddress}
-            onChange={(e) => {
-              setPickupAddress(e.target.value);
-              fetchSuggestions(e.target.value, setPickupSuggestions, pickup);
-            }}
-            sx={{ mb: 1 }}
-          />
-          {pickupSuggestions.map((s, i) => (
-            <ListItemButton
-              key={i}
-              onClick={() => handlePickupSelect(s.place_id, s.description)}
-            >
-              {s.description}
-            </ListItemButton>
-          ))}
+              {/* ✅ Pickup Input with Suggestions */}
+              <TextField
+                fullWidth
+                label="Pickup Address"
+                value={pickupAddress}
+                onChange={(e) => {
+                  setPickupAddress(e.target.value);
+                  fetchSuggestions(e.target.value, setPickupSuggestions, pickup);
+                }}
+                sx={{ mb: 1 }}
+              />
+              {pickupSuggestions.map((s, i) => (
+                <ListItemButton
+                  key={i}
+                  onClick={() => handlePickupSelect(s.place_id, s.description)}
+                >
+                  {s.description}
+                </ListItemButton>
+              ))}
 
-          {/* ✅ Drop Input with Suggestions */}
-          <TextField
-            fullWidth
-            label="Drop Address"
-            value={dropAddress}
-            onChange={(e) => {
-              setDropAddress(e.target.value);
-              fetchSuggestions(e.target.value, setDropSuggestions, pickup);
-            }}
-            sx={{ mb: 1 }}
-          />
-          {dropSuggestions.map((s, i) => (
-            <ListItemButton
-              key={i}
-              onClick={() => handleDropSelect(s.place_id, s.description)}
-            >
-              {s.description}
-            </ListItemButton>
-          ))}
+              {/* ✅ Drop Input with Suggestions */}
+              <TextField
+                fullWidth
+                label="Drop Address"
+                value={dropAddress}
+                onChange={(e) => {
+                  setDropAddress(e.target.value);
+                  fetchSuggestions(e.target.value, setDropSuggestions, pickup);
+                }}
+                sx={{ mb: 1 }}
+              />
+              {dropSuggestions.map((s, i) => (
+                <ListItemButton
+                  key={i}
+                  onClick={() => handleDropSelect(s.place_id, s.description)}
+                >
+                  {s.description}
+                </ListItemButton>
+              ))}
 
-          <Button
-            fullWidth
-            variant="contained"
-            sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" }, mt: 2 }}
-            onClick={handleFindRiders}
-          >
-            Find Riders
-          </Button>
+              <Button
+                fullWidth
+                variant="contained"
+                sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" }, mt: 2 }}
+                onClick={handleFindRiders}
+              >
+                Find Riders
+              </Button>
+            </>
+          )}
         </Paper>
         )}
 
@@ -1012,7 +1108,7 @@ export default function Booking() {
         </Paper>
       </Box>
 
-      {/* Ride options drawer */}
+      {/* Rider options drawer */}
       <Drawer anchor="bottom" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>Choose a ride</Typography>
@@ -1225,13 +1321,11 @@ export default function Booking() {
               <Typography><b>Mobile:</b> {assignedRider.mobile}</Typography>
               <Typography>
                 <b>Vehicle:</b>{" "}
-                {
-                  (assignedRider.vehicleType || assignedRider.vehicle?.type)
-                    ? `${assignedRider.vehicleType || assignedRider.vehicle?.type} (${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber || 'N/A'})`
-                    : (assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber
-                        ? `(${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber})`
-                        : 'N/A')
-                }
+                { (assignedRider.vehicleType || assignedRider.vehicle?.type)
+                  ? `${assignedRider.vehicleType || assignedRider.vehicle?.type} (${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber || 'N/A'})`
+                  : (assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber
+                      ? `(${assignedRider.vehicleNumber || assignedRider.vehicle?.registrationNumber})`
+                      : 'N/A') }
               </Typography>
               <Typography>
                 <b>Preferred Languages:</b> {(() => {
@@ -1305,6 +1399,12 @@ export default function Booking() {
           )}
         </Box>
       </Drawer>
+    {/* Rider details drawer disabled in favor of inline panel */}
+    <Drawer anchor="bottom" open={false} onClose={() => setRiderPanelOpen(false)}>
+      <Box sx={{ p: 3 }}>
+        {/* kept for compatibility; content migrated to inline panel */}
+      </Box>
+    </Drawer>
     </Container>
-  );
+  );
 }

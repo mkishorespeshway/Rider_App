@@ -208,10 +208,13 @@ export default function HistoryRider() {
                   <Typography sx={{ fontWeight: 600 }}>Payment</Typography>
                 </Box>
                 <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
-                  Status: {r.payment?.status || "Not available"}
+                  Status: {r.payment?.status || (r.paymentStatus ? (r.paymentStatus === 'completed' ? 'Paid' : 'Pending') : 'Not available')}
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  Amount: {r.payment?.amount != null ? `₹${r.payment.amount}` : "—"}
+                  Method: {r.paymentMethod ? (r.detailedPaymentMethod ? `${r.paymentMethod} (${r.detailedPaymentMethod})` : r.paymentMethod) : (r.payment?.provider || '—')}
+                </Typography>
+                <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                  Amount: {r.payment?.amount != null ? `₹${r.payment.amount}` : (r.finalPrice != null ? `₹${Number(r.finalPrice).toFixed(2)}` : "—")}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={4}>
