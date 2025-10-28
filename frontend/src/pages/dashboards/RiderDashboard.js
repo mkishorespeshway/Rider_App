@@ -997,6 +997,7 @@ export default function RiderDashboard() {
           )}
 
 {SHOW_PARCELS_ON_DASHBOARD ? (
+          <>
           <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>
             Recent Parcels
           </Typography>
@@ -1042,6 +1043,7 @@ export default function RiderDashboard() {
               </Card>
             ))
           )}
+          </>
         ) : null}
         </>
       )}
