@@ -20,7 +20,7 @@ const RiderDetails = () => {
         const res = await axios.get(`${API}/api/admin/rider/${id}`, { headers: { Authorization: `Bearer ${token}` } });
         setRider(res.data);
       } catch (err) {
-        console.error(err);
+        console.warn(err);
         setError(err.response?.data?.message || "Failed to fetch rider details");
       } finally {
         setLoading(false);

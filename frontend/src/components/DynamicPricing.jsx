@@ -26,7 +26,7 @@ const DynamicPricing = ({ pickup, destination, distance, onPriceCalculated }) =>
         onPriceCalculated(details);
       }
     } catch (err) {
-      console.error('Failed to calculate price:', err);
+      console.warn('Price calculation warning:', err);
       setError('Unable to calculate price. Please try again.');
     } finally {
       setLoading(false);
@@ -65,7 +65,8 @@ const DynamicPricing = ({ pickup, destination, distance, onPriceCalculated }) =>
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-      <h3 className="text-lg font-semibold mb-2">Ride Fare</h3>
+      -  <h3 className="text-lg font-semibold mb-2">Ride Fare</h3>
+      +  <h3 className="text-lg font-semibold mb-2">Upfront Fare</h3>
       
       <div className="flex justify-between items-center mb-3">
         <span className="text-gray-600">Base fare:</span>
@@ -103,12 +104,14 @@ const DynamicPricing = ({ pickup, destination, distance, onPriceCalculated }) =>
       )}
       
       <div className="flex justify-between items-center border-t border-gray-200 pt-3 mt-3">
-        <span className="font-semibold">Total fare:</span>
+        -    <span className="font-semibold">Total fare:</span>
+        +    <span className="font-semibold">Upfront fare:</span>
         <span className="font-bold text-xl">₹{priceDetails.finalPrice.toFixed(2)}</span>
       </div>
       
       <p className="text-xs text-gray-500 mt-2">
-        Fare may change if pickup or destination location changes
+        -    Fare may change if pickup or destination location changes
+        +    Upfront fare recalculates if pickup or destination changes before booking
       </p>
     </div>
   );

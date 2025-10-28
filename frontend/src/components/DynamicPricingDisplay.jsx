@@ -48,7 +48,7 @@ const DynamicPricingDisplay = ({ pickup, destination, distance, durationMins, no
       });
       setZoneInfo(response.data);
     } catch (err) {
-      console.error('Failed to fetch pricing factors/zone info:', err?.response?.data || err.message);
+      console.warn('Pricing factors/zone info warning:', err?.response?.data || err.message);
     } finally {
       setLoading(false);
     }
@@ -84,7 +84,7 @@ const DynamicPricingDisplay = ({ pickup, destination, distance, durationMins, no
         onPriceCalculated(response.data);
       }
     } catch (err) {
-      console.error('Failed to calculate price:', err?.response?.data || err.message);
+      console.warn('Price calculation warning:', err?.response?.data || err.message);
       // Graceful fallback to basic fare if API fails
       const fallbackBase = Number((25 + (isFinite(distNum) ? distNum : 0) * 5).toFixed(2));
       const fallback = {
@@ -143,7 +143,6 @@ const DynamicPricingDisplay = ({ pickup, destination, distance, durationMins, no
 
   return (
     <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-      <h3 className="text-lg font-semibold mb-2">Ride Fare</h3>
 
       {/* Visible zone metadata block */}
       {zoneInfo?.zone && (
@@ -193,11 +192,7 @@ const DynamicPricingDisplay = ({ pickup, destination, distance, durationMins, no
         </div>
       )}
       
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-gray-600">Base fare:</span>
-        <span>₹{priceDetails.basePrice.toFixed(2)}</span>
-      </div>
-      
+
       {priceDetails.surgeMultiplier > 1 && (
         <div className="bg-yellow-50 border border-yellow-100 rounded-md p-3 mb-3">
           <div className="flex items-center mb-2">
@@ -239,13 +234,17 @@ const DynamicPricingDisplay = ({ pickup, destination, distance, durationMins, no
       )}
       
       <div className="flex justify-between items-center border-t border-gray-200 pt-3 mt-3">
-        <span className="font-semibold">Total fare:</span>
-        <span className="font-bold text-xl">₹{priceDetails.finalPrice.toFixed(2)}</span>
-      </div>
-      
-      <p className="text-xs text-gray-500 mt-2">
-        Fare calculated by our automated pricing system
-      </p>
+-        <span className="font-semibold">Total fare:</span>
++        <span className="font-semibold">Upfront fare:</span>
+         <span className="font-bold text-xl">₹{priceDetails.finalPrice.toFixed(2)}</span>
+       </div>
+       
+-      <p className="text-xs text-gray-500 mt-2">
+-        Fare calculated by our automated pricing system
+-      </p>
++      <p className="text-xs text-gray-500 mt-2">
++        Upfront fare locked at booking and matches payment
++      </p>
     </div>
   );
 };

@@ -39,10 +39,12 @@ class DynamicPricingService {
       const zoneMultiplier = await this.getZoneMultiplier(zoneId);
 
       // Calculate combined multiplier (capped at maxSurgeMultiplier)
-      const combinedMultiplier = Math.min(
-        weatherMultiplier * trafficMultiplier * demandMultiplier * timeMultiplier * zoneMultiplier,
-        3.0 // Max surge multiplier
-      );
+-      const combinedMultiplier = Math.min(
+-        weatherMultiplier * trafficMultiplier * demandMultiplier * timeMultiplier * zoneMultiplier,
+-        3.0 // Max surge multiplier
+-      );
++      // Rapido-style upfront fare: disable surge; keep multipliers informational only
++      const combinedMultiplier = 1.0;
 
       // Resolve per-km rate by vehicle type when provided
       const resolvedPerKm = (ratePerKm != null && Number(ratePerKm) > 0)
@@ -53,16 +55,23 @@ class DynamicPricingService {
       const distancePrice = Number(
         (resolvedPerKm ? (distance * resolvedPerKm) : (basePrice + (distance * 5)))
       .toFixed(2));
-      const finalPrice = Number((distancePrice * combinedMultiplier).toFixed(2));
+-      const finalPrice = Number((distancePrice * combinedMultiplier).toFixed(2));
++      // Upfront fare equals base distance price; no surge applied
++      const finalPrice = Number(distancePrice.toFixed(2));
 
       // Save pricing data for analytics
       await this.savePricingData(location, {
         basePrice,
-        weatherMultiplier,
-        trafficMultiplier,
-        demandMultiplier,
-        timeMultiplier,
-        combinedMultiplier
+-        weatherMultiplier,
+-        trafficMultiplier,
+-        demandMultiplier,
+-        timeMultiplier,
+-        combinedMultiplier
++        weatherMultiplier,
++        trafficMultiplier,
++        demandMultiplier,
++        timeMultiplier,
++        combinedMultiplier
       });
 
       return {
@@ -70,10 +79,14 @@ class DynamicPricingService {
         finalPrice,
         surgeMultiplier: combinedMultiplier,
         factors: {
-          weather: weatherMultiplier > 1 ? 'Increased due to weather conditions' : 'Normal',
-          traffic: trafficMultiplier > 1 ? 'Increased due to traffic conditions' : 'Normal',
-          demand: demandMultiplier > 1 ? 'Increased due to high demand' : 'Normal',
-          time: timeMultiplier > 1 ? 'Increased due to peak hours' : 'Normal'
+-          weather: weatherMultiplier > 1 ? 'Increased due to weather conditions' : 'Normal',
+-          traffic: trafficMultiplier > 1 ? 'Increased due to traffic conditions' : 'Normal',
+-          demand: demandMultiplier > 1 ? 'Increased due to high demand' : 'Normal',
+-          time: timeMultiplier > 1 ? 'Increased due to peak hours' : 'Normal'
++          weather: 'Normal',
++          traffic: 'Normal',
++          demand: 'Normal',
++          time: 'Normal'
         }
       };
     } catch (error) {

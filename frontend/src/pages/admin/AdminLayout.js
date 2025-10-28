@@ -7,8 +7,8 @@ export default function AdminLayout() {
   const [tab, setTab] = useState("overview");
 
   return (
-    <Box display="flex" minHeight="100vh">
-      <Paper elevation={3} sx={{ width: 240, p: 2 }}>
+    <Box className="admin-layout" display="flex" minHeight="100vh">
+      <Paper elevation={3} className="admin-sidebar" sx={{ width: 240, p: 2 }}>
         <AdminSidebar />
       </Paper>
       <Box flex={1} p={3}>

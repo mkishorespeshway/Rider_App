@@ -54,7 +54,7 @@ export default function HistoryRider() {
         const data = res?.data?.rides || res?.data || [];
         setRides(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.error("HistoryRider fetch error:", err);
+        console.warn("HistoryRider warning:", err);
         setError("Failed to load history");
       } finally {
         setLoading(false);
@@ -208,13 +208,13 @@ export default function HistoryRider() {
                   <Typography sx={{ fontWeight: 600 }}>Payment</Typography>
                 </Box>
                 <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.5 }}>
-                  Status: {r.payment?.status || (r.paymentStatus ? (r.paymentStatus === 'completed' ? 'Paid' : 'Pending') : 'Not available')}
+                  Status: {r.payment?.status ? (r.payment.status === 'success' ? 'Paid' : (r.payment.status === 'initiated' ? 'Initiated' : r.payment.status)) : (r.paymentStatus ? (r.paymentStatus === 'completed' ? 'Paid' : 'Pending') : 'Not available')}
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
                   Method: {r.paymentMethod ? (r.detailedPaymentMethod ? `${r.paymentMethod} (${r.detailedPaymentMethod})` : r.paymentMethod) : (r.payment?.provider || '—')}
                 </Typography>
                 <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                  Amount: {r.payment?.amount != null ? `₹${r.payment.amount}` : (r.finalPrice != null ? `₹${Number(r.finalPrice).toFixed(2)}` : "—")}
+                  Amount: {r.payment?.amount != null ? `₹${Number(r.payment.amount).toFixed(2)}` : (r.finalPrice != null ? `₹${Number(r.finalPrice).toFixed(2)}` : "—")}
                 </Typography>
               </Grid>
               <Grid item xs={12} sm={4}>

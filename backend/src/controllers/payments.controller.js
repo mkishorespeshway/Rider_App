@@ -25,89 +25,114 @@ exports.merchant = async (req, res) => {
 
 exports.initiate = async (req, res, next) => {
   try {
-    const { rideId, amount, method = 'upi', currency = 'INR' } = req.body;
-    if (!rideId || !amount) {
-      return res.status(400).json({ ok: false, message: 'rideId and amount are required' });
-    }
-    // Enforce LIVE payments only
-    const keyId = process.env.RAZORPAY_KEY_ID || null;
-    if (!keyId || isMockMode || isTestKey) {
-      return res.status(400).json({ ok: false, message: 'Live payments disabled: configure LIVE Razorpay keys.' });
-    }
-
-    // Create Razorpay order
-    const order = await createOrder({ rideId, amount, currency });
-
-    // Persist initial payment record
-    await Payment.create({
-      rideId,
-      amount,
-      currency,
-      provider: 'razorpay',
-      method,
-      status: 'initiated',
-      orderId: order.id,
-    });
-
-    return res.json({ ok: true, order, key: process.env.RAZORPAY_KEY_ID || null });
+-    const { rideId, amount, method = 'upi', currency = 'INR' } = req.body;
+-    if (!rideId || !amount) {
+-      return res.status(400).json({ ok: false, message: 'rideId and amount are required' });
+-    }
++    const { rideId, method = 'upi', currency = 'INR' } = req.body;
++    if (!rideId) {
++      return res.status(400).json({ ok: false, message: 'rideId is required' });
++    }
++    const ride = await Ride.findById(rideId);
++    const amount = Number(ride?.finalPrice || 0);
++    if (!Number.isFinite(amount) || amount <= 0) {
++      return res.status(400).json({ ok: false, message: 'Invalid ride amount' });
++    }
+     // Enforce LIVE payments only
+     const keyId = process.env.RAZORPAY_KEY_ID || null;
+     if (!keyId || isMockMode || isTestKey) {
+       return res.status(400).json({ ok: false, message: 'Live payments disabled: configure LIVE Razorpay keys.' });
+     }
+ 
+     // Create Razorpay order
+     const order = await createOrder({ rideId, amount, currency });
+ 
+     // Persist initial payment record
+     await Payment.create({
+       rideId,
+       amount,
+       currency,
+       provider: 'razorpay',
+       method,
+       status: 'initiated',
+       orderId: order.id,
+     });
+ 
+     return res.json({ ok: true, order, key: process.env.RAZORPAY_KEY_ID || null });
   } catch (err) {
-    next(err);
+     next(err);
   }
 };
 
 // Mark payment as completed via Cash (COD)
 exports.cash = async (req, res, next) => {
   try {
-    const { rideId, amount } = req.body;
-    if (!rideId) {
-      return res.status(400).json({ ok: false, message: 'rideId is required' });
-    }
-
-    // Update ride payment status and method
-    await Ride.findByIdAndUpdate(rideId, {
-      $set: { paymentStatus: 'completed', paymentMethod: 'COD', detailedPaymentMethod: '' }
-    });
-
-    // Record a payment entry for audit purposes
-    if (amount) {
-      await Payment.create({
-        rideId,
-        amount,
-        currency: 'INR',
-        provider: 'cash',
-        method: 'upi', // schema requires enum; store 'upi' as default even for cash
-        status: 'success',
-        orderId: `cash-${rideId}-${Date.now()}`,
-      });
-    }
-
-    // For cash payments: deduct 10% admin commission from rider wallet
-    try {
-      const ride = await Ride.findById(rideId);
-      const gross = Number(amount || ride?.finalPrice || 0);
-      const adminShare = Math.round(gross * 0.10);
-      const riderUserId = ride?.driverId || ride?.captainId || null;
-      if (riderUserId && adminShare > 0) {
-        let wallet = await Wallet.findOne({ riderId: riderUserId });
-        if (!wallet) wallet = await Wallet.create({ riderId: riderUserId, balance: 0, lockedBalance: 0, bankDetails: {} });
-        // Allow negative balance to reflect dues; UI will prompt recharge beyond threshold
-        wallet.balance = Number(wallet.balance || 0) - adminShare;
-        await wallet.save();
-        await WalletTransaction.create({
-          riderId: riderUserId,
-          type: 'debit',
-          amount: adminShare,
-          description: 'Admin commission (cash) 10% deducted',
-          meta: { rideId, gross }
-        });
-      }
-    } catch (walletErr) {
-      console.error('Wallet debit error (cash):', walletErr.message);
-    }
-
-    return res.json({ ok: true });
+-    const { rideId, amount } = req.body;
++    const { rideId } = req.body;
+     if (!rideId) {
+       return res.status(400).json({ ok: false, message: 'rideId is required' });
+     }
+ 
+     // Update ride payment status and method
+-    await Ride.findByIdAndUpdate(rideId, {
++    await Ride.findByIdAndUpdate(rideId, {
+       $set: { paymentStatus: 'completed', paymentMethod: 'COD', detailedPaymentMethod: '' }
+     });
+ 
+-    // Record a payment entry for audit purposes
+-    if (amount) {
+-      await Payment.create({
+-        rideId,
+-        amount,
+-        currency: 'INR',
+-        provider: 'cash',
+-        method: 'upi', // schema requires enum; store 'upi' as default even for cash
+-        status: 'success',
+-        orderId: `cash-${rideId}-${Date.now()}`,
+-      });
+-    }
++    // Record a payment entry for audit purposes using locked finalPrice
++    const rideDoc = await Ride.findById(rideId);
++    const grossCash = Number(rideDoc?.finalPrice || 0);
++    await Payment.create({
++      rideId,
++      amount: grossCash,
++      currency: 'INR',
++      provider: 'cash',
++      method: 'upi', // schema requires enum; store 'upi' as default even for cash
++      status: 'success',
++      orderId: `cash-${rideId}-${Date.now()}`,
++    });
+ 
+     // For cash payments: deduct 10% admin commission from rider wallet
+     try {
+-      const ride = await Ride.findById(rideId);
+-      const gross = Number(amount || ride?.finalPrice || 0);
++      const ride = rideDoc || await Ride.findById(rideId);
++      const gross = Number(ride?.finalPrice || 0);
+       const adminShare = Math.round(gross * 0.10);
+       const riderUserId = ride?.driverId || ride?.captainId || null;
+       if (riderUserId && adminShare > 0) {
+         let wallet = await Wallet.findOne({ riderId: riderUserId });
+         if (!wallet) wallet = await Wallet.create({ riderId: riderUserId, balance: 0, lockedBalance: 0, bankDetails: {} });
+         // Allow negative balance to reflect dues; UI will prompt recharge beyond threshold
+         wallet.balance = Number(wallet.balance || 0) - adminShare;
+         await wallet.save();
+         await WalletTransaction.create({
+           riderId: riderUserId,
+           type: 'debit',
+           amount: adminShare,
+           description: 'Admin commission (cash) 10% deducted',
+           meta: { rideId, gross }
+         });
+       }
+     } catch (walletErr) {
+       console.error('Wallet debit error (cash):', walletErr.message);
+     }
+ 
+     return res.json({ ok: true });
   } catch (err) {
-    next(err);
+     next(err);
   }
 };
 
@@ -169,61 +194,64 @@ exports.verify = async (req, res, next) => {
 // This is useful for flows like UPI intent/collect where the rider confirms completion.
 exports.manualOnline = async (req, res, next) => {
   try {
-    const { rideId, amount } = req.body;
-    if (!rideId) {
-      return res.status(400).json({ ok: false, message: 'rideId is required' });
-    }
-
-    // Update ride payment status and method
-    const ride = await Ride.findByIdAndUpdate(
-      rideId,
-      { $set: { paymentStatus: 'completed', paymentMethod: 'online', detailedPaymentMethod: 'upi' } },
-      { new: true }
-    );
-
-    // Record a payment entry for audit purposes
-    try {
-      const gross = Number(amount || ride?.finalPrice || 0);
-      await Payment.create({
-        rideId,
-        amount: gross,
-        currency: 'INR',
-        provider: 'manual',
-        method: 'upi',
-        status: 'success',
-        orderId: `manual-${rideId}-${Date.now()}`,
-      });
-    } catch (pErr) {
-      console.warn('Manual online payment record error:', pErr.message);
-    }
-
-    // Credit rider wallet with 90% (admin 10% cut)
-    try {
-      const gross = Number(amount || ride?.finalPrice || 0);
-      const adminShare = Math.round(gross * 0.10);
-      const riderShare = gross - adminShare;
-      const riderUserId = ride?.driverId || ride?.captainId || null;
-      if (riderUserId && riderShare > 0) {
-        let wallet = await Wallet.findOne({ riderId: riderUserId });
-        if (!wallet) wallet = await Wallet.create({ riderId: riderUserId, balance: 0, lockedBalance: 0, bankDetails: {} });
-        wallet.balance += riderShare;
-        await wallet.save();
-        await WalletTransaction.create({
-          riderId: riderUserId,
-          type: 'credit',
-          amount: riderShare,
-          description: 'Ride earning (manual online) after 10% admin cut',
-          meta: { rideId, gross, adminShare }
-        });
-      }
-    } catch (walletErr) {
-      console.error('Wallet credit error (manual online):', walletErr.message);
-    }
-
-    return res.json({ ok: true, ride });
+-    const { rideId, amount } = req.body;
++    const { rideId } = req.body;
+     if (!rideId) {
+       return res.status(400).json({ ok: false, message: 'rideId is required' });
+     }
+ 
+     // Update ride payment status and method
+-    const ride = await Ride.findByIdAndUpdate(
++    const ride = await Ride.findByIdAndUpdate(
+       rideId,
+       { $set: { paymentStatus: 'completed', paymentMethod: 'online', detailedPaymentMethod: 'upi' } },
+       { new: true }
+     );
+ 
+     // Record a payment entry for audit purposes
+     try {
+-      const gross = Number(amount || ride?.finalPrice || 0);
++      const gross = Number(ride?.finalPrice || 0);
+       await Payment.create({
+         rideId,
+         amount: gross,
+         currency: 'INR',
+         provider: 'manual',
+         method: 'upi',
+         status: 'success',
+         orderId: `manual-${rideId}-${Date.now()}`,
+       });
+     } catch (pErr) {
+       console.warn('Manual online payment record error:', pErr.message);
+     }
+ 
+     // Credit rider wallet with 90% (admin 10% cut)
+     try {
+-      const gross = Number(amount || ride?.finalPrice || 0);
++      const gross = Number(ride?.finalPrice || 0);
+       const adminShare = Math.round(gross * 0.10);
+       const riderShare = gross - adminShare;
+       const riderUserId = ride?.driverId || ride?.captainId || null;
+       if (riderUserId && riderShare > 0) {
+         let wallet = await Wallet.findOne({ riderId: riderUserId });
+         if (!wallet) wallet = await Wallet.create({ riderId: riderUserId, balance: 0, lockedBalance: 0, bankDetails: {} });
+         wallet.balance += riderShare;
+         await wallet.save();
+         await WalletTransaction.create({
+           riderId: riderUserId,
+           type: 'credit',
+           amount: riderShare,
+           description: 'Ride earning (online) after 10% admin cut',
+           meta: { rideId, gross, adminShare }
+         });
+       }
+     } catch (pErr) {
+       console.error('Wallet credit error (online):', pErr.message);
+     }
+ 
+     return res.json({ ok: true });
   } catch (err) {
-    console.error('Manual online confirm error:', err.message);
-    return res.status(500).json({ ok: false, message: 'Server error' });
+     next(err);
   }
 };
 

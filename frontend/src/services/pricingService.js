@@ -20,7 +20,7 @@ const PricingService = {
       
       return response.data;
     } catch (error) {
-      console.error('Error calculating price:', error);
+      console.warn('Price calculation warning:', error);
       throw error;
     }
   },
@@ -36,7 +36,7 @@ const PricingService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Error getting pricing factors:', error);
+      console.warn('Pricing factors warning:', error);
       throw error;
     }
   }

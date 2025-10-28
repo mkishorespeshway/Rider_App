@@ -54,6 +54,16 @@ io.on("connection", (socket) => {
     socket.join(userId);
   });
 
+  // ✅ Register rider into vehicle-specific room for targeted ride requests
+  socket.on("registerRiderVehicleType", (vehicleType) => {
+    const vType = String(vehicleType || "").trim().toLowerCase();
+    if (vType) {
+      const roomName = `vehicle:${vType}`;
+      socket.join(roomName);
+      console.log(`🚗 Rider joined vehicle room: ${roomName} (socket: ${socket.id})`);
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("❌ Socket disconnected:", socket.id);
   });

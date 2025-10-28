@@ -252,7 +252,7 @@ const BookRide = () => {
             </div>
           </div>
           
-          {/* Detailed Online Payment Options - Rapido Style */}
+          {/* Detailed Online Payment Options - Mobile Style */}
           {showDetailedPayments && (
             <div className="mt-4 border-t border-indigo-200 pt-4">
               <h4 className="font-medium text-sm mb-3 text-indigo-700">Choose Payment Option</h4>

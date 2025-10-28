@@ -3,8 +3,10 @@ import {
   Container, Paper, Typography, TextField, Box,
   Button, Drawer, CircularProgress, ListItemButton,
   FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, Chip, Avatar,
-  Dialog, DialogTitle, DialogContent, DialogActions
+  Dialog, DialogTitle, DialogContent, DialogActions, Grid, InputAdornment
 } from "@mui/material";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import FlagIcon from "@mui/icons-material/Flag";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -15,6 +17,7 @@ import DynamicPricingDisplay from "../components/DynamicPricingDisplay.jsx";
 // import { initiatePayment, verifyPayment } from "../services/api";
 import PricingService from "../services/pricingService";
 import SOSButton from "../components/SOSButton";
+import "../theme.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
   const API_URL = `${API_BASE}/api`;
@@ -245,7 +248,7 @@ export default function Booking() {
         const addr = await getAddressFromCoords(loc.lat, loc.lng);
         setPickupAddress(addr);
       },
-      (err) => console.error("Geolocation error:", err.message)
+      (err) => console.warn("Geolocation warning:", err?.message || err)
     );
   }, [mapOnlyView, auth]);
 
@@ -345,7 +348,7 @@ export default function Booking() {
         }
       );
     } catch (err) {
-      console.error("Pickup place details failed:", err);
+      console.warn("Pickup place details warning:", err);
     }
   };
 
@@ -372,9 +375,34 @@ export default function Booking() {
         }
       );
     } catch (err) {
-      console.error("Drop place details failed:", err);
+      console.warn("Drop place details warning:", err);
     }
   };
+
+  // Allow changing pickup/drop before OTP; persist to backend
+  useEffect(() => {
+    if (!createdRide || !createdRide._id) return;
+    const st = String(createdRide.status || '').toLowerCase();
+    if (st === 'in_progress' || st === 'completed' || st === 'cancelled') return;
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        await axios.post(
+          `${API_URL}/rides/${createdRide._id}/update-details`,
+          {
+            pickupAddress,
+            dropAddress,
+            pickupCoords: pickup,
+            dropCoords: drop,
+          },
+          { headers: { Authorization: `Bearer ${auth?.token}` }, signal: controller.signal }
+        );
+      } catch (e) {
+        try { console.warn('update-details warning:', e?.response?.data || e?.message || e); } catch {}
+      }
+    }, 400);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [pickupAddress, dropAddress, pickup, drop]);
 
   // 🚖 Update ride options dynamically
   useEffect(() => {
@@ -416,7 +444,7 @@ export default function Booking() {
             return m ? parseInt(m[1], 10) : null;
           };
           const curMins = parseMinsLocal(duration || "");
-          const normMins = parseMinsLocal(normalDuration || currentEta);
+          const normMins = parseMinsLocal(normalDuration || duration);
           if (curMins && normMins && normMins > 0) {
             const ratio = curMins / normMins;
             const durAdj = Math.max(1, 1 + (ratio - 1) * 0.6); // scale impact to avoid extreme surges
@@ -427,7 +455,7 @@ export default function Booking() {
           setZoneFactors(combined);
         }
       } catch (err) {
-        console.error("Failed to fetch pricing factors:", err);
+        console.warn("Pricing factors fetch warning:", err);
       }
     };
     fetchFactors();
@@ -516,6 +544,16 @@ export default function Booking() {
       const resp = await axios.get(`${API_URL}/rides/${rideId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
       const ride = resp.data?.ride;
       if (!ride) return false;
+
+      // If already paid, clear lock and do NOT show the prompt
+      const ps = ride?.payment?.status || ride?.paymentStatus || null;
+      if (ps === "success" || ps === "completed" || ps === "paid") {
+        try { localStorage.removeItem(`unpaid:${rideId}`); } catch {}
+        setShowPaymentPrompt(false);
+        setCreatedRide(ride);
+        return false;
+      }
+
       setCreatedRide(ride);
       const computedAmount = (ride.finalPrice != null) ? Number(ride.finalPrice) : null;
       setPaymentAmount(computedAmount);
@@ -555,35 +593,20 @@ export default function Booking() {
       return;
     }
     try {
-      // 🚫 Block new booking if there is any unpaid completed ride
-      try {
-        const unpaidKeys = Object.keys(localStorage).filter(k => k.startsWith('unpaid:'));
-        if (unpaidKeys.length > 0) {
-          const opened = await openPaymentPromptForUnpaidRide();
-          if (!opened) {
-            alert("Payment pending for previous ride. Please pay before booking another.");
-          }
-          return;
-        }
-      } catch {}
-      // 🚫 Client-side guard: only one active ride per user
+      // ✅ Allow booking even if a previous active ride exists (Uber-like behavior)
       const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
-      const existingId = localStorage.getItem(activeKey);
-      if (existingId) {
-        try {
+      try {
+        const existingId = localStorage.getItem(activeKey);
+        // If a stale active ride ID is hanging around, clear it and proceed
+        if (existingId) {
           const chk = await axios.get(`${API_URL}/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
           const st = chk.data?.ride?.status;
-          if (st && st !== 'completed' && st !== 'cancelled') {
-            alert("You already have an active ride. Please complete it before booking another.");
-            return;
-          } else {
+          if (!st || st === 'completed' || st === 'cancelled') {
             localStorage.removeItem(activeKey);
           }
-        } catch {
-          // If status can't be verified, be conservative and block
-          alert("You already have an active ride. Please complete it before booking another.");
-          return;
         }
+      } catch {
+        // Silently continue — do not block new booking
       }
       // Always use backend dynamic pricing before creating the ride
       const distanceKm = parseFloat(distance);
@@ -635,7 +658,7 @@ export default function Booking() {
       socket.emit("newRide", ride);
       setDrawerOpen(true);
     } catch (err) {
-      console.error("Failed to create ride request:", err);
+      console.warn("Ride request warning:", err);
       const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to create ride request";
       if (msg === "Invalid token" || msg === "Authorization token missing") {
         alert("Session expired. Please log in again.");
@@ -862,8 +885,6 @@ export default function Booking() {
         const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
         const rideId = localStorage.getItem(activeKey);
         if (rideId) {
-          // Keep an unpaid lock to block next booking until payment
-          localStorage.setItem(`unpaid:${rideId}`, "true");
           // Clear per-ride OTP when completed; it will be shown until rider starts
           localStorage.removeItem(`rideOtp:${rideId}`);
         }
@@ -898,8 +919,27 @@ export default function Booking() {
     };
   }, []);
 
+  // Re-check payment status when the prompt is visible; auto-hide if already paid
+  useEffect(() => {
+    if (!showPaymentPrompt) return;
+    (async () => {
+      try {
+        const unpaidKeys = Object.keys(localStorage).filter((k) => k.startsWith("unpaid:"));
+        const rideId = (createdRide?._id) || (unpaidKeys.length ? unpaidKeys[0].split(":")[1] : null);
+        if (!rideId) return;
+        const resp = await axios.get(`${API_URL}/rides/${rideId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+        const ride = resp.data?.ride;
+        const ps = ride?.payment?.status || ride?.paymentStatus || null;
+        if (ps === "success" || ps === "completed" || ps === "paid") {
+          setShowPaymentPrompt(false);
+          try { localStorage.removeItem(`unpaid:${rideId}`); } catch {}
+        }
+      } catch {}
+    })();
+  }, [showPaymentPrompt, createdRide, auth]);
+
   return (
-    <Container maxWidth="xl" sx={{ mt: 3 }}>
+    <Container maxWidth="xl" sx={{ mt: 3 }} className="booking-page">
       {/* 🚨 SOS Button (fixed position) */}
       <SOSButton role="user" />
 
@@ -915,6 +955,30 @@ export default function Booking() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setServiceLimitOpen(false)} variant="contained">OK</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Searching modal (Rapido-style popup) */}
+      <Dialog open={lookingForRider} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 'bold' }}>Finding a nearby captain…</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 2 }}>
+            <CircularProgress />
+            <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }}>
+              We’re matching you with the best nearby rider.
+            </Typography>
+            {pickupAddress && dropAddress && (
+              <Box sx={{ mt: 2, width: '100%' }}>
+                <Typography variant="caption">Pickup</Typography>
+                <Typography variant="body2" sx={{ mb: 1 }}>{pickupAddress}</Typography>
+                <Typography variant="caption">Drop</Typography>
+                <Typography variant="body2">{dropAddress}</Typography>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLookingForRider(false)}>Cancel</Button>
         </DialogActions>
       </Dialog>
 
@@ -955,10 +1019,10 @@ export default function Booking() {
           </Button>
         </Box>
       )}
-      <Box sx={{ display: "grid", gridTemplateColumns: mapOnlyView ? "1fr" : "1fr 2fr", gap: 2 }}>
+      <Box className="booking-grid" sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: mapOnlyView ? "1fr" : "1fr 2fr" }, gap: 2 }}>
         {/* Left panel (hidden after OTP verification) */}
         {!mapOnlyView && (
-        <Paper sx={{ p: 3, borderRadius: 2 }}>
+        <Paper className="booking-form" sx={{ p: 3, borderRadius: 2 }}>
           {assignedRider && riderPanelOpen ? (
             <>
               {acceptBannerOpen && (
@@ -1005,7 +1069,7 @@ export default function Booking() {
                 })()}
               </Typography>
               <Typography>
-                <b>Fare:</b>{" "}
+                <b>Upfront Fare:</b>{" "}
                 {createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0
                   ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
                   : (rideOptions.find((r) => r.id === selectedRide)?.price || "—")}
@@ -1025,22 +1089,30 @@ export default function Booking() {
             </>
           ) : (
             <>
-              <Typography variant="h6" sx={{ mb: 2 }}>Find a trip</Typography>
+              <Typography variant="h6" sx={{ mb: 2 }}> Rider App!</Typography>
 
               {/* ✅ Pickup Input with Suggestions */}
               <TextField
+                className="booking-input"
                 fullWidth
-                label="Pickup Address"
+                label="Enter Pickup Location"
                 value={pickupAddress}
                 onChange={(e) => {
                   setPickupAddress(e.target.value);
                   fetchSuggestions(e.target.value, setPickupSuggestions, pickup);
                 }}
                 sx={{ mb: 1 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <LocationOnIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
               />
               {pickupSuggestions.map((s, i) => (
                 <ListItemButton
-                  key={i}
+                  key={`m-pu-${i}`}
                   onClick={() => handlePickupSelect(s.place_id, s.description)}
                 >
                   {s.description}
@@ -1049,39 +1121,110 @@ export default function Booking() {
 
               {/* ✅ Drop Input with Suggestions */}
               <TextField
+                className="booking-input"
                 fullWidth
-                label="Drop Address"
+                label="Enter Drop Location"
                 value={dropAddress}
                 onChange={(e) => {
                   setDropAddress(e.target.value);
                   fetchSuggestions(e.target.value, setDropSuggestions, pickup);
                 }}
                 sx={{ mb: 1 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <FlagIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
               />
               {dropSuggestions.map((s, i) => (
                 <ListItemButton
-                  key={i}
+                  key={`m-dr-${i}`}
                   onClick={() => handleDropSelect(s.place_id, s.description)}
                 >
                   {s.description}
                 </ListItemButton>
               ))}
 
-              <Button
-                fullWidth
-                variant="contained"
-                sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" }, mt: 2 }}
-                onClick={handleFindRiders}
-              >
-                Find Riders
-              </Button>
+              {pickup && drop && distance ? (
+                <>
+                  <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, borderRadius: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <LocationOnIcon fontSize="small" color="error" />
+                      <Typography variant="body2" noWrap>{pickupAddress}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                      <FlagIcon fontSize="small" color="success" />
+                      <Typography variant="body2" noWrap>{dropAddress}</Typography>
+                    </Box>
+                  </Paper>
+
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    Select service
+                  </Typography>
+                  <Box>
+                    {rideOptions.filter((opt) => opt.id !== 'parcel').map((opt) => {
+                      const num = Number(String(opt.price).replace(/[^0-9.]/g, ''));
+                      const hasPrice = Number.isFinite(num) && num > 0;
+                      const min = hasPrice ? Math.round(num * 0.9) : null;
+                      const max = hasPrice ? Math.round(num * 1.12) : null;
+                      return (
+                        <ListItemButton
+                          key={`svc-mobile-${opt.id}`}
+                          selected={selectedRide === opt.id}
+                          onClick={() => setSelectedRide(opt.id)}
+                          sx={{ border: selectedRide === opt.id ? '2px solid #1E3A8A' : '1px solid #000', borderRadius: 2, mb: 1, bgcolor: selectedRide === opt.id ? '#E8EDFF' : undefined }}
+                        >
+                          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                              <span style={{ fontSize: 18 }}>{opt.icon}</span>
+                              <Typography variant="body2" sx={{ fontWeight: selectedRide === opt.id ? 'bold' : 'normal', color: selectedRide === opt.id ? '#1E3A8A' : 'inherit' }}>
+                                {opt.name.replace(/ • .*$/, '')}
+                              </Typography>
+                            </Box>
+                            <Typography variant="body2" sx={{ color: '#1E3A8A' }}>{selectedRide === opt.id && createdRide?.finalPrice != null ? `₹ ${Number(createdRide.finalPrice).toFixed(2)}` : opt.price}</Typography>
+                          </Box>
+                        </ListItemButton>
+                      );
+                    })}
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                      <Chip size="small" label="Cash" variant="outlined" sx={{ borderColor: '#000', color: '#000' }} />
+                    </Box>
+                  </Box>
+
+                  <Button
+                    className="booking-blue-btn"
+                    fullWidth
+                    variant="contained"
+                    onClick={handleFindRiders}
+                    sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' } }}
+                  >
+                    Continue Booking
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  className="booking-blue-btn"
+                  fullWidth
+                  variant="contained"
+                  onClick={handleFindRiders}
+                  sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' } }}
+                >
+                  Book Ride
+                </Button>
+              )}
             </>
           )}
         </Paper>
         )}
 
-        {/* Right panel (Map) */}
-        <Paper sx={{ p: 1, borderRadius: 2 }} ref={mapPanelRef}>
+        {/* Map panel */}
+        <Paper
+          className="booking-map"
+          sx={{ display: 'block', p: 1, borderRadius: 2, height: { xs: '60vh', md: '70vh' }, width: '100%' }}
+          ref={mapPanelRef}
+        >
           <MapComponent
             apiKey={GOOGLE_API_KEY}
             pickup={pickup}
@@ -1103,7 +1246,6 @@ export default function Booking() {
             rideStarted={mapOnlyView}
             vehicleType={assignedRider?.vehicleType || assignedRider?.vehicle?.type}
             vehicleImage={assignedRider?.vehicle?.images?.[0] || assignedRider?.vehicleImage}
-
           />
         </Paper>
       </Box>
@@ -1133,33 +1275,14 @@ export default function Booking() {
                   {opt.icon ? `${opt.icon} ` : ""}{opt.name}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {opt.eta} • {(opt.meta?.km ?? distance) || "—"} km
+                  Pickup ETA: {opt.eta} • Drop time: {duration || opt.meta?.duration || "—"}
                 </Typography>
-                {/* breakdown block */}
-                {opt.meta?.breakdown && (
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="body2">Base Fare: ₹{opt.meta.breakdown.base.toFixed(2)}</Typography>
-                    <Typography variant="body2">+ Traffic: ₹{opt.meta.breakdown.trafficAdd.toFixed(2)}</Typography>
-                    <Typography variant="body2">+ Weather: ₹{opt.meta.breakdown.weatherAdd.toFixed(2)}</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: "bold", mt: 0.5 }}>Total: ₹{opt.meta.breakdown.total.toFixed(2)}</Typography>
-                  </Box>
-                )}
               </Box>
-              <Typography variant="h6" sx={{ fontWeight: "bold", color: "black" }}>{opt.price}</Typography>
+              <Typography variant="h6" sx={{ fontWeight: "bold", color: "#1E3A8A" }}>{selectedRide === opt.id && createdRide?.finalPrice != null ? `₹${Number(createdRide.finalPrice).toFixed(2)}` : opt.price}</Typography>
             </Box>
           ))}
           {/* Price details based on traffic/weather conditions */}
-          {distance && pickup && drop && (
-            <Box sx={{ mt: 2 }}>
-              <DynamicPricingDisplay
-                pickup={{ latitude: pickup.lat || pickup.latitude, longitude: pickup.lng || pickup.longitude }}
-                destination={{ latitude: drop.lat || drop.latitude, longitude: drop.lng || drop.longitude }}
-                distance={parseFloat(distance)}
-                durationMins={parseMins(duration)}
-                normalDurationMins={parseMins(normalDuration || duration)}
-              />
-            </Box>
-          )}
+          {/* Pricing panel removed per request */}
           {/* Payment Method Selection */}
           <Box sx={{ border: "1px solid #e0e0e0", borderRadius: 2, p: 2, mb: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>Payment Method</Typography>
@@ -1186,7 +1309,7 @@ export default function Booking() {
                   <Chip
                     label={`Selected: ${(() => {
                       const labels = {
-                        rapido_wallet: "Rapido Wallet",
+                        wallet: "Wallet",
                         amazon_pay: "Amazon Pay",
                         upi_gpay: "GPay",
                         upi_phonepe: "PhonePe",
@@ -1209,10 +1332,10 @@ export default function Booking() {
                 <Typography variant="subtitle2" sx={{ fontWeight: "bold", mt: 1 }}>Wallets</Typography>
                 <Box sx={{ display: "flex", flexDirection: "column" }}>
                   <ListItemButton
-                    selected={selectedPaymentOption === "rapido_wallet"}
-                    onClick={() => setSelectedPaymentOption("rapido_wallet")}
+                    selected={selectedPaymentOption === "wallet"}
+                    onClick={() => setSelectedPaymentOption("wallet")}
                   >
-                    Rapido Wallet
+                    Wallet
                   </ListItemButton>
                   <ListItemButton
                     selected={selectedPaymentOption === "amazon_pay"}
@@ -1286,10 +1409,7 @@ export default function Booking() {
           </Box>
 
           {lookingForRider ? (
-            <Box textAlign="center" sx={{ my: 3 }}>
-              <CircularProgress />
-              <Typography variant="body1" sx={{ mt: 2 }}>⏳ Looking for riders...</Typography>
-            </Box>
+            <></>
           ) : (
             <Button variant="contained" fullWidth sx={{ mt: 2 }}
               onClick={handleRequestRide} disabled={!selectedRide || !createdRide}>
@@ -1338,7 +1458,7 @@ export default function Booking() {
               </Typography>
 
             <Typography>
-              <b>Fare:</b>{" "}
+              <b>Upfront Fare:</b>{" "}
               {createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0
                 ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
                 : (rideOptions.find((r) => r.id === selectedRide)?.price || "—")}
@@ -1399,12 +1519,6 @@ export default function Booking() {
           )}
         </Box>
       </Drawer>
-    {/* Rider details drawer disabled in favor of inline panel */}
-    <Drawer anchor="bottom" open={false} onClose={() => setRiderPanelOpen(false)}>
-      <Box sx={{ p: 3 }}>
-        {/* kept for compatibility; content migrated to inline panel */}
-      </Box>
-    </Drawer>
     </Container>
   );
 }

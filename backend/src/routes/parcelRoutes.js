@@ -131,6 +131,13 @@ router.post("/", upload.array("documents", 10), async (req, res) => {
     await parcel.save();
     console.log("✅ Parcel saved with _id:", parcel._id);
 
+    // 🚨 Broadcast parcel request to bike riders only (parcels are bike-only)
+    const io = req.app.get("io");
+    if (io) {
+      io.to("vehicle:bike").emit("parcelRequest", parcel);
+      console.log("📦 Parcel request broadcasted to bike riders");
+    }
+
     res.status(201).json({
       success: true,
       message: "Parcel created",
@@ -264,6 +271,14 @@ router.post('/:id/accept', authMiddleware, async (req, res) => {
     // Mark accepted; OTP will be set by user Activity page
     parcel.status = 'accepted';
     await parcel.save();
+
+    // 🚨 Broadcast parcelLocked to remove from other bike riders' lists
+    const io = req.app.get("io");
+    if (io) {
+      io.to("vehicle:bike").emit("parcelLocked", { parcelId: parcel._id });
+      console.log("🔒 Parcel locked, broadcasted to bike riders");
+    }
+
     res.json({ success: true, parcel });
   } catch (err) {
     console.error('Accept parcel error:', err);

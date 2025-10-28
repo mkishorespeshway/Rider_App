@@ -1,3 +1,115 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Black & White theme (mobile-first) */
+:root {
+  --bw-bg: #ffffff;
+  --bw-fg: #000000;
+  --bw-muted: #666666;
+  --bw-border: #1a1a1a;
+}
+
+/* Apply theme to body and root */
+.bw-theme, .bw-theme body {
+  background: var(--bw-bg);
+  color: var(--bw-fg);
+}
+
+/* General typography tweaks for mobile */
+@media (max-width: 600px) {
+  body { font-size: 15px; }
+}
+
+/* AppBar: black background + white text */
+.bw-theme .MuiAppBar-root {
+  background-color: #1976d2 !important;
+  color: #ffffff !important;
+}
+.bw-theme .MuiAppBar-root .MuiToolbar-root,
+.bw-theme .MuiAppBar-root .MuiTypography-root,
+.bw-theme .MuiAppBar-root .MuiIconButton-root {
+  color: #ffffff !important;
+}
+
+/* Default text should remain black on light surfaces */
+.bw-theme .MuiTypography-root { color: #000000 !important; }
+
+/* Paper: white surface + black text */
+.bw-theme .MuiPaper-root {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid var(--bw-border);
+  box-shadow: none !important;
+  border-radius: 12px;
+}
+
+/* Buttons: black background + white text */
+.bw-theme .MuiButton-root {
+  background-color: #1976d2 !important;
+  color: #ffffff !important;
+  border-radius: 10px;
+  min-height: 40px;
+}
+.bw-theme .MuiButton-root.MuiButton-outlined {
+  background-color: transparent !important;
+  color: #1976d2 !important;
+  border-color: #1976d2 !important;
+}
+
+/* Chips: black text, black border on white surface */
+.bw-theme .MuiChip-root {
+  color: #000000 !important;
+  border-color: #000000 !important;
+}
+
+/* Inputs */
+.bw-theme .MuiTextField-root .MuiInputBase-root,
+.bw-theme .MuiOutlinedInput-notchedOutline { border-color: #000000 !important; }
+.bw-theme .MuiInputLabel-root { color: var(--bw-muted) !important; }
+@media (max-width: 600px) {
+  .bw-theme .MuiInputBase-input { font-size: 16px; } /* prevent iOS zoom */
+}
+
+/* Tables */
+.bw-theme .MuiTableCell-root { border-color: var(--bw-border) !important; }
+.bw-theme .MuiTableContainer-root { overflow-x: auto; }
+
+/* Map container: mobile height */
+.map-fullscreen {
+  height: calc(100vh - 56px);
+  width: 100%;
+}
+
+/* Action bar for mobile */
+.action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #1976d2;
+  color: #ffffff;
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+/* Global mobile responsiveness */
+@media (max-width: 900px) {
+  .bw-theme .MuiContainer-root { padding-left: 12px !important; padding-right: 12px !important; }
+  .bw-theme .MuiContainer-maxWidthXl,
+  .bw-theme .MuiContainer-maxWidthLg,
+  .bw-theme .MuiContainer-maxWidthMd,
+  .bw-theme .MuiContainer-maxWidthSm,
+  .bw-theme .MuiContainer-maxWidthXs { max-width: 100% !important; }
+  .bw-theme .MuiButton-root { width: 100%; }
+  .bw-theme .MuiGrid-item { padding-top: 8px !important; padding-left: 8px !important; }
+  .bw-theme .app-main { padding: 12px !important; }
+}
+
+/* Admin layout stack on mobile */
+@media (max-width: 900px) {
+  .admin-layout { flex-direction: column !important; }
+  .admin-layout .admin-sidebar { width: 100% !important; margin-bottom: 12px; }
+}

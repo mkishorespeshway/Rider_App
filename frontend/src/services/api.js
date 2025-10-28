@@ -3,10 +3,8 @@ import axios from "axios";
 // Use env, default to backend on 5010
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 // Debug: surface the base URL in the browser console to verify env usage
-try {
-  console.log("[API] Base URL:", API_BASE);
-} catch {}
- 
+/* Debug log removed to keep console clean */
+
 const AUTH_API = axios.create({
   baseURL: `${API_BASE}/api/auth`,
   headers: { "Content-Type": "application/json" },
@@ -15,9 +13,7 @@ const OTP_API = axios.create({
   baseURL: `${API_BASE}/api/otp`,
   headers: { "Content-Type": "application/json" },
 });
-try {
-  console.log("[API] OTP baseURL:", OTP_API?.defaults?.baseURL);
-} catch {}
+/* Debug log removed to keep console clean */
 // ❌ removed "Content-Type" here, let browser decide
 const RIDER_API = axios.create({
   baseURL: `${API_BASE}/api/rider`,

@@ -65,7 +65,7 @@ export default function Parcel() {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
         }),
-      (err) => console.error("Geolocation error:", err)
+      (err) => console.warn("Geolocation warning:", err)
     );
   }, []);
 
@@ -77,7 +77,7 @@ export default function Parcel() {
       );
       return res.data.display_name || "";
     } catch (err) {
-      console.error("❌ Reverse geocode failed:", err);
+      console.warn("Reverse geocode warning:", err);
       return "";
     }
   };
@@ -112,7 +112,7 @@ export default function Parcel() {
       if (type === "pickup") setPickupSuggestions(res.data);
       if (type === "drop") setDropSuggestions(res.data);
     } catch (err) {
-      console.error("❌ Suggestion fetch failed:", err);
+      console.warn("Suggestion fetch warning:", err);
     }
   };
 
@@ -169,7 +169,7 @@ export default function Parcel() {
         },
       });
     } catch (err) {
-      console.error("❌ Error submitting parcel:", err?.response?.data || err.message);
+      console.warn("Error submitting parcel:", err?.response?.data || err.message);
       alert(err?.response?.data?.message || "Error submitting parcel!");
     }
   };
@@ -192,7 +192,7 @@ export default function Parcel() {
           setRoute(data.geometry.coordinates.map((c) => [c[1], c[0]]));
           setDistance((data.distance / 1000).toFixed(2)); // in km
         } catch (err) {
-          console.error("❌ Route fetch failed:", err);
+          console.warn("Route fetch warning:", err);
         }
       }
     };

@@ -22,7 +22,6 @@ import { getMerchantDetails, confirmOnlinePayment, markCashPayment } from "../..
  
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const API_URL = `${API_BASE}/api`;
-const SHOW_PARCELS_ON_DASHBOARD = false;
 
 const socket = io(API_BASE);
 
@@ -213,7 +212,6 @@ export default function RiderDashboard() {
 
   // Fetch parcels (recent)
   useEffect(() => {
-    if (!SHOW_PARCELS_ON_DASHBOARD) return;
     (async () => {
       try {
         const riderVehicleType = String(
@@ -235,9 +233,7 @@ export default function RiderDashboard() {
               }
             )
           : parcels;
-        // Hide completed parcels from dashboard; they appear in history
-        const visible = filtered.filter((p) => String(p?.status || "").toLowerCase() !== "completed");
-        setParcels(visible);
+        setParcels(filtered);
       } catch (err) {
         console.warn("Parcels fetch warning:", err);
       }
@@ -304,35 +300,11 @@ export default function RiderDashboard() {
       setRides((prev) => prev.filter((r) => String(r._id) !== String(rideId)));
     });
 
-    // Remove accepted parcels from other riders' lists
-    socket.on("parcelLocked", ({ parcelId }) => {
-      setParcels((prev) => prev.filter((p) => String(p._id) !== String(parcelId)));
-    });
-
-    // Listen for parcel requests (bike riders only)
-    const riderVehicleType = String(
-      auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
-    ).trim().toLowerCase();
-    if (riderVehicleType === "bike") {
-      socket.on("parcelRequest", (parcel) => {
-        console.log("📦 Received parcel request:", parcel);
-        // Add to parcels list if not already present
-        setParcels((prev) => {
-          const exists = prev.some((p) => p._id === parcel._id);
-          return exists ? prev : [parcel, ...prev];
-        });
-      });
-    } else {
-      socket.off("parcelRequest");
-    }
-
     return () => {
       socket.off("rideRequest");
       socket.off("rideAccepted");
       socket.off("rideRejected");
       socket.off("rideLocked");
-      socket.off("parcelLocked");
-      socket.off("parcelRequest");
     };
   }, [isOnline, riderLocation]);
 
@@ -493,20 +465,6 @@ export default function RiderDashboard() {
     }
   };
 
-  // View/select a parcel and sync map context
-  const handleViewParcel = (parcel) => {
-    try {
-      if (!parcel) return;
-      setSelectedParcel(parcel);
-      const p = parcel?.pickup || parcel?.pickupCoords;
-      const d = parcel?.drop || parcel?.dropCoords;
-      if (p) setPickup(p);
-      if (d) setDrop(d);
-    } catch (e) {
-      console.warn("handleViewParcel error:", e?.message || e);
-    }
-  };
-
   // Verify Parcel OTP
   const handleVerifyParcelOtp = async () => {
     if (!parcelOtp || parcelOtp.length !== 4) {
@@ -624,10 +582,10 @@ export default function RiderDashboard() {
     try {
       if (!selectedRide?._id) return;
       setConfirmingOnline(true);
-      await confirmOnlinePayment({ rideId: selectedRide._id });
+      const amount = Number(selectedRide?.finalPrice || selectedRide?.estimatedPrice || 0);
+      await confirmOnlinePayment({ rideId: selectedRide._id, amount });
       setPaymentMsg("Online payment confirmed.");
-      setSelectedRide(null);
-      navigate("/rider-dashboard");
+      setSelectedRide((prev) => ({ ...prev, paymentStatus: "completed", paymentMethod: "online" }));
     } catch (err) {
       console.warn("Confirm online payment warning:", err);
       alert("Failed to confirm online payment");
@@ -641,10 +599,10 @@ export default function RiderDashboard() {
     try {
       if (!selectedRide?._id) return;
       setConfirmingCash(true);
-      await markCashPayment({ rideId: selectedRide._id });
+      const amount = Number(selectedRide?.finalPrice || selectedRide?.estimatedPrice || 0);
+      await markCashPayment({ rideId: selectedRide._id, amount });
       setPaymentMsg("Cash payment confirmed.");
-      setSelectedRide(null);
-      navigate("/rider-dashboard");
+      setSelectedRide((prev) => ({ ...prev, paymentStatus: "completed", paymentMethod: "COD" }));
     } catch (err) {
       console.warn("Confirm cash payment warning:", err);
       alert("Failed to confirm cash payment");
@@ -690,24 +648,13 @@ export default function RiderDashboard() {
   }, [rides, riderLocation]);
 
   return (
-    // Blue header + white card layout to match login/register pages
-    <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0a3d62, #1266f1)' }}>
-      {/* Header with circular brand */}
-      <Box sx={{ height: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Box sx={{ width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 32, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
-          R
-        </Box>
-      </Box>
-
-      {/* White form/content card overlapping header */}
-      <Box sx={{ maxWidth: 980, mx: 'auto', px: 2 }}>
-        <Paper elevation={6} sx={{ p: 3, borderRadius: 3, mt: '-80px', background: '#fff' }}>
-          <Typography variant="h4" gutterBottom sx={{ fontWeight: 800, color: '#0a3d62' }}>
-            Rider Dashboard
-          </Typography>
+    <Box p={4}>
+      <Typography variant="h4" gutterBottom>
+        Rider Dashboard
+      </Typography>
  
-          <Button
-            variant="contained"
+      <Button
+        variant="contained"
         sx={{
           bgcolor: "black",
           color: "white",
@@ -961,10 +908,10 @@ export default function RiderDashboard() {
           <Typography variant="h5" gutterBottom>
             Pending Ride Requests
           </Typography>
-          {displayedRides.length === 0 ? (
+          {rides.length === 0 ? (
             <Typography>No pending rides</Typography>
           ) : (
-            displayedRides.map((ride) => (
+            rides.map((ride) => (
               <Card key={ride._id} sx={{ mb: 2 }}>
                 <CardContent>
                   <Typography>
@@ -996,14 +943,13 @@ export default function RiderDashboard() {
             ))
           )}
 
-{SHOW_PARCELS_ON_DASHBOARD ? (
           <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>
             Recent Parcels
           </Typography>
-          {parcels.filter(p => String(p.status || '').toLowerCase() !== 'completed').length === 0 ? (
+          {parcels.length === 0 ? (
             <Typography>No parcels</Typography>
           ) : (
-            parcels.filter(p => String(p.status || '').toLowerCase() !== 'completed').map((p) => (
+            parcels.map((p) => (
               <Card key={p._id} sx={{ mb: 2 }}>
                 <CardContent>
                   <Typography><b>Sender:</b> {p.senderName} ({p.senderMobile})</Typography>
@@ -1013,6 +959,7 @@ export default function RiderDashboard() {
                   <Typography><b>Drop:</b> {p.dropAddress}</Typography>
                   <Typography>Status: {p.status || 'pending'}</Typography>
                   <Box mt={2}>
+
                      {p.status === "pending" && (
                        <>
                          <Button variant="contained" color="success" sx={{ ml: 2 }} onClick={() => handleAcceptParcel(p._id)}>Accept</Button>
@@ -1024,7 +971,7 @@ export default function RiderDashboard() {
                          Verify OTP
                        </Button>
                      )}
-                     {p?.status === "in_progress" && Array.isArray(p?.documents) && p.documents.length > 0 && (p.documentsVisibleToRider !== false) && (String(p?.assignedRider?.id || '') === String(auth?.user?._id || '')) && (
+                     {p?.status === "in_progress" && Array.isArray(p?.documents) && p.documents.length > 0 && (p.documentsVisibleToRider !== false) && (
                        <>
                          <Button variant="outlined" sx={{ ml: 2 }} onClick={() => handleViewParcel(p)}>
                            View Documents
@@ -1042,7 +989,6 @@ export default function RiderDashboard() {
               </Card>
             ))
           )}
-        ) : null}
         </>
       )}
  
@@ -1117,12 +1063,11 @@ export default function RiderDashboard() {
   </DialogActions>
 </Dialog>
 
-        </Paper>
-      </Box>
     </Box>
   );
 }
  
+
 
 // Helper: sanitize URL strings coming from DB or user input
 const sanitizeUrl = (raw) => {
@@ -1140,111 +1085,7 @@ const sanitizeUrl = (raw) => {
 };
 
 // Helper: build Cloudinary attachment URL to force download
-// ... existing code ...
-
-// Trigger download for a single document
-const _handleDownloadDocLegacy = async (doc, idx) => {
-  const raw = String(doc?.url || "");
-  const url = sanitizeUrl(raw);
-  const filename = doc?.originalName || "document";
-  try {
-    // Prefer backend streaming endpoint to avoid Cloudinary auth/CORS issues
-    const hasSelected = typeof selectedParcel !== "undefined" && selectedParcel && selectedParcel._id != null;
-    if (hasSelected && Number.isInteger(idx)) {
-      try {
-        const dlRes = await axios.get(`${API_URL}/parcels/${selectedParcel._id}/documents/${idx}/download`, { responseType: "blob", headers: { Authorization: `Bearer ${auth?.token}` } });
-        const blob = new Blob([dlRes.data], { type: doc?.mimetype || dlRes.headers["content-type"] || "application/octet-stream" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = filename.replace(/[\\\/:*?"<>|]+/g, "_");
-        document.body.appendChild(a);
-        a.click();
-        URL.revokeObjectURL(a.href);
-        a.remove();
-        return;
-      } catch (e) {
-        console.warn("Backend streaming download failed", e?.response?.status, e?.response?.data);
-        // Fall through to direct URL attempts
-      }
-    }
- 
-    // Cloudinary direct attachment URL
-    if (url?.includes("res.cloudinary.com")) {
-      const attachmentUrl = toCloudinaryAttachmentUrl(url, filename);
-      // Try programmatic fetch first
-      try {
-        const resp = await fetch(attachmentUrl);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const blob = await resp.blob();
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = filename.replace(/[\\\/:*?"<>|]+/g, "_");
-        a.click();
-        URL.revokeObjectURL(a.href);
-        return;
-      } catch (e) {
-        console.warn("Direct Cloudinary fetch failed", e);
-        // Fallback to original Cloudinary URL (no attachment flag)
-        try {
-          const resp2 = await fetch(url);
-          if (!resp2.ok) throw new Error(`HTTP ${resp2.status}`);
-          const blob2 = await resp2.blob();
-          const a2 = document.createElement("a");
-          a2.href = URL.createObjectURL(blob2);
-          a2.download = filename.replace(/[\\\/:*?"<>|]+/g, "_");
-          a2.click();
-          URL.revokeObjectURL(a2.href);
-          return;
-        } catch (e2) {
-          console.warn("Fallback to original Cloudinary URL failed", e2);
-          // Final fallback: open the original URL in a new tab (cross-origin safe)
-          try {
-            const a3 = document.createElement("a");
-            a3.href = url;
-            a3.target = "_blank";
-            a3.rel = "noopener";
-            document.body.appendChild(a3);
-            a3.click();
-            a3.remove();
-            return;
-          } catch (_) {}
-        }
-      }
-    }
- 
-    // Local or other URLs
-    const fileUrl = url.startsWith("/") ? `${API_BASE}${url}` : url;
-    try {
-      const res = await axios.get(fileUrl, { responseType: "blob" });
-      const blob = new Blob([res.data], { type: doc?.mimetype || res.headers["content-type"] || "application/octet-stream" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename.replace(/[\\\/:*?"<>|]+/g, "_");
-      document.body.appendChild(a);
-      a.click();
-      URL.revokeObjectURL(a.href);
-      a.remove();
-      return;
-    } catch (xhrErr) {
-      console.warn("XHR blob fetch failed, opening URL directly", xhrErr?.message || xhrErr);
-      // Last resort: open the URL directly in a new tab
-      const a = document.createElement("a");
-      a.href = fileUrl;
-      a.target = "_blank";
-      a.rel = "noopener";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      return;
-    }
-  } catch (err) {
-    console.warn("Download warning", err?.response?.status, err?.response?.data || err);
-    alert("Failed to download document");
-  }
-};
-
-// Helper: build Cloudinary attachment URL to force download
-const _toCloudinaryAttachmentUrlLegacy = (url, filename) => {
+const toCloudinaryAttachmentUrl = (url, filename) => {
   try {
     const clean = sanitizeUrl(url);
     const u = new URL(clean);
@@ -1252,7 +1093,7 @@ const _toCloudinaryAttachmentUrlLegacy = (url, filename) => {
     const parts = u.pathname.split("/");
     const idx = parts.indexOf("upload");
     if (idx === -1) return clean;
-    const safeName = (filename || "document").replace(/[\/:*?"<>|]+/g, "_");
+    const safeName = (filename || "document").replace(/[\\/:*?"<>|]+/g, "_");
     const attach = `fl_attachment:${safeName}`;
     const next = parts[idx + 1] || "";
     // If there's already a transformation chain, merge into it; otherwise insert a new segment
@@ -1269,7 +1110,7 @@ const _toCloudinaryAttachmentUrlLegacy = (url, filename) => {
     return sanitizeUrl(url);
   }
 };
- 
+
 // Trigger download for a single document
 const handleDownloadDoc = async (doc, idx) => {
   const raw = String(doc?.url || "");
@@ -1295,7 +1136,7 @@ const handleDownloadDoc = async (doc, idx) => {
         // Fall through to direct URL attempts
       }
     }
- 
+
     // Cloudinary direct attachment URL
     if (url?.includes("res.cloudinary.com")) {
       const attachmentUrl = toCloudinaryAttachmentUrl(url, filename);
@@ -1339,7 +1180,7 @@ const handleDownloadDoc = async (doc, idx) => {
         }
       }
     }
- 
+
     // Local or other URLs
     const fileUrl = url.startsWith("/") ? `${API_BASE}${url}` : url;
     try {
@@ -1368,5 +1209,5 @@ const handleDownloadDoc = async (doc, idx) => {
   } catch (err) {
     console.warn("Download warning", err?.response?.status, err?.response?.data || err);
     alert("Failed to download document");
-  }
+  }
 };

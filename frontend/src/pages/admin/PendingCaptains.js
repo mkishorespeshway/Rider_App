@@ -35,8 +35,8 @@ export default function PendingCaptains() {
       const res = await getPendingCaptains();
       setPending(res.data?.pendingCaptains || []);
     } catch (err) {
-      console.error(err);
-      setMessage({ type: "error", text: err.response?.data?.message || "Failed to load pending riders" });
+      console.warn(err);
+      setError("Failed to fetch pending captains");
     } finally {
       setLoading(false);
     }
@@ -54,7 +54,8 @@ export default function PendingCaptains() {
       setMessage({ type: "success", text: res.data?.message || "Approved successfully" });
       setPending((p) => p.filter((r) => r._id !== id));
     } catch (err) {
-      console.error(err);
+      console.warn(err);
+      setError("Failed to approve rider");
       setMessage({ type: "error", text: err.response?.data?.message || "Failed to approve" });
     } finally {
       setLoading(false);
@@ -69,7 +70,8 @@ export default function PendingCaptains() {
       setMessage({ type: "success", text: res.data?.message || "Rejected successfully" });
       setPending((p) => p.filter((r) => r._id !== id));
     } catch (err) {
-      console.error(err);
+      console.warn(err);
+      setError("Failed to reject rider");
       setMessage({ type: "error", text: err.response?.data?.message || "Failed to reject" });
     } finally {
       setLoading(false);

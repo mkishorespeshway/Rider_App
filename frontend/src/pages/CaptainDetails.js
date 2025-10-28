@@ -33,7 +33,7 @@ export default function CaptainDetails() {
       });
       setCaptain(res.data);
     } catch (err) {
-      console.error(err);
+      console.warn(err);
       setError(err.response?.data?.message || "Failed to fetch captain details");
     } finally {
       setLoading(false);

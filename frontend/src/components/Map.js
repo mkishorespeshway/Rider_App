@@ -54,7 +54,7 @@ export default function Map({
   setDuration,
   // NEW: send normal (baseline) duration to parent alongside current duration
   setNormalDuration,
-  // When true, show ONLY riderâ€™s exact location (OTP phase)
+  // When true, show ONLY rider’s exact location (OTP phase)
   showRiderOnly,
   userLiveCoords,
   // Indicates ride has started (OTP verified) to adjust marker visibility
@@ -62,6 +62,8 @@ export default function Map({
   // New: vehicle info to render correct pin + image
   vehicleType,
   vehicleImage,
+  // Follow rider on map updates during accepted/in_progress rides
+  followRider = true,
 }) {
   const mapRef = useRef(null);
   const directionsRendererRef = useRef(null);
@@ -426,6 +428,27 @@ export default function Map({
       console.warn("Map auto-pan to rider failed:", e.message);
     }
   }, [riderLocation, pickup, rideStarted]);
+
+  // ✅ Follow rider during accepted/in_progress ride
+  useEffect(() => {
+    try {
+      if (!mapRef.current) return;
+      if (!rideStarted || !followRider) return;
+
+      const loc = normalizeLatLng(riderLocation) || riderLocation;
+      if (!loc?.lat || !loc?.lng) return;
+
+      // Pan to rider and keep a comfortable zoom
+      mapRef.current.panTo({ lat: loc.lat, lng: loc.lng });
+      // Optionally, if directions are shown, keep rider near center
+      const currentZoom = mapRef.current.getZoom();
+      if (typeof currentZoom === "number" && currentZoom < 14) {
+        mapRef.current.setZoom(14);
+      }
+    } catch (e) {
+      console.warn("Follow rider movement failed:", e.message);
+    }
+  }, [riderLocation, rideStarted, followRider]);
 
   // âŒ Remove imperative marker creation to avoid duplicate pins
   // useEffect(() => {

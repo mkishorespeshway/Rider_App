@@ -18,7 +18,7 @@ export default function SOSButton({ role }) {
     await sendSOS(role, id);
     alert("🚨 SOS sent successfully!");
   } catch (err) {
-    console.error("❌ SOS failed:", err.response?.data || err.message);
+    console.warn("SOS warning:", err.response?.data || err.message);
     alert("Failed to send SOS");
   }
 };

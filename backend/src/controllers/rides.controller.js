@@ -92,24 +92,6 @@ exports.createRide = async (req, res) => {
       }
     }
 
-    // 🔒 Single-active-ride guard: block booking if user has one already
-    try {
-      if (mongoose.connection.readyState === 1) {
-        const existing = await Ride.findOne({
-          riderId: req.user._id,
-          status: { $in: ["pending", "accepted", "in_progress"] },
-        });
-        if (existing) {
-          return res.status(409).json({
-            success: false,
-            message: "You already have an active ride. Complete it before booking another.",
-            ride: existing,
-          });
-        }
-      }
-    } catch (guardErr) {
-      console.warn("Active ride guard warning:", guardErr.message);
-    }
 
     // If DB is not connected, short-circuit with a mock response to avoid timeouts in dev
     if (mongoose.connection.readyState !== 1) {
@@ -243,6 +225,18 @@ exports.acceptRide = async (req, res) => {
       },
     });
 
+    // Notify other riders of this vehicle type to remove the ride from their lists
+    try {
+      const vTypeBroadcast = String(
+        ride.requestedVehicleType || riderType || driver.vehicleType || (driver.vehicle && driver.vehicle.type) || ""
+      ).trim().toLowerCase();
+      if (vTypeBroadcast) {
+        io.to(`vehicle:${vTypeBroadcast}`).emit("rideLocked", { rideId: ride._id });
+      }
+    } catch (e) {
+      console.warn("rideLocked emit warning:", e.message);
+    }
+
     res.json({ success: true, ride });
   } catch (err) {
     console.error("❌ Accept ride error:", err);
@@ -296,25 +290,17 @@ exports.verifyOtp = async (req, res) => {
       message: "Ride not found",
     });
   }
-  // Validate OTP must match the one stored on the ride
+  // Validate OTP must be pre-set by the booking user and match
   if (!ride.rideOtp) {
-    // Fallback: allow assigned rider to set OTP if user persistence is delayed
-    const isAssignedRider = req.user && req.user.role === "rider" && ride.driverId?.toString() === req.user._id.toString();
-    const isStatusAcceptable = ["accepted", "pending"].includes(String(ride.status));
-    if (isAssignedRider && isStatusAcceptable) {
-      ride.rideOtp = String(otp);
-      await ride.save();
-    } else {
-      return res.status(400).json({ success: false, message: "OTP not set for this ride" });
-    }
+    return res.status(400).json({ success: false, message: "OTP not set for this ride" });
   }
-    if (String(ride.rideOtp) !== String(otp)) {
-      return res.status(400).json({ success: false, message: "Invalid OTP" });
-    }
-   
-    // Update ride status to in_progress
-    ride.status = "in_progress";
-    await ride.save();
+  if (String(ride.rideOtp) !== String(otp)) {
+    return res.status(400).json({ success: false, message: "Invalid OTP" });
+  }
+  
+  // Update ride status to in_progress only after correct OTP
+  ride.status = "in_progress";
+  await ride.save();
  
     const io = req.app.get("io");
     io.to(ride.riderId.toString()).emit("rideStarted", ride);
@@ -424,6 +410,11 @@ exports.completeRide = async (req, res) => {
       return res.status(403).json({ success: false, message: "You are not assigned to this ride" });
     }
 
+    // Enforce business rule: can only complete after OTP verification (in_progress)
+    if (ride.status !== "in_progress") {
+      return res.status(400).json({ success: false, message: "Cannot complete ride before start (OTP verification required)" });
+    }
+
     // Mark completed
     ride.status = "completed";
     await ride.save();
@@ -511,5 +502,56 @@ exports.getRideById = async (req, res) => {
   } catch (err) {
     console.error("❌ Ride fetch by ID error:", err);
     res.status(500).json({ error: "Failed to fetch ride" });
+  }
+};
+
+// ✏️ Update ride details (pickup/drop) before OTP verification
+exports.updateRideDetails = async (req, res) => {
+  try {
+    const rideId = req.params.id;
+    const { pickup, drop, pickupCoords, dropCoords, pickupAddress, dropAddress } = req.body || {};
+
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+
+    // Only the booking user can edit ride details
+    if (!req.user || ride.riderId?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: "Not authorized to edit this ride" });
+    }
+
+    // Allow edits only while pending or accepted (before OTP verification)
+    if (!["pending", "accepted"].includes(String(ride.status))) {
+      return res.status(400).json({ success: false, message: "Cannot change ride details after start" });
+    }
+
+    // Apply provided fields
+    if (typeof pickup !== "undefined") ride.pickup = pickup;
+    if (typeof drop !== "undefined") ride.drop = drop;
+    if (typeof pickupCoords === "object" && pickupCoords) ride.pickupCoords = pickupCoords;
+    if (typeof dropCoords === "object" && dropCoords) ride.dropCoords = dropCoords;
+    if (typeof pickupAddress === "string") ride.pickup = pickupAddress; // keep string form in pickup
+    if (typeof dropAddress === "string") ride.drop = dropAddress; // keep string form in drop
+
+    await ride.save();
+
+    // Notify rider and user about updated route if rider is assigned
+    try {
+      const io = req.app.get("io");
+      if (io) {
+        io.to(ride.riderId.toString()).emit("rideDetailsUpdated", ride);
+        if (ride.driverId) {
+          io.to(ride.driverId.toString()).emit("rideDetailsUpdated", ride);
+        }
+      }
+    } catch (e) {
+      console.warn("rideDetailsUpdated emit warning:", e.message);
+    }
+
+    res.json({ success: true, ride });
+  } catch (err) {
+    console.error("❌ Update ride details error:", err);
+    res.status(500).json({ error: "Failed to update ride details", details: err.message });
   }
 };

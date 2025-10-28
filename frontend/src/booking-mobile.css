@@ -1,0 +1,61 @@
+/* Rapido-style tokens and mobile layout overrides for Booking page */
+.rapido-ui {
+  --rapido-yellow: #FFC107;
+  --rapido-text: #121212;
+  --rapido-muted: #6b6b6b;
+}
+
+/* Turn the mobile booking form into a center hero card */
+@media (max-width: 600px) {
+  .booking-form {
+    position: static !important;
+    margin: 12px !important;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.08) !important;
+    border-radius: 16px !important;
+    max-height: none !important;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important; /* light border like reference */
+  }
+  .booking-map { display: none !important; }
+}
+
+/* Inputs: compact, rounded */
+.rapido-input .MuiOutlinedInput-root {
+  height: 44px;
+  border-radius: 12px;
+}
+
+/* Primary Book button in Rapido yellow (legacy) */
+.rapido-book-btn {
+  background-color: var(--rapido-yellow) !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+  border-radius: 12px !important;
+}
+
+/* Minimal card UI blue button (new) */
+.booking-blue-btn {
+  background-color: #1E3A8A !important; /* deep blue */
+  color: #fff !important;
+  font-weight: 700 !important;
+  border-radius: 12px !important;
+}
+
+/* Services grid (placeholder basic styles if needed later) */
+.rapido-services { gap: 8px; }
+.rapido-service-card { text-align: center; }
+
+/* Neutral mobile booking overrides */
+.mobile-ui {
+  --accent-yellow: #FFC107;
+  --app-text: #121212;
+  --app-muted: #6b6b6b;
+}
+
+.booking-input .MuiOutlinedInput-root { border-radius: 12px; }
+
+/* Primary Book button accent */
+.primary-book-btn { background-color: var(--accent-yellow) !important; }
+
+.booking-services { gap: 8px; }
+.booking-service-card { text-align: center; }

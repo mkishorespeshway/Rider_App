@@ -1,0 +1,20 @@
+/* Global UI tokens and mobile bottom-sheet layout */
+.app-ui {
+  --app-bg: #ffffff;
+  --app-text: #111111;
+  --app-muted: #6b6b6b;
+  --app-black: #000000;
+  --app-accent: #06C167;
+  --app-primary: #1976d2;
+}
+
+.app-ui header, .app-ui .Navbar-root { background: var(--app-bg); }
+
+/* Drawer rounded corners */
+.MuiDrawer-paper {
+  border-top-left-radius: 20px !important;
+  border-top-right-radius: 20px !important;
+}
+
+/* Primary button color */
+.MuiButton-contained { background: var(--app-primary) !important; color: #fff !important; }

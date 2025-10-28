@@ -38,7 +38,7 @@ export default function AdminSidebar() {
           rides: res.data.rides || 0,
         });
       } catch (err) {
-        console.error("Failed to fetch overview", err);
+        console.warn("Overview fetch warning", err);
         setCounts({ users:0, riders:0, captains:0, pendingCaptains:0, rides:0 });
       }
     };

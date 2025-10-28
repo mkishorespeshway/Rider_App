@@ -99,7 +99,7 @@ export default function AdminDashboard() {
         setAdminBank(null);
       }
     } catch (err) {
-      console.error(err);
+      console.warn(err);
       setError("Failed to load overview");
     }
   };
@@ -144,7 +144,7 @@ export default function AdminDashboard() {
       // Payments summary returns {data: {items}}
       setData(res?.data?.data?.items || res?.data?.data || []);
     } catch (err) {
-      console.error(err);
+      console.warn(err);
       setError("Failed to fetch data");
       setData([]);
     } finally {
@@ -158,7 +158,7 @@ export default function AdminDashboard() {
       fetchData("pending");
       fetchOverview();
     } catch (err) {
-      console.error(err);
+      console.warn(err);
       setError("Failed to approve rider");
     }
   };
@@ -169,7 +169,7 @@ export default function AdminDashboard() {
       fetchData("pending");
       fetchOverview();
     } catch (err) {
-      console.error(err);
+      console.warn(err);
       setError("Failed to reject rider");
     }
   };
@@ -180,7 +180,7 @@ export default function AdminDashboard() {
       fetchData("sos");
       fetchOverview();
     } catch (err) {
-      console.error(err);
+      console.warn(err);
       setError("Failed to resolve SOS");
     }
   };

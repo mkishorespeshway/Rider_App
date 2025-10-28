@@ -158,16 +158,16 @@ export default function RiderRegister() {
       });
  
       // 🔎 Debug: show what's inside FormData before sending
-      console.log("FormData being sent:");
+      void 0;
       for (let [key, value] of form.entries()) {
-        console.log(key, value instanceof File ? value.name : value);
+        void 0;
       }
  
       await signupRider(form); // ✅ sends multipart/form-data
  
       setOpenModal(true);
     } catch (err) {
-      console.error("❌ Signup error:", err);
+      console.warn("Signup warning:", err);
       setMessage({
         type: "error",
         text: err.response?.data?.message || err.message,

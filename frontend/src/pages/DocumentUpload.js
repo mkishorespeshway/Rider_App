@@ -52,7 +52,7 @@ export default function DocumentUpload() {
         setError(res.data?.message || "Upload failed. Try again.");
       }
     } catch (err) {
-      console.error("Upload error:", err.response?.data || err);
+      console.warn("Upload warning:", err.response?.data || err);
       setError(err.response?.data?.message || "Server error. Try again later.");
     } finally {
       setLoading(false);
@@ -67,7 +67,7 @@ export default function DocumentUpload() {
           p: 4,
           borderRadius: 3,
           textAlign: "center",
-          fontFamily: "Uber Move, Helvetica Neue, sans-serif",
+          fontFamily: "Inter, Helvetica Neue, sans-serif",
         }}
       >
         <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>

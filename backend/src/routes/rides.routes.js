@@ -26,6 +26,9 @@ router.post("/:id/set-otp", authMiddleware, rideController.setRideOtp);
  
 // 🏷️ Set requested vehicle type and notify matching riders
 router.post("/:id/request-type", authMiddleware, rideController.setRequestedVehicleType);
+
+// ✏️ Update ride details before OTP verification
+router.post("/:id/update-details", authMiddleware, rideController.updateRideDetails);
  
 // ✅ Complete ride (rider triggers when trip ends)
 router.post("/:id/complete", authMiddleware, rideController.completeRide);

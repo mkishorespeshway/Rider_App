@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Container, Paper, Typography, TextField, Button, Alert, CircularProgress } from "@mui/material";
-import { useNavigate } from "react-router-dom";
+import { Container, Box, Typography, TextField, Button, Alert, CircularProgress } from "@mui/material";
+import { useNavigate, Link } from "react-router-dom";
 import { signupUser } from "../services/api";
 
 export default function UserRegister() {
@@ -29,31 +29,201 @@ export default function UserRegister() {
   };
 
   return (
-    <Container maxWidth="xs">
-      <Paper sx={{ mt: 6, p: 4, borderRadius: 3, textAlign: "center", boxShadow: 5 }}>
-        <Typography variant="h4" sx={{ mb: 2 }}>User Register</Typography>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-        {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+    <Box sx={{ minHeight: "100vh", background: "#f8fafc" }}>
+      {/* Blue Header Section */}
+      <Box
+        sx={{
+          background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
+          height: "40vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        {/* Logo/Brand Circle */}
+        <Box
+          sx={{
+            width: 80,
+            height: 80,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "2px solid rgba(255,255,255,0.3)",
+          }}
+        >
+          <Typography
+            variant="h4"
+            sx={{
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "24px",
+            }}
+          >
+            R
+          </Typography>
+        </Box>
+      </Box>
 
-        <form onSubmit={handleSubmit}>
-          <TextField fullWidth label="Full Name" name="fullName" value={formData.fullName} onChange={handleChange} margin="normal" required />
-          <TextField fullWidth type="email" label="Email" name="email" value={formData.email} onChange={handleChange} margin="normal" required />
-          <TextField fullWidth type="tel" label="Mobile Number" name="mobile" value={formData.mobile} onChange={handleChange} margin="normal" inputProps={{ maxLength: 10 }} required />
+      {/* White Form Section */}
+      <Container maxWidth="xs">
+        <Box
+          sx={{
+            background: "white",
+            borderRadius: "24px 24px 0 0",
+            mt: "-60px",
+            position: "relative",
+            zIndex: 1,
+            p: 4,
+            minHeight: "60vh",
+            boxShadow: "0 -4px 20px rgba(0,0,0,0.1)",
+          }}
+        >
+          <Typography
+            variant="h5"
+            sx={{
+              textAlign: "center",
+              fontWeight: "bold",
+              mb: 1,
+              color: "#1f2937",
+            }}
+          >
+            Create Account
+          </Typography>
+          
+          <Typography
+            variant="body2"
+            sx={{
+              textAlign: "center",
+              color: "#6b7280",
+              mb: 4,
+            }}
+          >
+            Sign up to get started with your account
+          </Typography>
 
-          <Button type="submit" fullWidth variant="contained" sx={{ mt: 3, bgcolor: "black" }} disabled={loading}>
-            {loading ? <CircularProgress size={24} color="inherit" /> : "Sign Up"}
-          </Button>
-        </form>
+          {error && (
+            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+              {error}
+            </Alert>
+          )}
+          
+          {success && (
+            <Alert severity="success" sx={{ mb: 3, borderRadius: 2 }}>
+              {success}
+            </Alert>
+          )}
 
-        <Typography sx={{ mt: 2 }}>
-          Already have an account?{" "}
-          <Button onClick={() => navigate("/login")} sx={{ fontWeight: "bold" }}>Login</Button>
-        </Typography>
-        <Typography sx={{ mt: 1 }}>
-          Login as Rider?{" "}
-          <Button onClick={() => navigate("/rider-login")} sx={{ fontWeight: "bold" }}>Rider Login</Button>
-        </Typography>
-      </Paper>
-    </Container>
+          <form onSubmit={handleSubmit}>
+            <TextField
+              fullWidth
+              label="Full Name"
+              name="fullName"
+              value={formData.fullName}
+              onChange={handleChange}
+              margin="normal"
+              required
+              sx={{
+                mb: 2,
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 3,
+                  height: 56,
+                },
+              }}
+            />
+            
+            <TextField
+              fullWidth
+              type="email"
+              label="Email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              margin="normal"
+              required
+              sx={{
+                mb: 2,
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 3,
+                  height: 56,
+                },
+              }}
+            />
+            
+            <TextField
+              fullWidth
+              type="tel"
+              label="Mobile Number"
+              name="mobile"
+              value={formData.mobile}
+              onChange={handleChange}
+              margin="normal"
+              inputProps={{ maxLength: 10 }}
+              required
+              sx={{
+                mb: 3,
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: 3,
+                  height: 56,
+                },
+              }}
+            />
+
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              disabled={loading}
+              sx={{
+                height: 56,
+                borderRadius: 3,
+                background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
+                fontWeight: "bold",
+                fontSize: "16px",
+                textTransform: "none",
+                boxShadow: "0 4px 12px rgba(79, 70, 229, 0.4)",
+                "&:hover": {
+                  background: "linear-gradient(135deg, #4338CA 0%, #6D28D9 100%)",
+                },
+              }}
+            >
+              {loading ? <CircularProgress size={24} color="inherit" /> : "Sign Up"}
+            </Button>
+          </form>
+
+          <Box sx={{ mt: 4, textAlign: "center" }}>
+            <Typography variant="body2" sx={{ color: "#6b7280", mb: 2 }}>
+              Already have an account?{" "}
+              <Link
+                to="/login"
+                style={{
+                  color: "#4F46E5",
+                  textDecoration: "none",
+                  fontWeight: "600",
+                }}
+              >
+                Login
+              </Link>
+            </Typography>
+            <Typography variant="body2" sx={{ color: "#6b7280" }}>
+              Are you a Rider?{" "}
+              <Link
+                to="/rider-login"
+                style={{
+                  color: "#4F46E5",
+                  textDecoration: "none",
+                  fontWeight: "600",
+                }}
+              >
+                Login as Rider
+              </Link>
+            </Typography>
+          </Box>
+        </Box>
+      </Container>
+    </Box>
   );
 }
