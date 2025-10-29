@@ -1,47 +1,92 @@
 import React, { useEffect, useState } from "react";
-import api from "../services/api";
+import { Box, Paper, Typography, Avatar, Grid, Chip, Button } from "@mui/material";
 import { useAuth } from "../contexts/AuthContext";
+import { getRiderStatus } from "../services/api";
 
 export default function Profile() {
-  const { user, setUser, logout } = useAuth();
-  const [form, setForm] = useState(user || {});
-  const [msg, setMsg] = useState("");
+  const { auth, logout } = useAuth();
+  const role = (auth?.roles || [])[0] || (auth?.user?.role || "");
+  const baseUser = auth?.user || {};
+  const [riderInfo, setRiderInfo] = useState(null);
+  const [loading, setLoading] = useState(role === "rider");
 
   useEffect(() => {
-    setForm(user || {});
-  }, [user]);
-
-  const save = async () => {
-    try {
-      const res = await api.put(`/users/${form._id}`, form);
-      setUser({ ...res.data, token: user.token });
-      setMsg("Saved");
-    } catch (e) {
-      setMsg("Save failed");
+    if (role === "rider") {
+      (async () => {
+        try {
+          const res = await getRiderStatus();
+          const data = res?.data?.rider || res?.data?.data || res?.data || {};
+          setRiderInfo(data);
+        } catch (e) {
+          // non-blocking
+        } finally {
+          setLoading(false);
+        }
+      })();
     }
-  };
+  }, [role]);
+
+  const user = role === "rider" ? { ...baseUser, ...riderInfo } : baseUser;
+
+  const displayName = user.fullName || user.name || "";
+  const mobile = user.mobile || user.phone || "";
+  const email = user.email || "";
+  const avatar = user.profilePicture || user.avatarUrl || null;
 
   return (
-    <div style={{ maxWidth: 520 }}>
-      <h2>Profile</h2>
-      <div>
-        <label>Name</label>
-        <input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      </div>
-      <div>
-        <label>Phone</label>
-        <input value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-      </div>
-      <div>
-        <label>Email</label>
-        <input value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-      </div>
-      <div style={{ marginTop: 8 }}>
-        <button onClick={save}>Save</button>
-        <button onClick={logout} style={{ marginLeft: 8 }}>Logout</button>
-      </div>
-      {msg && <div style={{ marginTop: 8 }}>{msg}</div>}
-    </div>
+    <Box sx={{ maxWidth: 800, mx: "auto", mt: 3 }}>
+      <Paper sx={{ p: 3, borderRadius: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+          <Avatar src={avatar || undefined} sx={{ width: 64, height: 64, mr: 2 }} />
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="h5" sx={{ fontWeight: "bold" }}>{displayName || "Profile"}</Typography>
+            <Box sx={{ mt: 0.5 }}>
+              <Chip label={(role || "user").toUpperCase()} size="small" />
+            </Box>
+          </Box>
+          <Button variant="outlined" color="error" onClick={logout}>Logout</Button>
+        </Box>
+
+        {loading ? (
+          <Typography>Loading rider profile…</Typography>
+        ) : (
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <Typography><b>Mobile:</b> {mobile || "—"}</Typography>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Typography><b>Email:</b> {email || "—"}</Typography>
+            </Grid>
+
+            {role === "rider" && (
+              <>
+                <Grid item xs={12} sm={6}>
+                  <Typography><b>Vehicle Type:</b> {user.vehicleType || user?.vehicle?.type || "—"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography><b>Vehicle Number:</b> {user.vehicleNumber || user?.vehicle?.registrationNumber || "—"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography><b>Approval Status:</b> {user.approvalStatus || user.status || "—"}</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography><b>Preferred Language:</b> {user.preferredLanguage || "—"}</Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography><b>Address:</b> {user.address || "—"}</Typography>
+                </Grid>
+              </>
+            )}
+
+            {role !== "rider" && (
+              <Grid item xs={12}>
+                <Typography><b>Name:</b> {displayName || "—"}</Typography>
+              </Grid>
+            )}
+          </Grid>
+        )}
+      </Paper>
+    </Box>
   );
 }
 

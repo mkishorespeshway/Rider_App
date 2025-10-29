@@ -58,6 +58,13 @@ export default function RiderDashboard() {
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState("");
   const [verifyingOtp, setVerifyingOtp] = useState(false);
+  
+  // Ensure OTP input is fresh each time the dialog opens
+  const openOtpDialog = () => {
+    setOtp("");
+    setOtpError("");
+    setOtpDialogOpen(true);
+  };
  
   // map state
   const [pickup, setPickup] = useState(null);
@@ -775,7 +782,7 @@ export default function RiderDashboard() {
                   <Button
                     variant="contained"
                     color="primary"
-                    onClick={() => setOtpDialogOpen(true)}
+                    onClick={openOtpDialog}
                   >
                     Verify OTP 
                   </Button>
@@ -1050,7 +1057,7 @@ export default function RiderDashboard() {
  
       {/* OTP Verification Dialog */}
       {/* OTP Verification Dialog */}
-<Dialog open={otpDialogOpen} onClose={() => setOtpDialogOpen(false)}>
+<Dialog open={otpDialogOpen} onClose={() => { setOtpDialogOpen(false); setOtp(""); setOtpError(""); }}>
   <DialogTitle>Enter OTP to Start Ride</DialogTitle>
   <DialogContent>
     <Typography variant="body1" sx={{ mb: 2, fontWeight: 'bold', color: '#1976d2' }}>

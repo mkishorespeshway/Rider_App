@@ -798,7 +798,10 @@ export default function Booking() {
             console.warn("Failed to persist ride OTP:", e?.message || e);
           }
 
-        }}
+        };
+        // Invoke persistence immediately after defining
+        persistOtp();
+        }
       } catch {}
     });
 

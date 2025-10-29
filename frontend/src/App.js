@@ -163,11 +163,30 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            {/* Shared History route for user and rider */}
+            <Route
+              path="/history"
+              element={
+                <ProtectedRoute>
+                  <History />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Shared Profile route for user and rider */}
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
         </main>
       </div>
     </ThemeProvider>
   );
 }
- 
+
  
