@@ -14,9 +14,21 @@ export default function RiderLogin() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
+  // Helper: block login if a user session is active in this browser
+  const isRoleBlocked = () => {
+    const activeRole = localStorage.getItem('activeRole');
+    return activeRole && activeRole !== 'rider';
+  };
+  
+  // No cross-tab redirects; auth is tab-specific via sessionStorage
+
   const isValidMobile = (num) => /^[0-9]{10}$/.test(num);
 
   const handleSendOtp = async () => {
+    if (isRoleBlocked()) {
+      setMessage({ type: "error", text: "A user session is already active in this browser. Please logout to login as rider." });
+      return;
+    }
     setMessage({ type: "", text: "" });
     if (!mobile || !isValidMobile(mobile)) {
       setMessage({ type: "error", text: "Enter a valid 10-digit mobile number" });
@@ -40,6 +52,10 @@ export default function RiderLogin() {
   };
 
   const handleVerifyOtp = async () => {
+    if (isRoleBlocked()) {
+      setMessage({ type: "error", text: "A user session is already active in this browser. Please logout to login as rider." });
+      return;
+    }
     setMessage({ type: "", text: "" });
     if (!otp || otp.length < 4) {
       setMessage({ type: "error", text: "Enter OTP" });
@@ -55,11 +71,15 @@ export default function RiderLogin() {
           setLoading(false);
           return;
         }
-        login({
+        const ok = login({
           token: res.data.token,
           user,
           roles: [user.role], // ✅ FIX
         });
+        if (!ok) {
+          setMessage({ type: "error", text: "Another role is logged in. Please logout first." });
+          return;
+        }
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
         // Ensure dashboard opens to pending rides list (not a restored active ride)
         try { localStorage.removeItem("riderActiveRideId"); } catch {}

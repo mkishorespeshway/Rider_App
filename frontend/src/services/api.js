@@ -37,8 +37,15 @@ const WALLET_API = axios.create({
   headers: { "Content-Type": "application/json" },
 });
  
-// helper: get token either from auth object or legacy token key
+// helper: get token from sessionStorage (per-tab) first, then legacy localStorage
 const getToken = () => {
+  try {
+    const sessRaw = sessionStorage.getItem("auth");
+    if (sessRaw) {
+      const parsed = JSON.parse(sessRaw);
+      if (parsed && parsed.token) return parsed.token;
+    }
+  } catch (e) {}
   try {
     const authRaw = localStorage.getItem("auth");
     if (authRaw) {

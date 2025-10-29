@@ -24,7 +24,12 @@ const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const API_URL = `${API_BASE}/api`;
 const SHOW_PARCELS_ON_DASHBOARD = false;
 
-const socket = io(API_BASE);
+// Create a new socket connection for each tab instance
+const socket = io(API_BASE, {
+  query: { tabId: `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` },
+  forceNew: true, // Force a new connection for each tab
+  reconnection: true
+});
 
 // Rapido-style 50 km radius filtering (user pickup ↔ rider location)
 const RIDE_RADIUS_KM = 50;
@@ -49,6 +54,40 @@ export default function RiderDashboard() {
   const [loading, setLoading] = useState(false);
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
+  
+  // Generate a unique tab ID for this browser tab instance
+  const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  
+  // Check authentication and tab session on component mount
+  useEffect(() => {
+    // First check authentication
+    if (!auth?.token) {
+      // Only redirect if came from a different page (not from rider-login)
+      const prevPath = sessionStorage.getItem('prevPath');
+      if (prevPath !== '/rider-login') {
+        sessionStorage.setItem('prevPath', '/rider-dashboard');
+        window.location.href = "/rider-login";
+      }
+      return;
+    }
+    
+    // We're authenticated, update prevPath
+    sessionStorage.setItem('prevPath', '/rider-dashboard');
+    
+    // No need to check for active tabs or show popups
+    // Each tab can have its own session now
+    
+    // We still generate a unique tab ID for this tab's internal use
+    // but we don't restrict to one tab only
+    localStorage.setItem(`riderDashboardTab-${tabId}`, 'active');
+    
+    // Cleanup function to remove tab registration when component unmounts
+    return () => {
+      // Clean up this tab's data
+      localStorage.removeItem(`riderDashboardTab-${tabId}`);
+    };
+  }, [auth, navigate, tabId]);
+  
   // Admin UPI info for scanner display
   const [merchantVpa, setMerchantVpa] = useState(process.env.REACT_APP_MERCHANT_VPA || null);
   const [merchantName, setMerchantName] = useState("Rider App");
@@ -128,7 +167,8 @@ export default function RiderDashboard() {
   //  Logout
   const handleLogout = () => {
     logout();
-    navigate("/rider-login");
+    // Use window.location instead of navigate to avoid the insecure operation error
+    window.location.href = "/rider-login";
   };
  
   //  Get rider's live location (updates every 5s)

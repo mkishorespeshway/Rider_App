@@ -21,8 +21,13 @@ import "../theme.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
   const API_URL = `${API_BASE}/api`;
-  const MAX_RIDE_DISTANCE_KM = 50;
-  const socket = io(API_BASE);
+  const MAX_RIDE_DISTANCE_KM = 25;
+  // Create a new socket connection for each tab instance
+  const socket = io(API_BASE, {
+    query: { tabId: `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` },
+    forceNew: true, // Force a new connection for each tab
+    reconnection: true
+  });
 
 // Removed Razorpay loader (no third-party checkout in this flow)
 const loadRazorpayScript = () => Promise.resolve(false);
@@ -32,6 +37,30 @@ export default function Booking() {
   // Initialize auth and navigate before any references in effects
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
+  
+  // Generate a unique tab ID for this browser tab instance
+  const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  
+  // Check authentication and tab session on component mount
+  useEffect(() => {
+    // First check authentication
+    if (!auth?.token) {
+      navigate("/login", { replace: true });
+      return;
+    }
+    
+    // Each tab can have its own session now
+    // We still generate a unique tab ID for this tab's internal use
+    // but we don't restrict to one tab only
+    localStorage.setItem(`bookingTab-${tabId}`, 'active');
+    
+    // Cleanup function to remove tab registration when component unmounts
+    return () => {
+      // Clean up this tab's data
+      localStorage.removeItem(`bookingTab-${tabId}`);
+    };
+  }, [auth, navigate, tabId]);
+  
   const [pickup, setPickup] = useState(null);
   const [drop, setDrop] = useState(null);
   const [pickupAddress, setPickupAddress] = useState("");
@@ -72,8 +101,7 @@ export default function Booking() {
   const [rideStatus, setRideStatus] = useState("Waiting for rider 🚖");
   const [otp, setOtp] = useState("");
   const [userLiveCoords, setUserLiveCoords] = useState(null);
-  // Show a popup when a rider accepts the ride
-  const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
+  // No popup needed when a rider accepts the ride in multiple tabs
   const [serviceLimitOpen, setServiceLimitOpen] = useState(false);
   const [acceptBannerOpen, setAcceptBannerOpen] = useState(false);
   // Persist OTP per active ride across refreshes
@@ -99,24 +127,26 @@ export default function Booking() {
     }
   }, [auth]);
 
-  // 🔄 Restore active ride and keep popup open across refresh until OTP verification
-  useEffect(() => {
-    const restore = async () => {
-      try {
-        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
-        const existingId = localStorage.getItem(activeKey);
-        if (!existingId) return;
-        // If the ride was already started (OTP verified), persist map-only view across refresh
-        const mapOnlyKey = `rideMapOnly:${existingId}`;
-        const persistedMapOnly = localStorage.getItem(mapOnlyKey) === 'true';
-        if (persistedMapOnly) {
-          // Set map-only immediately to avoid flicker before API returns
-          setMapOnlyView(true);
-        }
-        const resp = await axios.get(
-            `${API_URL}/rides/${existingId}`,
-              { headers: { Authorization: `Bearer ${auth?.token}` } }
-            );
+    // 🔄 Restore active ride and keep popup open across refresh until OTP verification
+    useEffect(() => {
+      const restore = async () => {
+        try {
+          const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+          const existingId = localStorage.getItem(activeKey);
+          if (!existingId) return;
+          // If the ride was already started (OTP verified), persist map-only view across refresh
+          const mapOnlyKey = `rideMapOnly:${existingId}`;
+          const persistedMapOnly = localStorage.getItem(mapOnlyKey) === 'true';
+          if (persistedMapOnly) {
+            // Set map-only immediately to avoid flicker before API returns
+            setMapOnlyView(true);
+            // OTP banner should be hidden once ride has started
+            setAcceptBannerOpen(false);
+          }
+          const resp = await axios.get(
+              `${API_URL}/rides/${existingId}`,
+                { headers: { Authorization: `Bearer ${auth?.token}` } }
+              );
 
         const ride = resp.data?.ride;
         if (!ride) return;
@@ -178,6 +208,8 @@ export default function Booking() {
                 localStorage.setItem(otpKey, saved);
               }
               setOtp(saved);
+              // Show OTP banner until rider verifies it
+              setAcceptBannerOpen(true);
               // Persist OTP to backend so rider can verify even after refresh
               try {
                 await axios.post(
@@ -197,6 +229,8 @@ export default function Booking() {
           setRideStatus('Ride started ✅');
           // Switch to full map-only view after OTP verification
           setMapOnlyView(true);
+          // Hide OTP banner after OTP verification
+          setAcceptBannerOpen(false);
           // Ensure vehicle image and type are available to Map in map-only view
           try {
             const d = ride.driverId || {};
@@ -297,7 +331,7 @@ export default function Booking() {
     }
   };
 
-  // 🔎 Fetch suggestions using Google AutocompleteService (with 50 km radius)
+  // 🔎 Fetch suggestions using Google AutocompleteService (with 25 km radius)
   const fetchSuggestions = (input, setSuggestions, loc) => {
     if (!input || !window.google) return setSuggestions([]);
 
@@ -309,7 +343,7 @@ export default function Booking() {
         location: loc
           ? new window.google.maps.LatLng(loc.lat, loc.lng)
           : new window.google.maps.LatLng(17.385044, 78.486671), // Hyderabad fallback
-        radius: 50000, // ✅ 50 km
+          radius: 25000, // ✅ 25 km
         componentRestrictions: { country: "in" }, // ✅ restrict to India (optional)
       },
       (predictions, status) => {
@@ -584,11 +618,11 @@ export default function Booking() {
   // 🔥 Create ride request (opens the drawer with payment options)
   const handleFindRiders = async () => {
     if (!pickup || !drop || !distance) {
-      alert("Please select pickup and drop");
+      // Silently handle missing pickup/drop without popup
       return;
     }
     if (!auth?.token) {
-      alert("Please log in to book a ride.");
+      // Redirect to login without popup
       navigate("/login-user");
       return;
     }
@@ -611,7 +645,7 @@ export default function Booking() {
       // Always use backend dynamic pricing before creating the ride
       const distanceKm = parseFloat(distance);
 
-      // 🚧 Service area limit: block rides beyond 50 km from pickup
+  // 🚧 Service area limit: block rides beyond 25 km from pickup
       if (Number.isFinite(distanceKm) && distanceKm > MAX_RIDE_DISTANCE_KM) {
         setServiceLimitOpen(true);
         return;
@@ -661,12 +695,11 @@ export default function Booking() {
       console.warn("Ride request warning:", err);
       const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to create ride request";
       if (msg === "Invalid token" || msg === "Authorization token missing") {
-        alert("Session expired. Please log in again.");
         try { logout(); } catch {}
         navigate("/login-user");
         return;
       }
-      alert(msg);
+      // Silently handle error without popup
     }
   };
   
@@ -770,6 +803,8 @@ export default function Booking() {
       setRideStatus("Rider en route 🚖");
        // Show compact map until OTP verification
       setMapOnlyView(false);
+      // Show OTP banner immediately upon acceptance
+      setAcceptBannerOpen(true);
        // Persist active ride id on acceptance to filter GPS updates
       try {
         const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
@@ -833,7 +868,7 @@ export default function Booking() {
 
     socket.on("rideRejected", () => {
       setLookingForRider(false);
-      alert("❌ All riders rejected your request.");
+      // No popup needed when ride is rejected
       try {
         const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
         localStorage.removeItem(activeKey);
@@ -847,6 +882,8 @@ export default function Booking() {
       setPaymentAmount(null);
       setRiderPanelOpen(false);
       setMapOnlyView(true);
+      // Hide OTP banner once the rider verifies the OTP
+      setAcceptBannerOpen(false);
       // Close any open selection drawer once the ride starts
       try { setDrawerOpen(false); } catch {}
       // Persist map-only state for this active ride to survive refresh
@@ -952,7 +989,7 @@ export default function Booking() {
         <DialogTitle>Service Area Limit</DialogTitle>
         <DialogContent>
           <Typography variant="body1" sx={{ mb: 1 }}>
-            We currently support rides up to 50 km from your pickup location.
+            We currently support rides up to 25 km from your pickup location.
             Please adjust your drop location or consider splitting the journey.
           </Typography>
         </DialogContent>
@@ -1028,19 +1065,6 @@ export default function Booking() {
         <Paper className="booking-form" sx={{ p: 3, borderRadius: 2 }}>
           {assignedRider && riderPanelOpen ? (
             <>
-              {acceptBannerOpen && (
-                <Paper elevation={3} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', textAlign: 'center' }}>
-                    Your OTP Code
-                  </Typography>
-                  <Typography variant="h3" sx={{ letterSpacing: 2, fontWeight: 'bold', color: 'primary.main', textAlign: 'center' }}>
-                    {otp}
-                  </Typography>
-                  <Typography variant="caption" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
-                    Share this code with your rider to start the trip
-                  </Typography>
-                </Paper>
-              )}
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 2 }}>
                 <Avatar
                   src={assignedRider.profilePicture || undefined}
@@ -1424,8 +1448,8 @@ export default function Booking() {
         </Box>
       </Drawer>
 
-      {/* Rider details drawer */}
-      <Drawer anchor="bottom" open={riderPanelOpen} onClose={() => setRiderPanelOpen(false)}>
+      {/* Rider details drawer disabled to keep only side-by-side popup */}
+      <Drawer anchor="bottom" open={false} onClose={() => setRiderPanelOpen(false)}>
         <Box sx={{ p: 3 }}>
           {assignedRider && (
             <>

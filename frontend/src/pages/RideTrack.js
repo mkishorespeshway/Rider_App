@@ -6,7 +6,12 @@ import "leaflet/dist/leaflet.css";
 import { io } from "socket.io-client";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
-const socket = io(API_BASE);
+// Create a new socket connection for each tab instance
+const socket = io(API_BASE, {
+  query: { tabId: `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` },
+  forceNew: true, // Force a new connection for each tab
+  reconnection: true
+});
 
 function AutoFitBounds({ riderPos, driverPos }) {
   const map = useMap();

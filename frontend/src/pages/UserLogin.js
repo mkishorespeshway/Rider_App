@@ -38,12 +38,22 @@ export default function UserLogin() {
   const [message, setMessage] = useState({ type: "", text: "" });
  
   const navigate = useNavigate();
-
+ 
   const { login } = useAuth();
+ 
+  // Helper: block login if a rider session is active in this browser
+  const isRoleBlocked = () => {
+    const activeRole = localStorage.getItem('activeRole');
+    return activeRole && activeRole !== 'user';
+  };
  
   const isValidMobile = (num) => /^[0-9]{10}$/.test(num);
  
   const handleSendOtp = async () => {
+    if (isRoleBlocked()) {
+      setMessage({ type: "error", text: "A rider session is already active in this browser. Please logout to login as user." });
+      return;
+    }
 
     setMessage({ type: "", text: "" });
 
@@ -88,6 +98,10 @@ export default function UserLogin() {
   };
  
   const handleVerifyOtp = async () => {
+    if (isRoleBlocked()) {
+      setMessage({ type: "error", text: "A rider session is already active in this browser. Please logout to login as user." });
+      return;
+    }
 
     setMessage({ type: "", text: "" });
 
@@ -106,16 +120,19 @@ export default function UserLogin() {
       const res = await verifyOtp(mobile, otp, "user");
 
       if (res.data.success) {
-
-        login({
-
+        const ok = login({
+          
           token: res.data.token,
-
+          
           user: res.data.user,
-
+          
           roles: [res.data.role || res.data.user?.role || "user"], // ✅ FIX
-
+          
         });
+        if (!ok) {
+          setMessage({ type: "error", text: "Another role is logged in. Please logout first." });
+          return;
+        }
 
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
 
