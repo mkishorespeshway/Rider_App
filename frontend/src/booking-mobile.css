@@ -16,7 +16,7 @@
     background: #ffffff !important;
     border: 1px solid #e5e7eb !important; /* light border like reference */
   }
-  .booking-map { display: none !important; }
+  /* Removed the line that was hiding the map */
 }
 
 /* Inputs: compact, rounded */
