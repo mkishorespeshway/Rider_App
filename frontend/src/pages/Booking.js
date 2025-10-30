@@ -560,7 +560,7 @@ export default function Booking() {
   }, [pickup, distance, duration, normalDuration]);
 
   // state additions for payments
-  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentMethod, setPaymentMethod] = useState("online");
   const [showDetailedPayments, setShowDetailedPayments] = useState(false);
   const [detailedPaymentMethod, setDetailedPaymentMethod] = useState("upi");
   const [selectedPaymentOption, setSelectedPaymentOption] = useState(null);
@@ -668,6 +668,18 @@ export default function Booking() {
       const selectedFinalPrice = Number(price?.finalPrice ?? 0);
       const selectedBasePrice = Number(price?.basePrice ?? 0);
 
+      // Resolve selected payment preferences for ride creation
+      const resolveDetailed = (opt) => {
+        try {
+          if (!opt) return "";
+          if (String(opt).startsWith("upi")) return "upi";
+          if (opt === "wallet" || opt === "amazon_pay") return "wallet";
+          if (String(opt).startsWith("card")) return "card";
+          // Net banking / pay later and other experimental options are stored as empty
+          return "";
+        } catch { return ""; }
+      };
+
       const res = await axios.post(
         `${API_URL}/rides/create`,
         {
@@ -680,6 +692,9 @@ export default function Booking() {
           basePrice: selectedBasePrice,
           finalPrice: selectedFinalPrice,
           requestedVehicleType: selectedRide || "",
+          // Persist payment preference for rider visibility and history
+          paymentMethod: paymentMethod === "online" ? "online" : "COD",
+          detailedPaymentMethod: paymentMethod === "online" ? resolveDetailed(selectedPaymentOption) : "",
         },
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
@@ -1187,38 +1202,7 @@ export default function Booking() {
                     </Box>
                   </Paper>
 
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-                    Select service
-                  </Typography>
-                  <Box>
-                    {rideOptions.filter((opt) => opt.id !== 'parcel').map((opt) => {
-                      const num = Number(String(opt.price).replace(/[^0-9.]/g, ''));
-                      const hasPrice = Number.isFinite(num) && num > 0;
-                      const min = hasPrice ? Math.round(num * 0.9) : null;
-                      const max = hasPrice ? Math.round(num * 1.12) : null;
-                      return (
-                        <ListItemButton
-                          key={`svc-mobile-${opt.id}`}
-                          selected={selectedRide === opt.id}
-                          onClick={() => setSelectedRide(opt.id)}
-                          sx={{ border: selectedRide === opt.id ? '2px solid #1E3A8A' : '1px solid #000', borderRadius: 2, mb: 1, bgcolor: selectedRide === opt.id ? '#E8EDFF' : undefined }}
-                        >
-                          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                              <span style={{ fontSize: 18 }}>{opt.icon}</span>
-                              <Typography variant="body2" sx={{ fontWeight: selectedRide === opt.id ? 'bold' : 'normal', color: selectedRide === opt.id ? '#1E3A8A' : 'inherit' }}>
-                                {opt.name.replace(/ • .*$/, '')}
-                              </Typography>
-                            </Box>
-                            <Typography variant="body2" sx={{ color: '#1E3A8A' }}>{selectedRide === opt.id && createdRide?.finalPrice != null ? `₹ ${Number(createdRide.finalPrice).toFixed(2)}` : opt.price}</Typography>
-                          </Box>
-                        </ListItemButton>
-                      );
-                    })}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                      <Chip size="small" label="Cash" variant="outlined" sx={{ borderColor: '#000', color: '#000' }} />
-                    </Box>
-                  </Box>
+                  {/* Service selection removed per request; defaulting to Bike */}
 
                   <Button
                     className="booking-blue-btn"
@@ -1227,7 +1211,7 @@ export default function Booking() {
                     onClick={handleFindRiders}
                     sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' } }}
                   >
-                    Continue Booking
+                    Find Driver
                   </Button>
                 </>
               ) : (
@@ -1238,7 +1222,7 @@ export default function Booking() {
                   onClick={handleFindRiders}
                   sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' } }}
                 >
-                  Book Ride
+                  Find Driver
                 </Button>
               )}
             </>
@@ -1249,7 +1233,15 @@ export default function Booking() {
         {/* Map panel */}
         <Paper
           className="booking-map"
-          sx={{ display: 'block', p: 1, borderRadius: 2, height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 360, md: 420 }, width: '100%' }}
+          sx={{
+            display: 'block',
+            p: 1,
+            borderRadius: 2,
+            // Make the map reliably visible on mobile and desktop
+            height: { xs: 'calc(100vh - 160px)', md: '70vh' },
+            minHeight: { xs: 420, md: 520 },
+            width: '100%'
+          }}
           ref={mapPanelRef}
         >
           <MapComponent
@@ -1325,8 +1317,8 @@ export default function Booking() {
                 }
               }}
             >
-              <FormControlLabel value="cash" control={<Radio />} label="Cash" />
               <FormControlLabel value="online" control={<Radio />} label="Online" />
+              <FormControlLabel value="cash" control={<Radio />} label="Cash (Pay at drop)" />
             </RadioGroup>
 
             {showDetailedPayments && (
@@ -1397,6 +1389,32 @@ export default function Booking() {
                       onClick={() => { setSelectedPaymentOption("upi_any"); setDetailedPaymentMethod("upi"); }}
                     >
                       Pay by any UPI app
+                    </ListItemButton>
+                  </Box>
+                </Box>
+
+                {/* Cards */}
+                <Box sx={{ mt: 1 }}>
+                  <Chip label="Cards" color="default" variant="outlined" sx={{ mb: 0.5 }} />
+                  <Box sx={{ display: "flex", flexDirection: "column" }}>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "card_any"}
+                      onClick={() => { setSelectedPaymentOption("card_any"); setDetailedPaymentMethod("card"); }}
+                    >
+                      Debit/Credit Card
+                    </ListItemButton>
+                  </Box>
+                </Box>
+
+                {/* Net Banking */}
+                <Box sx={{ mt: 1 }}>
+                  <Chip label="Net Banking" color="default" variant="outlined" sx={{ mb: 0.5 }} />
+                  <Box sx={{ display: "flex", flexDirection: "column" }}>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "net_banking_any"}
+                      onClick={() => { setSelectedPaymentOption("net_banking_any"); setDetailedPaymentMethod(""); }}
+                    >
+                      Net Banking
                     </ListItemButton>
                   </Box>
                 </Box>

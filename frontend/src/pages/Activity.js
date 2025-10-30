@@ -21,6 +21,24 @@ export default function Activity() {
   const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
   const API_URL = `${API_BASE}/api`;
 
+  // Helper to reliably open Google Maps (mobile-first, popup-safe)
+  const openNavUrl = (url) => {
+    try {
+      const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (typeof window !== 'undefined' && window.innerWidth < 768);
+      if (isMobile) {
+        try { window.location.assign(url); return; } catch {}
+      }
+      const win = window.open(url, isMobile ? "_self" : "_blank");
+      if (!win) {
+        try { window.location.assign(url); } catch (e1) {
+          try { window.top.location.href = url; } catch {}
+        }
+      }
+    } catch (e) {
+      try { window.location.href = url; } catch {}
+    }
+  };
+
   // Remove auto-OTP on mount; set OTP only after rider accepts
   // Generate and persist OTP when parcel status becomes 'accepted'
   useEffect(() => {
@@ -131,6 +149,61 @@ export default function Activity() {
               Vehicle: {liveParcel.assignedRider.vehicleType}
             </Typography>
             <Typography>Plate: {liveParcel.assignedRider.vehicleNumber}</Typography>
+            {/* Navigate in Google Maps after OTP verified */}
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>Open turn-by-turn navigation in Google Maps</Typography>
+              <button
+                onClick={() => {
+                  try {
+                    const o = liveParcel?.pickup || parcel?.pickup;
+                    const d = liveParcel?.drop || parcel?.drop;
+                    if (!o || !d) return;
+                    const origin = `${o.lat},${o.lng}`;
+                    const destination = `${d.lat},${d.lng}`;
+                    const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving&dir_action=navigate`;
+                    openNavUrl(url);
+                  } catch {}
+                }}
+                style={{
+                  backgroundColor: "#1E3A8A",
+                  color: "#fff",
+                  padding: "10px 14px",
+                  borderRadius: 8,
+                  border: "1px solid #000",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Navigate in Google Maps
+              </button>
+            </Box>
+          </Box>
+        )}
+
+        {/* Pay Now prompt after completion (mirrors booking page behavior) */}
+        {liveParcel?.status === 'completed' && (
+          <Box sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>Parcel Completed — Proceed to Payment</Typography>
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              {price != null ? `Amount: ₹${Number(price).toFixed(2)}` : 'Amount will be shown on the payment screen.'}
+            </Typography>
+            <button
+              onClick={() => {
+                const amt = price ? Number(price) : undefined;
+                try { window.location.href = amt != null ? `/payment` : `/payment`; } catch {}
+              }}
+              style={{
+                backgroundColor: "#0B2A6E",
+                color: "#fff",
+                padding: "10px 14px",
+                borderRadius: 8,
+                border: "1px solid #000",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              Pay Now
+            </button>
           </Box>
         )}
       </Paper>
