@@ -291,67 +291,7 @@ export default function Parcel() {
               <MenuItem value="Other">Other</MenuItem>
             </TextField>
 
-            {/* Pickup with suggestions */}
-            <Box sx={{ gridColumn: "1/3" }}>
-              <TextField
-                fullWidth
-                name="pickupAddress"
-                label="Pickup Address"
-                value={form.pickupAddress}
-                onChange={(e) => {
-                  handleChange(e);
-                  fetchSuggestions(e.target.value, "pickup");
-                }}
-              />
-              {pickupSuggestions.length > 0 && (
-                <List sx={{ border: "1px solid #ccc", maxHeight: 150, overflowY: "auto" }}>
-                  {pickupSuggestions.map((s, i) => (
-                    <ListItem key={i} disablePadding>
-                      <ListItemButton
-                        onClick={() => {
-                          setForm((prev) => ({ ...prev, pickupAddress: s.display_name }));
-                          setPickup({ lat: parseFloat(s.lat), lng: parseFloat(s.lon) });
-                          setPickupSuggestions([]);
-                        }}
-                      >
-                        {s.display_name}
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </Box>
-
-            {/* Drop with suggestions */}
-            <Box sx={{ gridColumn: "1/3" }}>
-              <TextField
-                fullWidth
-                name="dropAddress"
-                label="Drop Address"
-                value={form.dropAddress}
-                onChange={(e) => {
-                  handleChange(e);
-                  fetchSuggestions(e.target.value, "drop");
-                }}
-              />
-              {dropSuggestions.length > 0 && (
-                <List sx={{ border: "1px solid #ccc", maxHeight: 150, overflowY: "auto" }}>
-                  {dropSuggestions.map((s, i) => (
-                    <ListItem key={i} disablePadding>
-                      <ListItemButton
-                        onClick={() => {
-                          setForm((prev) => ({ ...prev, dropAddress: s.display_name }));
-                          setDrop({ lat: parseFloat(s.lat), lng: parseFloat(s.lon) });
-                          setDropSuggestions([]);
-                        }}
-                      >
-                        {s.display_name}
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </Box>
+            {/* Pickup/Drop addresses removed as requested – use map pins only */}
 
             {/* Parcel Details */}
             <TextField
@@ -388,7 +328,7 @@ export default function Parcel() {
           </Box>
 
           {/* --- RIGHT: Map (Google Maps with fallback) --- */}
-          <Box sx={{ height: { xs: '60vh', md: '70vh' }, borderRadius: 2, overflow: 'hidden' }}>
+          <Box sx={{ height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 380, md: 440 }, borderRadius: 2, overflow: 'hidden' }}>
             <Map
               apiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
               pickup={pickup}
