@@ -202,8 +202,8 @@ export default function Parcel() {
   // ✅ Custom marker icons (only used for legacy Leaflet map, kept for reference)
 
   return (
-    <Container maxWidth="lg">
-      <Paper sx={{ mt: 4, p: 4, borderRadius: 3 }}>
+    <Container maxWidth="lg" className="px-3 sm:px-6">
+      <Paper className="p-3 sm:p-4 rounded-2xl" sx={{ mt: 4, p: 4, borderRadius: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>
           📦 Book a Parcel
         </Typography>
@@ -213,9 +213,10 @@ export default function Parcel() {
 
         {/* ✅ Flex layout: Form (left) + Map (right) */}
         <Box
+          className="grid grid-cols-1 lg:grid-cols-2 gap-3"
           sx={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
             gap: 3,
           }}
         >
@@ -223,9 +224,10 @@ export default function Parcel() {
           <Box
             component="form"
             onSubmit={handleSubmit}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-2"
             sx={{
               display: "grid",
-              gridTemplateColumns: "1fr 1fr",
+              gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
               gap: 2,
             }}
           >
@@ -386,7 +388,7 @@ export default function Parcel() {
           </Box>
 
           {/* --- RIGHT: Map (Google Maps with fallback) --- */}
-          <Box sx={{ height: "100%", minHeight: "500px", borderRadius: 2, overflow: "hidden" }}>
+          <Box sx={{ height: { xs: '60vh', md: '70vh' }, borderRadius: 2, overflow: 'hidden' }}>
             <Map
               apiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
               pickup={pickup}

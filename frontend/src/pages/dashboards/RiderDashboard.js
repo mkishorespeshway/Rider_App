@@ -20,9 +20,9 @@ import { io } from "socket.io-client";
 import Map from "../../components/Map"; //  Google Maps component
 import { getMerchantDetails, confirmOnlinePayment, markCashPayment } from "../../services/api";
  
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5010";
 const API_URL = `${API_BASE}/api`;
-const SHOW_PARCELS_ON_DASHBOARD = true;
+const SHOW_PARCELS_ON_DASHBOARD = false;
 
 // Create a new socket connection for each tab instance
 const socket = io(API_BASE, {
@@ -738,7 +738,7 @@ export default function RiderDashboard() {
 
   return (
     // Blue header + white card layout to match login/register pages
-    <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0a3d62, #1266f1)' }}>
+    <Box className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-600" sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0a3d62, #1266f1)' }}>
       {/* Header with circular brand */}
       <Box sx={{ height: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Box sx={{ width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 32, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
@@ -747,13 +747,14 @@ export default function RiderDashboard() {
       </Box>
 
       {/* White form/content card overlapping header */}
-      <Box sx={{ maxWidth: 980, mx: 'auto', px: 2 }}>
-        <Paper elevation={6} sx={{ p: 3, borderRadius: 3, mt: '-80px', background: '#fff' }}>
+      <Box className="max-w-screen-md px-3 sm:px-6" sx={{ maxWidth: 980, mx: 'auto', px: 2 }}>
+        <Paper elevation={6} className="p-3 sm:p-4 rounded-2xl" sx={{ p: 3, borderRadius: 3, mt: '-80px', background: '#fff' }}>
           <Typography variant="h4" gutterBottom sx={{ fontWeight: 800, color: '#0a3d62' }}>
             Rider Dashboard
           </Typography>
  
           <Button
+            className="w-full sm:w-auto"
             variant="contained"
         sx={{
           bgcolor: "black",
@@ -766,9 +767,10 @@ export default function RiderDashboard() {
         Logout
       </Button>
 
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
+      <Box className="flex flex-col sm:flex-row gap-2" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
         <Button
           variant="contained"
+          className="w-full sm:w-auto"
           onClick={() => setIsOnline((prev) => !prev)}
           sx={{
             bgcolor: isOnline ? "success.main" : "error.main",
@@ -811,15 +813,16 @@ export default function RiderDashboard() {
               <Typography>
                 <b>Status:</b> {selectedRide.status === "in_progress" ? "Ride in Progress" : selectedRide.status === "completed" ? "Ride Completed" : "Waiting for OTP Verification"}
               </Typography>
-              <Box mt={2}>
-                <Button variant="contained" color="success" sx={{ mr: 2 }}>
+              <Box mt={2} className="flex flex-col sm:flex-row gap-2">
+                <Button className="w-full sm:w-auto" variant="contained" color="success" sx={{ mr: 2 }}>
                   Call 
                 </Button>
-                <Button variant="outlined" color="primary" sx={{ mr: 2 }}>
+                <Button className="w-full sm:w-auto" variant="outlined" color="primary" sx={{ mr: 2 }}>
                   Chat 
                 </Button>
                 {selectedRide.status !== "in_progress" && selectedRide.status !== "completed" && (
                   <Button
+                    className="w-full sm:w-auto"
                     variant="contained"
                     color="primary"
                     onClick={openOtpDialog}
@@ -829,6 +832,7 @@ export default function RiderDashboard() {
                 )}
                 {selectedRide.status === "in_progress" && (
                   <Button
+                    className="w-full sm:w-auto"
                     variant="contained"
                     color="success"
                     onClick={handleCompleteRide}
@@ -902,7 +906,7 @@ export default function RiderDashboard() {
           </Card>
  
           {/*  Google Map */}
-          <Paper sx={{ p: 1 }}>
+          <Paper sx={{ p: 1, height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 360, md: 420 }, borderRadius: 2, overflow: 'hidden' }}>
             <Map
               apiKey="AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"
               pickup={pickup}
@@ -935,14 +939,14 @@ export default function RiderDashboard() {
               <Typography><b>Drop:</b> {selectedParcel.dropAddress}</Typography>
               <Typography><b>Status:</b> {selectedParcel.status || "pending"}</Typography>
               {selectedParcel.status === "pending" && (
-                <Box mt={2}>
-                  <Button variant="contained" color="success" onClick={() => handleAcceptParcel(selectedParcel._id)}>Accept</Button>
-                  <Button variant="contained" color="error" sx={{ ml: 2 }} onClick={() => handleRejectParcel(selectedParcel._id)}>Reject</Button>
+                <Box mt={2} className="flex flex-col sm:flex-row gap-2">
+                  <Button className="w-full sm:w-auto" variant="contained" color="success" onClick={() => handleAcceptParcel(selectedParcel._id)}>Accept</Button>
+                  <Button className="w-full sm:w-auto" variant="contained" color="error" sx={{ ml: 2 }} onClick={() => handleRejectParcel(selectedParcel._id)}>Reject</Button>
                 </Box>
               )}
               {selectedParcel.status === "accepted" && (
-                <Box mt={2}>
-                  <Button variant="contained" color="primary" onClick={() => setParcelOtpDialogOpen(true)}>
+                <Box mt={2} className="flex flex-col sm:flex-row gap-2">
+                  <Button className="w-full sm:w-auto" variant="contained" color="primary" onClick={() => setParcelOtpDialogOpen(true)}>
                     Verify Parcel OTP
                   </Button>
                 </Box>
@@ -972,9 +976,25 @@ export default function RiderDashboard() {
                     );
                   })}
                 </Box>
-                <Box mt={2}>
-                  <Button variant="contained" color="warning" onClick={() => handleMarkDocsCopied(selectedParcel._id)}>
-                    Xerox Documents
+                <Box mt={2} className="flex flex-col sm:flex-row gap-2">
+                  <Button className="w-full sm:w-auto" variant="contained" color="primary" onClick={async () => {
+                    try {
+                      for (let i = 0; i < (selectedParcel?.documents?.length || 0); i++) {
+                        const d = selectedParcel.documents[i];
+                        await handleDownloadDoc(d, i);
+                      }
+                      await handleMarkDocsCopied(selectedParcel._id);
+                    } catch (e) {
+                      alert('Failed to download all documents');
+                      try { console.warn('Download all warning:', e); } catch {}
+                    }
+                  }}>
+                    Download All & Delete (Xerox)
+                  </Button>
+                </Box>
+                <Box mt={2} className="flex flex-col sm:flex-row gap-2">
+                  <Button className="w-full sm:w-auto" variant="contained" color="warning" onClick={() => handleMarkDocsCopied(selectedParcel._id)}>
+                    Hide/Delete Documents
                   </Button>
                 </Box>
                 <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
@@ -985,7 +1005,7 @@ export default function RiderDashboard() {
           </CardContent>
           </Card>
 
-          <Paper sx={{ p: 1 }}>
+          <Paper sx={{ p: 1, height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 360, md: 420 }, borderRadius: 2, overflow: 'hidden' }}>
             <Map
               apiKey="AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"
               pickup={pickup}
@@ -1021,8 +1041,9 @@ export default function RiderDashboard() {
                     <b>Drop:</b> {ride.drop}
                   </Typography>
                   <Typography>Status: {ride.status}</Typography>
-                  <Box mt={2}>
+                  <Box mt={2} className="flex flex-col sm:flex-row gap-2">
                     <Button
+                      className="w-full sm:w-auto"
                       variant="contained"
                       color="success"
                       onClick={() => handleAccept(ride._id)}
@@ -1030,6 +1051,7 @@ export default function RiderDashboard() {
                       Accept  
                     </Button>
                     <Button
+                      className="w-full sm:w-auto"
                       variant="contained"
                       color="error"
                       sx={{ ml: 2 }}

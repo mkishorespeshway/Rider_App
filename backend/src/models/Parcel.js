@@ -39,6 +39,10 @@ const parcelSchema = new mongoose.Schema(
       default: "pending",
     },
     parcelOtp: { type: String, default: null },
+    // Pricing and payment
+    finalPrice: { type: Number, default: null },
+    paymentStatus: { type: String, enum: ["unpaid", "paid"], default: "unpaid" },
+    paymentMethod: { type: String, enum: ["cash", "online", null], default: null },
     // Assigned rider after OTP verification
     assignedRider: {
       id: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

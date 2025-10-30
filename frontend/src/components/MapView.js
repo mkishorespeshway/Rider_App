@@ -46,7 +46,7 @@ export default function MapView({
     : defaultPosition;
 
   return (
-    <div style={{ height: "400px", width: "100%" }}> {/* ✅ Set container height */}
+    <div style={{ height: "100%", minHeight: "300px", width: "100%" }}> {/* ✅ Responsive height with safe minimum */}
       <MapContainer
         center={mapCenter}
         zoom={14}

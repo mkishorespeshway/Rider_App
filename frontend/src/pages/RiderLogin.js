@@ -96,7 +96,7 @@ export default function RiderLogin() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", background: "#f8fafc" }}>
+    <Box className="min-h-screen bg-gray-50" sx={{ minHeight: "100vh", background: "#f8fafc" }}>
       {/* Blue Header Section */}
       <Box
         sx={{
@@ -127,7 +127,7 @@ export default function RiderLogin() {
       </Box>
 
       {/* White Form Section */}
-      <Container maxWidth="xs">
+      <Container maxWidth="xs" className="px-3 sm:px-6">
         <Box
           sx={{
             background: "white",

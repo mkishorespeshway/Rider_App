@@ -1249,7 +1249,7 @@ export default function Booking() {
         {/* Map panel */}
         <Paper
           className="booking-map"
-          sx={{ display: 'block', p: 1, borderRadius: 2, height: { xs: '60vh', md: '70vh' }, width: '100%' }}
+          sx={{ display: 'block', p: 1, borderRadius: 2, height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 360, md: 420 }, width: '100%' }}
           ref={mapPanelRef}
         >
           <MapComponent

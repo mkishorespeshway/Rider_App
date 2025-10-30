@@ -14,7 +14,8 @@ export default function UserDashboard() {
   };
 
   return (
-    <Box sx={{ p: 4 }}>
+    <Box className="min-h-screen bg-gray-50" sx={{ p: 4 }}>
+      <Box className="max-w-screen-sm mx-auto px-3 sm:px-6">
       <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>
         User Dashboard
       </Typography>
@@ -25,6 +26,7 @@ export default function UserDashboard() {
       {/* ✅ Logout button */}
       <Button
         variant="contained"
+        className="w-full sm:w-auto"
         sx={{ bgcolor: "black", color: "white", "&:hover": { bgcolor: "#333" } }}
         onClick={handleLogout}
       >
@@ -33,6 +35,7 @@ export default function UserDashboard() {
 
       {/* 🚨 SOS Button */}
       <SOSButton role="user" />
+      </Box>
     </Box>
   );
 }

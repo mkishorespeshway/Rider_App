@@ -802,7 +802,7 @@ export default function RiderDashboard() {
           </Card>
  
           {/*  Google Map */}
-          <Paper sx={{ p: 1 }}>
+          <Paper sx={{ p: 1, height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 360, md: 420 }, borderRadius: 2, overflow: 'hidden' }}>
             <Map
               apiKey="AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"
               pickup={pickup}
@@ -885,7 +885,7 @@ export default function RiderDashboard() {
           </CardContent>
           </Card>
 
-          <Paper sx={{ p: 1 }}>
+          <Paper sx={{ p: 1, height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 360, md: 420 }, borderRadius: 2, overflow: 'hidden' }}>
             <Map
               apiKey="AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"
               pickup={pickup}

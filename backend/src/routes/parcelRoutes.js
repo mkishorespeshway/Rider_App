@@ -450,4 +450,27 @@ router.get('/:id/documents/:idx/download', authMiddleware, async (req, res) => {
     return res.status(500).json({ success: false, message: 'Failed to download document' });
   }
 });
+
+// 💵 Mark parcel cash payment (sets finalPrice and payment status)
+router.post('/:id/pay/cash', authMiddleware, async (req, res) => {
+  try {
+    const parcel = await Parcel.findById(req.params.id);
+    if (!parcel) return res.status(404).json({ success: false, message: 'Parcel not found' });
+
+    const amount = Number(req.body?.amount);
+    if (!isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid amount is required' });
+    }
+
+    parcel.finalPrice = amount;
+    parcel.paymentMethod = 'cash';
+    parcel.paymentStatus = 'paid';
+    await parcel.save();
+
+    res.json({ success: true, parcel });
+  } catch (err) {
+    console.error('Parcel cash payment error:', err?.message || err);
+    res.status(500).json({ success: false, message: 'Failed to mark parcel cash payment' });
+  }
+});
 module.exports = router;
