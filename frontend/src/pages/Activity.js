@@ -25,7 +25,7 @@ export default function Activity() {
   // Generate and persist OTP when parcel status becomes 'accepted'
   useEffect(() => {
     if (!liveParcel?._id) return;
-    if (liveParcel?.status === "accepted" && !otp) {
+    if (liveParcel?.status === "accepted") {
       setStatus("Rider accepted. Share OTP to start 📲");
       try {
         const key = `parcelOtp:${liveParcel._id}`;
@@ -34,13 +34,16 @@ export default function Activity() {
           existing = Math.floor(1000 + Math.random() * 9000).toString();
           localStorage.setItem(key, existing);
         }
+        // Always set OTP regardless of previous state
         setOtp(existing);
         axios
           .post(`${API_URL}/parcels/${liveParcel._id}/set-otp`, { otp: existing })
           .catch(() => {});
-      } catch {}
+      } catch (error) {
+        console.error("Error setting OTP:", error);
+      }
     }
-  }, [liveParcel, otp]);
+  }, [liveParcel]);
 
   // 🔄 Poll parcel to reflect rider acceptance and progress
   useEffect(() => {

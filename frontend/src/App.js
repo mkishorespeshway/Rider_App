@@ -103,6 +103,15 @@ export default function App() {
               }
             />
 
+            <Route
+              path="/activity"
+              element={
+                <ProtectedRoute role="user">
+                  <Activity />
+                </ProtectedRoute>
+              }
+            />
+
             {/* RIDER */}
             <Route
               path="/rider-login"

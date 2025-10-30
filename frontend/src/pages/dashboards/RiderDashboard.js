@@ -22,7 +22,7 @@ import { getMerchantDetails, confirmOnlinePayment, markCashPayment } from "../..
  
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const API_URL = `${API_BASE}/api`;
-const SHOW_PARCELS_ON_DASHBOARD = false;
+const SHOW_PARCELS_ON_DASHBOARD = true;
 
 // Create a new socket connection for each tab instance
 const socket = io(API_BASE, {
