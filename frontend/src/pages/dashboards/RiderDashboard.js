@@ -964,6 +964,14 @@ export default function RiderDashboard() {
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                               Ask user to scan and pay. Payment status updates on their side.
                             </Typography>
+                            <Box sx={{ mt: 1 }}>
+                              <Button size="small" variant="outlined" onClick={() => {
+                                try {
+                                  const url = `upi://pay?${qrParams.toString()}`;
+                                  window.open(url, '_blank');
+                                } catch {}
+                              }}>Pay Now</Button>
+                            </Box>
                           </Box>
                         </Box>
                       );
@@ -1160,6 +1168,11 @@ export default function RiderDashboard() {
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                           Ask user to scan and pay. Payment status updates on their side.
                         </Typography>
+                        <Box sx={{ mt: 1 }}>
+                          <Button size="small" variant="outlined" onClick={() => {
+                            try { window.open(qrUpiUrl, '_blank'); } catch {}
+                          }}>Pay Now</Button>
+                        </Box>
                       </Box>
                     </Box>
                   );

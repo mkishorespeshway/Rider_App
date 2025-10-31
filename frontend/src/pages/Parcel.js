@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Container,
   Paper,
@@ -119,6 +119,8 @@ export default function Parcel() {
     }
     setDocuments(filtered);
   };
+
+  const fileInputRef = useRef(null);
 
   // Drag & drop helpers
   const onDropZoneDragOver = (e) => { try { e.preventDefault(); e.stopPropagation(); } catch {} };
@@ -365,10 +367,8 @@ export default function Parcel() {
                 <Box onDragOver={onDropZoneDragOver} onDrop={onDropZoneDrop} sx={{ border: "2px dashed #9aa0a6", borderRadius: 2, p: 3, textAlign: "center", bgcolor: "#fafafa" }}>
                   <Typography sx={{ mb: 1 }}>Drop files here or click to upload (PDF, JPG, PNG)</Typography>
                   <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 2 }}>Maximum upload size per file: 50 MB • Maximum files: 15</Typography>
-                  <label htmlFor="xerox-file-input">
-                    <input id="xerox-file-input" type="file" multiple onChange={handleDocsChange} style={{ display: "none" }} accept=".pdf,image/png,image/jpeg" />
-                    <Button variant="contained" sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" } }}>Upload your files</Button>
-                  </label>
+                  <input ref={fileInputRef} id="xerox-file-input" type="file" multiple onChange={handleDocsChange} style={{ display: "none" }} accept=".pdf,image/png,image/jpeg" />
+                  <Button onClick={() => fileInputRef.current?.click()} variant="contained" sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" } }}>Upload your files</Button>
                   {documents.length > 0 && (
                     <List dense sx={{ mt: 2 }}>
                       {documents.map((f, idx) => (
