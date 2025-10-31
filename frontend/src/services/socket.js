@@ -1,11 +1,11 @@
 // src/services/socket.js
 import { io } from "socket.io-client";
 
-// Prefer explicit socket URL; fall back to API URL; then localhost:5010
+// Prefer explicit socket URL; fall back to API URL; then localhost:5000
 const SOCKET_URL =
   process.env.REACT_APP_SOCKET_URL ||
   process.env.REACT_APP_API_URL ||
-  "http://localhost:5010";
+  "http://localhost:5000";
 
 // Single shared Socket.IO client with sane reconnection settings
 export const socket = io(SOCKET_URL, {

@@ -13,6 +13,7 @@ const BookRide = () => {
     // In a real app, this would use the browser's geolocation API
     return {
       latitude: 12.9716,
+      
       longitude: 77.5946
     };
   };

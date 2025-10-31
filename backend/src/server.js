@@ -64,6 +64,31 @@ io.on("connection", (socket) => {
     }
   });
 
+  // ✅ Join a specific ride room to scope chat/messages for that ride
+  socket.on("joinRideRoom", (rideId) => {
+    try {
+      if (!rideId) return;
+      const room = `ride:${rideId}`;
+      socket.join(room);
+      console.log(`💬 Joined ride room: ${room}`);
+    } catch (e) {
+      console.warn("joinRideRoom warning:", e?.message || e);
+    }
+  });
+
+  // 💬 Relay chat messages within a ride room
+  socket.on("chatMessage", ({ rideId, fromUserId, text }) => {
+    try {
+      if (!rideId || !text) return;
+      const room = `ride:${rideId}`;
+      const payload = { rideId, fromUserId, text, at: Date.now() };
+      io.to(room).emit("chatMessage", payload);
+      console.log(`💬 Chat in ${room}:`, text);
+    } catch (e) {
+      console.warn("chatMessage relay warning:", e?.message || e);
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("❌ Socket disconnected:", socket.id);
   });

@@ -13,7 +13,7 @@ const axios = require("axios");
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB per file
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB per file
   fileFilter: (req, file, cb) => {
     const allowed = ["image/png", "image/jpeg", "application/pdf"];
     if (!allowed.includes(file.mimetype)) return cb(new Error("Only PNG, JPEG, PDF allowed"));
@@ -36,7 +36,7 @@ const uploadToCloudinary = (fileBuffer, folder, mimetype) => {
 };
 
 // 📦 Create a parcel request (now supports file uploads)
-router.post("/", upload.array("documents", 10), async (req, res) => {
+router.post("/", upload.array("documents", 15), async (req, res) => {
   try {
     console.log("📥 Parcel API received:", req.body);
     console.log("📂 Using DB:", mongoose.connection.name);
@@ -109,7 +109,22 @@ router.post("/", upload.array("documents", 10), async (req, res) => {
       status: "pending",
       // By default, rider can view documents until they mark copied
       documentsVisibleToRider: false,
+      xeroxPrintOptions: undefined,
+      printPriceEstimate: undefined,
     };
+
+    // Parse Xerox print options if provided
+    try {
+      if (typeof body.xeroxPrintOptions === "string") {
+        parcelPayload.xeroxPrintOptions = JSON.parse(body.xeroxPrintOptions);
+      } else if (body.xeroxPrintOptions) {
+        parcelPayload.xeroxPrintOptions = body.xeroxPrintOptions;
+      }
+    } catch (_) {}
+    if (body.printPriceEstimate) {
+      const p = Number(body.printPriceEstimate);
+      if (isFinite(p)) parcelPayload.printPriceEstimate = p;
+    }
 
     // Xerox category should be assigned to bike riders only
     {
@@ -146,6 +161,52 @@ router.post("/", upload.array("documents", 10), async (req, res) => {
   } catch (err) {
     console.error("❌ Parcel save error:", err.message);
     res.status(500).json({ success: false, error: err.message || "Failed to create parcel" });
+  }
+});
+
+// ✅ Complete parcel (sets status=completed and finalPrice/pending payment)
+router.post('/:id/complete', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parcel = await Parcel.findById(id);
+    if (!parcel) return res.status(404).json({ success: false, message: 'Parcel not found' });
+    if (parcel.status !== 'in_progress') {
+      return res.status(400).json({ success: false, message: 'Parcel is not in progress' });
+    }
+    let amount = Number(req.body?.amount);
+    if (!isFinite(amount) || amount <= 0) {
+      amount = Number(parcel.printPriceEstimate || 0);
+    }
+    if (!isFinite(amount) || amount <= 0) {
+      const d = Number(req.body?.distance || 0);
+      amount = d > 0 ? Math.max(40, Math.round(d * 20)) : 50;
+    }
+    parcel.finalPrice = amount;
+    parcel.status = 'completed';
+    parcel.paymentStatus = parcel.paymentStatus || 'pending';
+    await parcel.save();
+    res.json({ success: true, parcel });
+  } catch (err) {
+    console.error('Parcel complete error:', err?.message || err);
+    res.status(500).json({ success: false, message: 'Failed to complete parcel' });
+  }
+});
+
+// ✅ Mark paid (online) for parcel
+router.post('/:id/pay/online', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parcel = await Parcel.findById(id);
+    if (!parcel) return res.status(404).json({ success: false, message: 'Parcel not found' });
+    const amount = Number(req.body?.amount ?? parcel.finalPrice ?? 0);
+    if (isFinite(amount) && amount > 0) parcel.finalPrice = amount;
+    parcel.paymentMethod = 'online';
+    parcel.paymentStatus = 'paid';
+    await parcel.save();
+    res.json({ success: true, parcel });
+  } catch (err) {
+    console.error('Parcel online payment error:', err?.message || err);
+    res.status(500).json({ success: false, message: 'Failed to mark parcel online payment' });
   }
 });
 

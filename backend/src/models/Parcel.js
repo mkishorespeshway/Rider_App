@@ -28,6 +28,15 @@ const parcelSchema = new mongoose.Schema(
         size: Number,
       },
     ],
+    // Xerox print store options
+    xeroxPrintOptions: {
+      size: { type: String, default: null }, // A4/A3/A5
+      colorMode: { type: String, default: null }, // bw/color
+      sides: { type: String, default: null }, // single/double
+      copies: { type: Number, default: null },
+      totalPages: { type: Number, default: null },
+    },
+    printPriceEstimate: { type: Number, default: null },
     // Visibility and tracking for rider document access
     documentsVisibleToRider: { type: Boolean, default: false },
     docsCopiedAt: { type: Date, default: null },

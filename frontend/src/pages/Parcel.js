@@ -24,6 +24,7 @@ import "leaflet/dist/leaflet.css";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import Map from "../components/Map";
+import "../parcel-mobile.css";
 
 export default function Parcel() {
   const [form, setForm] = useState({
@@ -41,6 +42,8 @@ export default function Parcel() {
   const [drop, setDrop] = useState(null);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [documents, setDocuments] = useState([]);
+  const [xeroxOptions, setXeroxOptions] = useState({ size: "A4", colorMode: "bw", sides: "single", copies: 1, totalPages: 1 });
+  const [priceEstimate, setPriceEstimate] = useState(0);
   // clear documents when category doesn't require uploads
   useEffect(() => {
     const cat = String(form.parcelCategory || "").trim().toLowerCase();
@@ -48,6 +51,19 @@ export default function Parcel() {
       setDocuments([]);
     }
   }, [form.parcelCategory]);
+
+  // Compute simple price estimate similar to Blinkit
+  useEffect(() => {
+    try {
+      const pages = Math.max(1, Number(xeroxOptions.totalPages) || 1);
+      const copies = Math.max(1, Number(xeroxOptions.copies) || 1);
+      const perPage = xeroxOptions.colorMode === "color" ? 15 : 3;
+      const sidesFactor = xeroxOptions.sides === "double" ? 0.9 : 1.0; // small discount for double-sided
+      const sizeFactor = xeroxOptions.size === "A3" ? 2 : xeroxOptions.size === "A5" ? 0.7 : 1;
+      const total = Math.round(perPage * sizeFactor * sidesFactor * pages * copies);
+      setPriceEstimate(total);
+    } catch {}
+  }, [xeroxOptions]);
 
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [dropSuggestions, setDropSuggestions] = useState([]);
@@ -85,7 +101,34 @@ export default function Parcel() {
   // 📤 Document change handler
   const handleDocsChange = (e) => {
     const files = Array.from(e.target.files || []);
-    setDocuments(files);
+    const allowedTypes = ["image/png", "image/jpeg", "application/pdf"];
+    const maxPerFileMB = 50;
+    const maxFiles = 15;
+    const filtered = [];
+    for (const f of files) {
+      if (!allowedTypes.includes(f.type)) {
+        alert(`Unsupported file type: ${f.type}. Allowed: PNG, JPG, PDF.`);
+        continue;
+      }
+      if (f.size > maxPerFileMB * 1024 * 1024) {
+        alert(`${f.name} exceeds ${maxPerFileMB} MB limit`);
+        continue;
+      }
+      filtered.push(f);
+      if (filtered.length >= maxFiles) break;
+    }
+    setDocuments(filtered);
+  };
+
+  // Drag & drop helpers
+  const onDropZoneDragOver = (e) => { try { e.preventDefault(); e.stopPropagation(); } catch {} };
+  const onDropZoneDrop = (e) => {
+    try {
+      e.preventDefault();
+      const dtFiles = Array.from(e.dataTransfer?.files || []);
+      const mockEvent = { target: { files: dtFiles } };
+      handleDocsChange(mockEvent);
+    } catch {}
   };
 
   // 📍 Suggestions search (within ~30km radius)
@@ -159,6 +202,11 @@ export default function Parcel() {
       formData.append("pickup", JSON.stringify(pickupData));
       formData.append("drop", JSON.stringify(dropData));
       documents.forEach((file) => formData.append("documents", file));
+      const isXerox = String(form.parcelCategory || "").trim().toLowerCase() === "xerox";
+      if (isXerox) {
+        formData.append("xeroxPrintOptions", JSON.stringify(xeroxOptions));
+        formData.append("printPriceEstimate", String(priceEstimate));
+      }
 
       const res = await axios.post(`${API_URL}/parcels`, formData);
       // Persist active parcel context so Activity works across reloads/devices
@@ -207,8 +255,8 @@ export default function Parcel() {
   // ✅ Custom marker icons (only used for legacy Leaflet map, kept for reference)
 
   return (
-    <Container maxWidth="lg" className="px-3 sm:px-6">
-      <Paper className="p-3 sm:p-4 rounded-2xl" sx={{ mt: 4, p: 4, borderRadius: 3 }}>
+    <Container maxWidth="lg" className="parcel-container px-3 sm:px-6">
+      <Paper className="parcel-paper p-3 sm:p-4 rounded-2xl" sx={{ mt: 4, p: 4, borderRadius: 3 }}>
         <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>
           📦 Book a Parcel
         </Typography>
@@ -310,11 +358,52 @@ export default function Parcel() {
               sx={{ gridColumn: "1/3" }}
             />
 
-            {/* Upload Documents (only for Xerox/Documents) */}
-            {(["xerox" ].includes(String(form.parcelCategory || "").trim().toLowerCase())) && (
+            {/* Upload Documents and Print Options (Xerox) */}
+            {(["xerox", "documents" ].includes(String(form.parcelCategory || "").trim().toLowerCase())) && (
               <Box sx={{ gridColumn: "1/3" }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>Upload Document(s)</Typography>
-                <input type="file" multiple onChange={handleDocsChange} />
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>Upload your files</Typography>
+                <Box onDragOver={onDropZoneDragOver} onDrop={onDropZoneDrop} sx={{ border: "2px dashed #9aa0a6", borderRadius: 2, p: 3, textAlign: "center", bgcolor: "#fafafa" }}>
+                  <Typography sx={{ mb: 1 }}>Drop files here or click to upload (PDF, JPG, PNG)</Typography>
+                  <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 2 }}>Maximum upload size per file: 50 MB • Maximum files: 15</Typography>
+                  <label htmlFor="xerox-file-input">
+                    <input id="xerox-file-input" type="file" multiple onChange={handleDocsChange} style={{ display: "none" }} accept=".pdf,image/png,image/jpeg" />
+                    <Button variant="contained" sx={{ bgcolor: "black", "&:hover": { bgcolor: "#333" } }}>Upload your files</Button>
+                  </label>
+                  {documents.length > 0 && (
+                    <List dense sx={{ mt: 2 }}>
+                      {documents.map((f, idx) => (
+                        <ListItem key={`${f.name}-${idx}`} sx={{ py: 0.5 }}>
+                          <ListItemButton disableRipple sx={{ cursor: "default" }}>
+                            {f.name} • {(f.size / (1024 * 1024)).toFixed(2)} MB
+                          </ListItemButton>
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </Box>
+
+                <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 2 }}>
+                  <TextField select label="Paper Size" value={xeroxOptions.size} onChange={(e) => setXeroxOptions((o) => ({ ...o, size: e.target.value }))}>
+                    <MenuItem value="A4">A4</MenuItem>
+                    <MenuItem value="A3">A3</MenuItem>
+                    <MenuItem value="A5">A5</MenuItem>
+                  </TextField>
+                  <TextField select label="Color Mode" value={xeroxOptions.colorMode} onChange={(e) => setXeroxOptions((o) => ({ ...o, colorMode: e.target.value }))}>
+                    <MenuItem value="bw">Black & White</MenuItem>
+                    <MenuItem value="color">Color</MenuItem>
+                  </TextField>
+                  <TextField select label="Print Sides" value={xeroxOptions.sides} onChange={(e) => setXeroxOptions((o) => ({ ...o, sides: e.target.value }))}>
+                    <MenuItem value="single">Single-sided</MenuItem>
+                    <MenuItem value="double">Double-sided</MenuItem>
+                  </TextField>
+                  <TextField type="number" label="Copies" inputProps={{ min: 1 }} value={xeroxOptions.copies} onChange={(e) => setXeroxOptions((o) => ({ ...o, copies: Math.max(1, Number(e.target.value) || 1) }))} />
+                  <TextField type="number" label="Total Pages" inputProps={{ min: 1 }} value={xeroxOptions.totalPages} onChange={(e) => setXeroxOptions((o) => ({ ...o, totalPages: Math.max(1, Number(e.target.value) || 1) }))} />
+                </Box>
+
+                <Box sx={{ mt: 2, p: 2, border: "1px solid #eee", borderRadius: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="subtitle2">Estimated print price</Typography>
+                  <Typography variant="h6">₹ {priceEstimate}</Typography>
+                </Box>
               </Box>
             )}
 

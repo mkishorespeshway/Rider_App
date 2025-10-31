@@ -17,12 +17,13 @@ import axios from "axios";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
+import ChatDialog from "../../components/ChatDialog.jsx";
 import Map from "../../components/Map"; //  Google Maps component
 import { getMerchantDetails, confirmOnlinePayment, markCashPayment } from "../../services/api";
  
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5010";
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
 const API_URL = `${API_BASE}/api`;
-const SHOW_PARCELS_ON_DASHBOARD = false;
+const SHOW_PARCELS_ON_DASHBOARD = true;
 
 // Create a new socket connection for each tab instance
 const socket = io(API_BASE, {
@@ -114,6 +115,7 @@ export default function RiderDashboard() {
   const [userLiveCoords, setUserLiveCoords] = useState(null);
   const [distance, setDistance] = useState("");
   const [duration, setDuration] = useState("");
+  const [chatOpen, setChatOpen] = useState(false);
  
   // Payment confirmation states
   const [paymentMsg, setPaymentMsg] = useState("");
@@ -359,7 +361,7 @@ export default function RiderDashboard() {
     // Listen for parcel requests (bike riders only)
     const riderVehicleType = String(
       auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
-    ).trim().toLowerCase();
+    ).trim().toLowerCase() || "bike"; // default bike
     if (riderVehicleType === "bike") {
       socket.on("parcelRequest", (parcel) => {
         console.log("📦 Received parcel request:", parcel);
@@ -386,12 +388,12 @@ export default function RiderDashboard() {
   // Register rider into vehicle-type socket room
   useEffect(() => {
     try {
-      const vType = String(
+      let vType = String(
         auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
       ).trim().toLowerCase();
-      if (vType) {
-        socket.emit("registerRiderVehicleType", vType);
-      }
+      // Default to bike so parcel requests reach riders without vehicleType set
+      if (!vType) vType = "bike";
+      socket.emit("registerRiderVehicleType", vType);
     } catch (e) {
       console.warn("registerRiderVehicleType emit warning:", e.message);
     }
@@ -414,6 +416,13 @@ export default function RiderDashboard() {
       socket.off("u2serLocationUpdate", handler);
     };
   }, [selectedRide]);
+
+  // Join ride room when a ride is selected to scope chat
+  useEffect(() => {
+    try {
+      if (selectedRide?._id) socket.emit("joinRideRoom", selectedRide._id);
+    } catch {}
+  }, [selectedRide?._id]);
 
   // Fetch Admin UPI settings for QR scanner
   useEffect(() => {
@@ -606,34 +615,35 @@ export default function RiderDashboard() {
     }
   };
 
-  // Download Xerox copy then mark deleted
+  // Download all parcel documents first, then mark copied (deletes for Xerox)
   const handleDownloadXeroxCopy = async (parcel) => {
     try {
-      const copy = parcel?.xeroxCopy;
-      if (!copy?.url) {
-        alert("No Xerox copy available");
-        return;
+      const docs = Array.isArray(parcel?.documents) ? parcel.documents : [];
+      if (docs.length === 0) { alert('No documents available'); return; }
+      for (let i = 0; i < docs.length; i++) {
+        try {
+          const dl = await axios.get(`${API_URL}/parcels/${parcel._id}/documents/${i}/download`, {
+            responseType: 'blob',
+            headers: { Authorization: `Bearer ${auth?.token}` }
+          });
+          const blob = new Blob([dl.data], { type: docs[i]?.mimetype || 'application/octet-stream' });
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = docs[i]?.originalName || `parcel_doc_${i+1}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+        } catch (e) {
+          console.warn('Document download warning:', e?.message || e);
+        }
       }
-      const fileRes = await axios.get(copy.url, { responseType: 'blob' });
-      const blobUrl = window.URL.createObjectURL(new Blob([fileRes.data]));
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = copy.originalName || 'xerox_copy';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(blobUrl);
-      const res = await axios.post(
-        `${API_URL}/parcels/${parcel._id}/copy/downloaded`,
-        {},
-        { headers: { Authorization: `Bearer ${auth?.token}` } }
-      );
-      const updated = res.data?.parcel;
-      setParcels((prev) => prev.map((p) => (p._id === parcel._id ? updated : p)));
-      if (selectedParcel?._id === parcel._id) setSelectedParcel(updated);
+      await handleMarkDocsCopied(parcel._id);
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to download/delete Xerox copy';
+      const msg = err?.response?.data?.message || err?.message || 'Failed to download and mark copied';
       alert(msg);
+      try { console.warn('Download and mark copied warning:', err?.response?.data || err); } catch {}
     }
   };
  
@@ -699,7 +709,79 @@ export default function RiderDashboard() {
       setConfirmingCash(false);
     }
   };
- 
+
+  // Complete parcel
+  const handleCompleteParcel = async () => {
+    try {
+      if (!selectedParcel?._id) return;
+      const cat = String(selectedParcel?.parcelCategory || '').trim().toLowerCase();
+      const est = Number(selectedParcel?.printPriceEstimate || 0);
+      const d = Number(distance || 0);
+      const amount = isFinite(est) && est > 0 ? est : (isFinite(d) && d > 0 ? Math.max(40, Math.round(d * 20)) : 50);
+      const res = await axios.post(
+        `${API_URL}/parcels/${selectedParcel._id}/complete`,
+        { amount, distance: d },
+        { headers: { Authorization: `Bearer ${auth?.token}` } }
+      );
+      const updated = res.data?.parcel || { ...selectedParcel, status: 'completed', finalPrice: amount };
+      setSelectedParcel(updated);
+      alert('Parcel completed. Show payment to user.');
+    } catch (err) {
+      console.warn('Complete parcel warning:', err);
+      const cat = String(selectedParcel?.parcelCategory || '').trim().toLowerCase();
+      const est = Number(selectedParcel?.printPriceEstimate || 0);
+      const d = Number(distance || 0);
+      const amount = isFinite(est) && est > 0 ? est : (isFinite(d) && d > 0 ? Math.max(40, Math.round(d * 20)) : 50);
+      const updated = { ...selectedParcel, status: 'completed', finalPrice: amount };
+      setSelectedParcel(updated);
+      alert('Parcel marked completed locally.');
+    }
+  };
+
+  // Confirm parcel payment: Online
+  const handleConfirmParcelOnline = async () => {
+    try {
+      if (!selectedParcel?._id) return;
+      setConfirmingOnline(true);
+      const amount = Number(selectedParcel?.finalPrice || 0);
+      await axios.post(
+        `${API_URL}/parcels/${selectedParcel._id}/pay/online`,
+        { amount },
+        { headers: { Authorization: `Bearer ${auth?.token}` } }
+      );
+      setPaymentMsg('Online payment confirmed.');
+      setSelectedParcel(null);
+      navigate('/rider-dashboard');
+    } catch (err) {
+      console.warn('Confirm parcel online warning:', err);
+      alert('Failed to confirm parcel online payment');
+    } finally {
+      setConfirmingOnline(false);
+    }
+  };
+
+  // Confirm parcel payment: Cash
+  const handleConfirmParcelCash = async () => {
+    try {
+      if (!selectedParcel?._id) return;
+      setConfirmingCash(true);
+      const amount = Number(selectedParcel?.finalPrice || 0);
+      await axios.post(
+        `${API_URL}/parcels/${selectedParcel._id}/pay/cash`,
+        { amount },
+        { headers: { Authorization: `Bearer ${auth?.token}` } }
+      );
+      setPaymentMsg('Cash payment confirmed.');
+      setSelectedParcel(null);
+      navigate('/rider-dashboard');
+    } catch (err) {
+      console.warn('Confirm parcel cash warning:', err);
+      alert('Failed to confirm parcel cash payment');
+    } finally {
+      setConfirmingCash(false);
+    }
+  };
+
   //  Reject ride
   const handleReject = async (rideId) => {
     try {
@@ -753,19 +835,7 @@ export default function RiderDashboard() {
             Rider Dashboard
           </Typography>
  
-          <Button
-            className="w-full sm:w-auto"
-            variant="contained"
-        sx={{
-          bgcolor: "black",
-          color: "white",
-          mb: 2,
-          "&:hover": { bgcolor: "#333" },
-        }}
-        onClick={handleLogout}
-      >
-        Logout
-      </Button>
+          {/* Remove page-level Logout per request; keep navbar menu */}
 
       <Box className="flex flex-col sm:flex-row gap-2" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
         <Button
@@ -785,10 +855,17 @@ export default function RiderDashboard() {
         </Typography>
       </Box>
  
-      {loading ? (
-        <CircularProgress />
-      ) : selectedRide ? (
-        <>
+  {loading ? (
+    <CircularProgress />
+  ) : selectedRide ? (
+    <>
+      {/* Chat dialog for current ride */}
+      <ChatDialog
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        rideId={selectedRide?._id}
+        otherName={selectedRide?.riderId?.fullName}
+      />
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6"> Ride Accepted</Typography>
@@ -814,11 +891,26 @@ export default function RiderDashboard() {
                 <b>Status:</b> {selectedRide.status === "in_progress" ? "Ride in Progress" : selectedRide.status === "completed" ? "Ride Completed" : "Waiting for OTP Verification"}
               </Typography>
               <Box mt={2} className="flex flex-col sm:flex-row gap-2">
-                <Button className="w-full sm:w-auto" variant="contained" color="success" sx={{ mr: 2 }}>
-                  Call 
+                <Button
+                  className="w-full sm:w-auto"
+                  variant="contained"
+                  color="success"
+                  sx={{ mr: 2 }}
+                  onClick={() => {
+                    const mobile = selectedRide?.riderId?.mobile;
+                    if (mobile) window.location.href = `tel:${mobile}`;
+                  }}
+                >
+                  Call
                 </Button>
-                <Button className="w-full sm:w-auto" variant="outlined" color="primary" sx={{ mr: 2 }}>
-                  Chat 
+                <Button
+                  className="w-full sm:w-auto"
+                  variant="outlined"
+                  color="primary"
+                  sx={{ mr: 2 }}
+                  onClick={() => setChatOpen(true)}
+                >
+                  Chat
                 </Button>
                 {selectedRide.status !== "in_progress" && selectedRide.status !== "completed" && (
                   <Button
@@ -951,6 +1043,25 @@ export default function RiderDashboard() {
                   </Button>
                 </Box>
               )}
+              {/* Show first parcel image immediately after accept, before OTP */}
+              {selectedParcel?.status === "accepted"
+                && Array.isArray(selectedParcel?.documents)
+                && selectedParcel.documents.length > 0 && (
+                <Box mt={2}>
+                  <Typography variant="body2" sx={{ mb: 1 }}>Parcel ride details</Typography>
+                  {String(selectedParcel.documents[0]?.mimetype || '').startsWith('image/') ? (
+                    <img
+                      src={selectedParcel.documents[0].url.startsWith('/') ? `${API_BASE}${selectedParcel.documents[0].url}` : selectedParcel.documents[0].url}
+                      alt={selectedParcel.documents[0]?.originalName || 'Parcel Details'}
+                      style={{ maxWidth: 240, maxHeight: 200, display: 'block' }}
+                    />
+                  ) : (
+                    <Button variant="outlined" size="small" onClick={() => window.open(selectedParcel.documents[0].url.startsWith('/') ? `${API_BASE}${selectedParcel.documents[0].url}` : selectedParcel.documents[0].url, '_blank')}>
+                      View Details Document
+                    </Button>
+                  )}
+                </Box>
+              )}
               {/* Parcel documents — show only until rider marks copied */}
               {selectedParcel?.status === "in_progress"
                 && String(selectedParcel?.parcelCategory || '').trim().toLowerCase() === 'xerox'
@@ -958,8 +1069,17 @@ export default function RiderDashboard() {
                 && selectedParcel.documents.length > 0
                 && (selectedParcel.documentsVisibleToRider !== false) && (
               <Box mt={3}>
+                {/* After OTP, show the second specified image first if exists */}
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                  {selectedParcel.documents.map((doc, idx) => {
+                  {selectedParcel.documents
+                    .map((doc, idx) => ({ doc, idx }))
+                    .sort((a, b) => {
+                      // Prefer index 1 first if available; otherwise keep order
+                      const aScore = a.idx === 1 ? -1 : a.idx;
+                      const bScore = b.idx === 1 ? -1 : b.idx;
+                      return aScore - bScore;
+                    })
+                    .map(({ doc, idx }) => {
                     const isImage = String(doc.mimetype || '').startsWith('image/');
                     const isPdf = String(doc.mimetype || '') === 'application/pdf';
                     return (
@@ -1000,6 +1120,73 @@ export default function RiderDashboard() {
                 <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
                   After xerox documents will no longer be visible here.
                 </Typography>
+              </Box>
+            )}
+            {selectedParcel.status === "in_progress" && (
+              <Box mt={2} className="flex flex-col sm:flex-row gap-2">
+                <Button className="w-full sm:w-auto" variant="contained" color="success" onClick={handleCompleteParcel}>
+                  Complete Parcel
+                </Button>
+              </Box>
+            )}
+            {selectedParcel.status === "completed" && (
+              <Box sx={{ ml: 0, mt: 2 }}>
+                <Typography sx={{ fontWeight: "bold", color: "green", mb: 1 }}>
+                  Parcel Completed — show this scanner to the user
+                </Typography>
+                {(() => {
+                  const amount = Number(selectedParcel?.finalPrice || 0);
+                  if (!merchantVpa || !amount) return (
+                    <Typography variant="caption" color="text.secondary">
+                      Admin UPI not configured.
+                    </Typography>
+                  );
+                  const qrParams = new URLSearchParams({
+                    pa: merchantVpa,
+                    pn: merchantName || 'Rider App',
+                    am: String(amount.toFixed(2)),
+                    cu: 'INR',
+                    tn: 'Parcel Payment',
+                  });
+                  const qrUpiUrl = `upi://pay?${qrParams.toString()}`;
+                  const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrUpiUrl)}`;
+                  return (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, border: '1px solid #eee', borderRadius: 2 }}>
+                      <img src={qrImg} alt="Admin UPI QR" style={{ width: 180, height: 180 }} />
+                      <Box>
+                        <Typography variant="body2">Payee: {merchantName || 'Rider App'}</Typography>
+                        <Typography variant="body2">UPI: {merchantVpa}</Typography>
+                        <Typography variant="body2">Amount: ₹{amount.toFixed(2)}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                          Ask user to scan and pay. Payment status updates on their side.
+                        </Typography>
+                      </Box>
+                    </Box>
+                  );
+                })()}
+                {paymentMsg && (
+                  <Typography variant="body2" color="primary" sx={{ mt: 1 }}>
+                    {paymentMsg}
+                  </Typography>
+                )}
+                <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleConfirmParcelOnline}
+                    disabled={confirmingOnline}
+                  >
+                    {confirmingOnline ? "Confirming..." : "Confirm Paid (Online)"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="success"
+                    onClick={handleConfirmParcelCash}
+                    disabled={confirmingCash}
+                  >
+                    {confirmingCash ? "Confirming..." : "Confirm Paid (Cash)"}
+                  </Button>
+                </Box>
               </Box>
             )}
           </CardContent>

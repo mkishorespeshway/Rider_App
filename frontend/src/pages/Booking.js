@@ -12,12 +12,14 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { io } from "socket.io-client";
 import MapComponent from "../components/Map";
+import ChatDialog from "../components/ChatDialog.jsx";
 import DynamicPricingDisplay from "../components/DynamicPricingDisplay.jsx";
 // Razorpay removed from booking flow
 // import { initiatePayment, verifyPayment } from "../services/api";
 import PricingService from "../services/pricingService";
 import SOSButton from "../components/SOSButton";
 import "../theme.css";
+import "../booking-mobile.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
   const API_URL = `${API_BASE}/api`;
@@ -101,6 +103,7 @@ export default function Booking() {
   const [rideStatus, setRideStatus] = useState("Waiting for rider 🚖");
   const [otp, setOtp] = useState("");
   const [userLiveCoords, setUserLiveCoords] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
   // No popup needed when a rider accepts the ride in multiple tabs
   const [serviceLimitOpen, setServiceLimitOpen] = useState(false);
   const [acceptBannerOpen, setAcceptBannerOpen] = useState(false);
@@ -116,6 +119,18 @@ export default function Booking() {
       }
     } catch {}
   }, [auth]);
+
+  // Join the ride-specific room to scope chat messages for the user
+  useEffect(() => {
+    try {
+      const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+      const activeId = localStorage.getItem(activeKey);
+      const rideId = (createdRide && createdRide._id) || activeId || null;
+      if (rideId) socket.emit("joinRideRoom", rideId);
+    } catch (e) {
+      console.warn("joinRideRoom emit warning (user):", e?.message || e);
+    }
+  }, [createdRide, auth?.user?._id]);
 
 
   const GOOGLE_API_KEY = "AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"; // 🔑 Replace with your real key
@@ -615,48 +630,28 @@ export default function Booking() {
     })();
   }, [auth]);
   
-  // 🔥 Create ride request (opens the drawer with payment options)
-  const handleFindRiders = async () => {
-    if (!pickup || !drop || !distance) {
-      // Silently handle missing pickup/drop without popup
-      return;
-    }
-    if (!auth?.token) {
-      // Redirect to login without popup
-      navigate("/login-user");
-      return;
-    }
+  // 🔎 Find drivers: do NOT create a ride; only open selection (mobile-friendly flow)
+  const handleFindRiders = () => {
+    if (!pickup || !drop || !distance) return;
+    if (!auth?.token) { navigate("/login-user"); return; }
+    setDrawerOpen(true);
+  };
+
+  // 🧾 Book Ride: create the ride AFTER user selects vehicle/parcel and payment
+  const handleBookRide = async () => {
+    if (!pickup || !drop || !distance) return;
+    if (!auth?.token) { navigate("/login-user"); return; }
+    if (selectedRide === "parcel") { navigate("/parcel"); return; }
+
+    const distanceKm = parseFloat(distance);
+    if (Number.isFinite(distanceKm) && distanceKm > MAX_RIDE_DISTANCE_KM) { setServiceLimitOpen(true); return; }
+
+    let rateForCreate = null;
+    if (selectedRide === "bike") rateForCreate = 10;
+    else if (selectedRide === "auto") rateForCreate = 15;
+    else if (selectedRide === "car") rateForCreate = 20;
+
     try {
-      // ✅ Allow booking even if a previous active ride exists (Uber-like behavior)
-      const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
-      try {
-        const existingId = localStorage.getItem(activeKey);
-        // If a stale active ride ID is hanging around, clear it and proceed
-        if (existingId) {
-          const chk = await axios.get(`${API_URL}/rides/${existingId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
-          const st = chk.data?.ride?.status;
-          if (!st || st === 'completed' || st === 'cancelled') {
-            localStorage.removeItem(activeKey);
-          }
-        }
-      } catch {
-        // Silently continue — do not block new booking
-      }
-      // Always use backend dynamic pricing before creating the ride
-      const distanceKm = parseFloat(distance);
-
-  // 🚧 Service area limit: block rides beyond 25 km from pickup
-      if (Number.isFinite(distanceKm) && distanceKm > MAX_RIDE_DISTANCE_KM) {
-        setServiceLimitOpen(true);
-        return;
-      }
-
-      // Provide hint rate by vehicle for backend pricing
-      let rateForCreate = null;
-      if (selectedRide === "bike") rateForCreate = 10;
-      else if (selectedRide === "auto") rateForCreate = 15;
-      else if (selectedRide === "car") rateForCreate = 20;
-
       const price = await PricingService.calculatePrice(
         { latitude: pickup?.lat ?? pickup?.latitude, longitude: pickup?.lng ?? pickup?.longitude },
         { latitude: drop?.lat ?? drop?.latitude, longitude: drop?.lng ?? drop?.longitude },
@@ -668,14 +663,12 @@ export default function Booking() {
       const selectedFinalPrice = Number(price?.finalPrice ?? 0);
       const selectedBasePrice = Number(price?.basePrice ?? 0);
 
-      // Resolve selected payment preferences for ride creation
       const resolveDetailed = (opt) => {
         try {
           if (!opt) return "";
           if (String(opt).startsWith("upi")) return "upi";
           if (opt === "wallet" || opt === "amazon_pay") return "wallet";
           if (String(opt).startsWith("card")) return "card";
-          // Net banking / pay later and other experimental options are stored as empty
           return "";
         } catch { return ""; }
       };
@@ -688,11 +681,9 @@ export default function Booking() {
           pickupCoords: pickup,
           dropCoords: drop,
           distance: distanceKm,
-          // Persist backend-calculated dynamic price values
           basePrice: selectedBasePrice,
           finalPrice: selectedFinalPrice,
           requestedVehicleType: selectedRide || "",
-          // Persist payment preference for rider visibility and history
           paymentMethod: paymentMethod === "online" ? "online" : "COD",
           detailedPaymentMethod: paymentMethod === "online" ? resolveDetailed(selectedPaymentOption) : "",
         },
@@ -700,21 +691,15 @@ export default function Booking() {
       );
       const ride = res.data?.ride;
       if (ride) setCreatedRide(ride);
-      // Mark active ride locally to prevent parallel bookings
       if (ride?._id) {
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
         localStorage.setItem(activeKey, ride._id);
       }
       socket.emit("newRide", ride);
-      setDrawerOpen(true);
+      setDrawerOpen(false);
+      setLookingForRider(true);
     } catch (err) {
-      console.warn("Ride request warning:", err);
-      const msg = err?.response?.data?.message || err?.response?.data?.error || err?.message || "Failed to create ride request";
-      if (msg === "Invalid token" || msg === "Authorization token missing") {
-        try { logout(); } catch {}
-        navigate("/login-user");
-        return;
-      }
-      // Silently handle error without popup
+      console.warn("Book ride warning:", err);
     }
   };
   
@@ -994,7 +979,7 @@ export default function Booking() {
   }, [showPaymentPrompt, createdRide, auth]);
 
   return (
-    <Container maxWidth="xl" sx={{ mt: 3 }} className="booking-page">
+  <Container maxWidth="xl" sx={{ mt: 3 }} className="booking-page mobile-ui rapido-ui">
       {/* 🚨 SOS Button (fixed position) */}
       <SOSButton role="user" />
 
@@ -1124,8 +1109,23 @@ export default function Booking() {
                 <Typography variant="caption">Share this code with your rider to start the trip</Typography>
               </Box>
               <Box sx={{ mt: 2, display: "flex", gap: 2 }}>
-                <Button variant="contained" color="success">📞 Call</Button>
-                <Button variant="outlined" color="primary">💬 Chat</Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => {
+                    const mobile = assignedRider?.mobile;
+                    if (mobile) window.location.href = `tel:${mobile}`;
+                  }}
+                >
+                  📞 Call
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => setChatOpen(true)}
+                >
+                  💬 Chat
+                </Button>
               </Box>
               <Typography variant="body1" sx={{ mt: 2 }}>{rideStatus}</Typography>
             </>
@@ -1456,15 +1456,37 @@ export default function Booking() {
           {lookingForRider ? (
             <></>
           ) : (
-            <Button variant="contained" fullWidth sx={{ mt: 2 }}
-              onClick={handleRequestRide} disabled={!selectedRide || !createdRide}>
-              {selectedRide === "parcel"
-                ? "Go to Parcel Page"
-                : `Request ${rideOptions.find((r) => r.id === selectedRide)?.name || ""}`}
+            <Button
+              variant="contained"
+              fullWidth
+              sx={{ mt: 2, bgcolor: '#FF8A1F', color: '#fff', '&:hover': { bgcolor: '#E67600' } }}
+              onClick={handleBookRide}
+              disabled={!selectedRide}
+            >
+              {selectedRide === "parcel" ? "Go to Parcel Page" : "Book Ride"}
             </Button>
           )}
         </Box>
       </Drawer>
+      {/* Chat dialog for current ride */}
+      {(() => {
+        try {
+          const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+          const activeId = localStorage.getItem(activeKey);
+          const rideId = (createdRide && createdRide._id) || activeId || null;
+          const otherName = (assignedRider && (assignedRider.fullName || assignedRider.name)) || "Rider";
+          return (
+            <ChatDialog
+              open={chatOpen}
+              onClose={() => setChatOpen(false)}
+              rideId={rideId}
+              otherName={otherName}
+            />
+          );
+        } catch {
+          return null;
+        }
+      })()}
 
       {/* Rider details drawer disabled to keep only side-by-side popup */}
       <Drawer anchor="bottom" open={false} onClose={() => setRiderPanelOpen(false)}>
@@ -1519,8 +1541,23 @@ export default function Booking() {
               </Box>
               
               <Box sx={{ mt: 2, display: "flex", gap: 2 }}>
-                <Button variant="contained" color="success">📞 Call</Button>
-                <Button variant="outlined" color="primary">💬 Chat</Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => {
+                    const mobile = assignedRider?.mobile;
+                    if (mobile) window.location.href = `tel:${mobile}`;
+                  }}
+                >
+                  📞 Call
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => setChatOpen(true)}
+                >
+                  💬 Chat
+                </Button>
               </Box>
               <Typography variant="body1" sx={{ mt: 2 }}>{rideStatus}</Typography>
 

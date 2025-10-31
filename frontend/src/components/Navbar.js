@@ -1,11 +1,12 @@
 // src/components/Navbar.js
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { AppBar, Toolbar, Typography, IconButton, Menu, MenuItem, Avatar } from "@mui/material";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function Navbar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth, logout } = useAuth();
   const { token, roles } = auth || {};
   const role = roles[0] || null;
@@ -38,7 +39,9 @@ export default function Navbar() {
             else navigate("/");
           }}
         >
-          Rider App
+          {role === "rider" && location.pathname.startsWith("/rider-dashboard")
+            ? "Rider Dashboard"
+            : "Rider App"}
         </Typography>
 
         {token && (
