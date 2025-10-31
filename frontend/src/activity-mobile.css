@@ -1,0 +1,18 @@
+/* Mobile-specific styles for Activity page */
+@media (max-width: 600px) {
+  /* Ensure the activity content is visible in mobile view */
+  .activity-container {
+    display: block !important;
+    width: 100% !important;
+  }
+  
+  /* Style the activity card for mobile */
+  .activity-paper {
+    margin: 12px !important;
+    padding: 16px !important;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.08) !important;
+    border-radius: 16px !important;
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+  }
+}

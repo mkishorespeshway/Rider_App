@@ -9,10 +9,19 @@ import {
 } from "@mui/material";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
+import "../activity-mobile.css";
 
 export default function Activity() {
   const location = useLocation();
   const { parcel, distance } = location.state || {};
+  // Fallbacks: support reloads or mobile simulators where navigation state is lost
+  const [parcelId] = useState(() => {
+    try {
+      return parcel?._id || localStorage.getItem("activeParcelId");
+    } catch {
+      return parcel?._id;
+    }
+  });
 
   const [liveParcel, setLiveParcel] = useState(parcel);
   const [status, setStatus] = useState("Waiting for rider acceptance…");
@@ -39,36 +48,65 @@ export default function Activity() {
     }
   };
 
-  // Remove auto-OTP on mount; set OTP only after rider accepts
-  // Generate and persist OTP when parcel status becomes 'accepted'
+  // Ensure OTP exists when parcel is accepted/in_progress
+  const ensureOtpAssigned = async (parcelObj) => {
+    try {
+      if (!parcelObj?._id) return;
+      const statusVal = parcelObj?.status;
+      if (statusVal !== "accepted" && statusVal !== "in_progress") return;
+      const key = `parcelOtp:${parcelObj._id}`;
+      let existing = null;
+      try { existing = localStorage.getItem(key); } catch {}
+      const serverOtp = parcelObj?.parcelOtp || null;
+      const finalOtp = existing || serverOtp || Math.floor(1000 + Math.random() * 9000).toString();
+      if (!existing) {
+        try { localStorage.setItem(key, finalOtp); } catch {}
+      }
+      setOtp(finalOtp);
+      // Persist to server when status is accepted and serverOtp not set yet
+      if (statusVal === "accepted" && !serverOtp) {
+        try { await axios.post(`${API_URL}/parcels/${parcelObj._id}/set-otp`, { otp: finalOtp }); } catch {}
+      }
+    } catch (e) {
+      try { console.warn("ensureOtpAssigned warning:", e?.message || e); } catch {}
+    }
+  };
+
+  // Update local status and OTP when parcel changes
   useEffect(() => {
     if (!liveParcel?._id) return;
-    if (liveParcel?.status === "accepted") {
+    if (liveParcel?.status === "in_progress") {
+      setAccepted(true);
+      setStatus("Rider verified OTP. Parcel pickup started ✅");
+    } else if (liveParcel?.status === "accepted") {
+      setAccepted(false);
       setStatus("Rider accepted. Share OTP to start 📲");
-      try {
-        const key = `parcelOtp:${liveParcel._id}`;
-        let existing = localStorage.getItem(key);
-        if (!existing) {
-          existing = Math.floor(1000 + Math.random() * 9000).toString();
-          localStorage.setItem(key, existing);
-        }
-        // Always set OTP regardless of previous state
-        setOtp(existing);
-        axios
-          .post(`${API_URL}/parcels/${liveParcel._id}/set-otp`, { otp: existing })
-          .catch(() => {});
-      } catch (error) {
-        console.error("Error setting OTP:", error);
-      }
     }
+    ensureOtpAssigned(liveParcel);
   }, [liveParcel]);
+
+  // Fetch initial parcel when only id is available
+  useEffect(() => {
+    const id = parcel?._id || parcelId;
+    if (!id) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await axios.get(`${API_URL}/parcels/${id}`);
+        if (!mounted) return;
+        setLiveParcel(res.data.parcel);
+      } catch {}
+    })();
+    return () => { mounted = false; };
+  }, [parcelId, parcel]);
 
   // 🔄 Poll parcel to reflect rider acceptance and progress
   useEffect(() => {
-    if (!parcel?._id) return;
+    const id = parcel?._id || parcelId;
+    if (!id) return;
     const interval = setInterval(async () => {
       try {
-        const res = await axios.get(`${API_URL}/parcels/${parcel._id}`);
+        const res = await axios.get(`${API_URL}/parcels/${id}`);
         const p = res.data.parcel;
         setLiveParcel(p);
         if (p?.status === "in_progress") {
@@ -84,12 +122,21 @@ export default function Activity() {
       } catch {}
     }, 2000);
     return () => clearInterval(interval);
-  }, [parcel]);
+  }, [parcelId, parcel]);
 
-  if (!parcel) {
+  // Resolve distance (from state or persisted value)
+  const resolvedDistance = (() => {
+    if (typeof distance !== 'undefined' && distance !== null) return distance;
+    try {
+      const d = localStorage.getItem("activeParcelDistance");
+      return d ? parseFloat(d) : null;
+    } catch { return null; }
+  })();
+
+  if (!parcel && !parcelId) {
     return (
-      <Container>
-        <Paper sx={{ mt: 4, p: 4, textAlign: "center" }}>
+      <Container className="activity-container">
+        <Paper className="activity-paper" sx={{ mt: 4, p: 4, textAlign: "center" }}>
           <Typography variant="h6">No activity found.</Typography>
         </Paper>
       </Container>
@@ -97,11 +144,11 @@ export default function Activity() {
   }
 
   const pricePerKm = 10; // ₹10 per km
-  const price = distance ? (distance * pricePerKm).toFixed(2) : null;
+  const price = resolvedDistance ? (resolvedDistance * pricePerKm).toFixed(2) : null;
 
   return (
-    <Container maxWidth="sm">
-      <Paper sx={{ mt: 4, p: 4, borderRadius: 3 }}>
+    <Container className="activity-container" maxWidth="sm">
+      <Paper className="activity-paper" sx={{ mt: 4, p: 4, borderRadius: 3 }}>
         <Typography variant="h5" sx={{ fontWeight: "bold", mb: 2 }}>
           📦 Parcel Activity
         </Typography>
@@ -130,9 +177,9 @@ export default function Activity() {
         <Divider sx={{ my: 2 }} />
 
         {/* Distance & Price */}
-        {distance && (
+        {resolvedDistance && (
           <Box sx={{ mb: 2 }}>
-            <Typography>Distance: {distance} km</Typography>
+            <Typography>Distance: {resolvedDistance} km</Typography>
             <Typography>Estimated Price: ₹{price}</Typography>
           </Box>
         )}

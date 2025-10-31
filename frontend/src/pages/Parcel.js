@@ -161,6 +161,11 @@ export default function Parcel() {
       documents.forEach((file) => formData.append("documents", file));
 
       const res = await axios.post(`${API_URL}/parcels`, formData);
+      // Persist active parcel context so Activity works across reloads/devices
+      try {
+        localStorage.setItem("activeParcelId", res?.data?.parcel?._id || "");
+        if (distance) localStorage.setItem("activeParcelDistance", String(distance));
+      } catch {}
 
       navigate("/activity", {
         state: {
