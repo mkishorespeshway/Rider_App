@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Snackbar,
 } from "@mui/material";
 import axios from "axios";
 import { useAuth } from "../../contexts/AuthContext";
@@ -124,6 +125,85 @@ export default function RiderDashboard() {
   // Parcel states
   const [parcels, setParcels] = useState([]);
   const [selectedParcel, setSelectedParcel] = useState(null);
+  // Persist and restore dashboard view (ride/parcel/default) per user
+  const DASHBOARD_LAST_VIEW_KEY = "rider_dashboard_last_view";
+  const COOKIE_LAST_VIEW_KEY = "rider_last_view";
+
+  // Minimal cookie helpers scoped to this component file
+  const setCookie = (name, value, maxAgeSeconds = 3 * 24 * 60 * 60) => {
+    try {
+      document.cookie = `${name}=${encodeURIComponent(String(value))};path=/;max-age=${Number(maxAgeSeconds)}`;
+    } catch (_) {}
+  };
+  const getCookie = (name) => {
+    try {
+      const pairs = (document.cookie || "").split(";");
+      for (let p of pairs) {
+        const [k, v] = p.trim().split("=");
+        if (k === name) return decodeURIComponent(v || "");
+      }
+    } catch (_) {}
+    return "";
+  };
+  const deleteCookie = (name) => {
+    try {
+      document.cookie = `${name}=;path=/;max-age=0`;
+    } catch (_) {}
+  };
+
+  // Save current view whenever selection changes — but never overwrite with "default"
+  useEffect(() => {
+    try {
+      const id = selectedParcel?._id || selectedRide?._id || null;
+      if (!id) return; // keep previous selection intact until a real selection exists
+      const payload = {
+        userId: auth?.user?._id || null,
+        type: selectedParcel ? "parcel" : "ride",
+        id,
+        ts: Date.now()
+      };
+      localStorage.setItem(DASHBOARD_LAST_VIEW_KEY, JSON.stringify(payload));
+      // Also persist via cookie so logout/login survives app-level localStorage clears
+      setCookie(COOKIE_LAST_VIEW_KEY, JSON.stringify(payload));
+    } catch (_) {}
+  }, [selectedParcel?._id, selectedRide?._id, auth?.user?._id]);
+
+  // Restore last view after data loads and on login/refresh
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DASHBOARD_LAST_VIEW_KEY);
+      const cookieRaw = !raw ? getCookie(COOKIE_LAST_VIEW_KEY) : "";
+      const source = raw || cookieRaw;
+      if (!source) return;
+      const saved = JSON.parse(source);
+      if (!saved) return;
+      if (saved.userId && String(saved.userId) !== String(auth?.user?._id || "")) return;
+      if (saved.type === "parcel") {
+        const p = parcels.find(x => String(x?._id || "") === String(saved.id || ""));
+        if (p) {
+          // use existing helper to sync map and selection
+          handleViewParcel(p);
+        }
+      } else if (saved.type === "ride") {
+        const r = rides.find(x => String(x?._id || "") === String(saved.id || ""));
+        if (r) {
+          setSelectedRide(r);
+        }
+      }
+    } catch (_) {}
+  }, [auth?.user?._id, rides, parcels]);
+
+  // Clear persisted view after completion so future logins show fresh dashboard
+  useEffect(() => {
+    try {
+      const completedRide = selectedRide && String(selectedRide.status || '').toLowerCase() === 'completed';
+      const completedParcel = selectedParcel && String(selectedParcel.status || '').toLowerCase() === 'completed';
+      if (completedRide || completedParcel) {
+        localStorage.removeItem(DASHBOARD_LAST_VIEW_KEY);
+        deleteCookie(COOKIE_LAST_VIEW_KEY);
+      }
+    } catch (_) {}
+  }, [selectedRide?.status, selectedParcel?.status]);
 
   // Online/Offline toggle state
   const [isOnline, setIsOnline] = useState(() => {
@@ -166,6 +246,10 @@ export default function RiderDashboard() {
   const [parcelOtp, setParcelOtp] = useState("");
   const [parcelOtpError, setParcelOtpError] = useState("");
   const [verifyingParcelOtp, setVerifyingParcelOtp] = useState(false);
+
+  // Snackbar state for notifications
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
   //  Logout
   const handleLogout = () => {
     logout();
@@ -199,7 +283,15 @@ export default function RiderDashboard() {
 
   // ðŸ”’ Restore active ride on reload so dashboard stays on same page
   useEffect(() => {
-    const activeId = typeof window !== "undefined" && localStorage.getItem("riderActiveRideId");
+    const activeIdLocal = typeof window !== "undefined" && localStorage.getItem("riderActiveRideId");
+    const cookieSaved = getCookie(COOKIE_LAST_VIEW_KEY);
+    let activeId = activeIdLocal;
+    try {
+      if (!activeId && cookieSaved) {
+        const parsed = JSON.parse(cookieSaved);
+        if (parsed && parsed.type === "ride") activeId = parsed.id;
+      }
+    } catch (_) {}
     if (!activeId || !auth?.token) return;
     (async () => {
       try {
@@ -215,6 +307,7 @@ export default function RiderDashboard() {
           if (ride.dropCoords) setDrop(ride.dropCoords);
         } else {
           localStorage.removeItem("riderActiveRideId");
+          deleteCookie(COOKIE_LAST_VIEW_KEY);
         }
       } catch (e) {
         console.warn("restore active ride warning:", e?.message || e);
@@ -261,36 +354,38 @@ export default function RiderDashboard() {
   };
 
   // Fetch parcels (recent)
-  useEffect(() => {
+  const fetchParcels = async () => {
     if (!SHOW_PARCELS_ON_DASHBOARD) return;
-    (async () => {
-      try {
-        const riderVehicleType = String(
-          auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
-        ).trim().toLowerCase();
-        const res = await axios.get(`${API_URL}/parcels`, {
-          params: riderVehicleType ? { vehicleType: riderVehicleType } : {},
-          headers: { Authorization: `Bearer ${auth?.token}` },
-        });
-        const parcels = res.data?.parcels || [];
-        const filtered = riderVehicleType
-          ? parcels.filter(
-              (p) => {
-                const reqType = String(p?.requiredVehicleType || "").trim().toLowerCase();
-                const cat = String(p?.parcelCategory || "").trim().toLowerCase();
-                if (reqType) return reqType === riderVehicleType;
-                if (cat === "xerox") return riderVehicleType === "bike";
-                return true;
-              }
-            )
-          : parcels;
-        // Hide completed parcels from dashboard; they appear in history
-        const visible = filtered.filter((p) => String(p?.status || "").toLowerCase() !== "completed");
-        setParcels(visible);
-      } catch (err) {
-        console.warn("Parcels fetch warning:", err);
-      }
-    })();
+    try {
+      const riderVehicleType = String(
+        auth?.user?.vehicleType || auth?.user?.vehicle?.type || ""
+      ).trim().toLowerCase();
+      const res = await axios.get(`${API_URL}/parcels`, {
+        params: riderVehicleType ? { vehicleType: riderVehicleType } : {},
+        headers: { Authorization: `Bearer ${auth?.token}` },
+      });
+      const parcels = res.data?.parcels || [];
+      const filtered = riderVehicleType
+        ? parcels.filter(
+            (p) => {
+              const reqType = String(p?.requiredVehicleType || "").trim().toLowerCase();
+              const cat = String(p?.parcelCategory || "").trim().toLowerCase();
+              if (reqType) return reqType === riderVehicleType;
+              if (cat === "xerox") return riderVehicleType === "bike";
+              return true;
+            }
+          )
+        : parcels;
+      // Hide completed parcels from dashboard; they appear in history
+      const visible = filtered.filter((p) => String(p?.status || "").toLowerCase() !== "completed");
+      setParcels(visible);
+    } catch (err) {
+      console.warn("Parcels fetch warning:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchParcels();
   }, []);
 
   useEffect(() => {
@@ -328,6 +423,18 @@ export default function RiderDashboard() {
             const exists = prev.some((r) => r._id === ride._id);
             return exists ? prev : [ride, ...prev];
           });
+          
+          // Show notification for new ride request
+          setSnackbarMessage(`New ${requestedType} ride request from ${ride.pickup || 'Unknown location'}`);
+          setSnackbarOpen(true);
+          
+          // Browser notification
+          if (Notification.permission === 'granted') {
+            new Notification('New Ride Request', {
+              body: `${requestedType} ride from ${ride.pickup || 'Unknown location'}`,
+              icon: '/favicon.ico'
+            });
+          }
         }
       };
       socket.on("rideRequest", handleRideRequest);
@@ -339,6 +446,14 @@ export default function RiderDashboard() {
       void 0;
       setSelectedRide(ride);
       try { localStorage.setItem("riderActiveRideId", ride._id); } catch {}
+      try {
+        setCookie(COOKIE_LAST_VIEW_KEY, JSON.stringify({
+          userId: auth?.user?._id || null,
+          type: "ride",
+          id: ride?._id,
+          ts: Date.now()
+        }));
+      } catch (_) {}
       if (ride.pickupCoords) setPickup(ride.pickupCoords);
       if (ride.dropCoords) setDrop(ride.dropCoords);
     });
@@ -370,6 +485,18 @@ export default function RiderDashboard() {
           const exists = prev.some((p) => p._id === parcel._id);
           return exists ? prev : [parcel, ...prev];
         });
+        
+        // Show notification for new parcel request
+        setSnackbarMessage(`New parcel request: ${parcel.parcelDetails || 'Package delivery'}`);
+        setSnackbarOpen(true);
+        
+        // Browser notification
+        if (Notification.permission === 'granted') {
+          new Notification('New Parcel Request', {
+            body: `Package: ${parcel.parcelDetails || 'Package delivery'}`,
+            icon: '/favicon.ico'
+          });
+        }
       });
     } else {
       socket.off("parcelRequest");
@@ -486,9 +613,21 @@ export default function RiderDashboard() {
       if (ok) {
         setOtpDialogOpen(false);
         const updatedRide = res.data?.ride || { ...selectedRide, status: "in_progress" };
-        // Preserve rider details if missing in response
+        // Preserve rider and user details if missing in response
         if (!updatedRide?.riderId && selectedRide?.riderId) {
           updatedRide.riderId = selectedRide.riderId;
+        }
+        if (!updatedRide?.user && selectedRide?.user) {
+          updatedRide.user = selectedRide.user;
+        }
+        if (!updatedRide?.userId && selectedRide?.userId) {
+          updatedRide.userId = selectedRide.userId;
+        }
+        if (!updatedRide?.userName && selectedRide?.userName) {
+          updatedRide.userName = selectedRide.userName;
+        }
+        if (!updatedRide?.phone && selectedRide?.phone) {
+          updatedRide.phone = selectedRide.phone;
         }
         setSelectedRide(updatedRide);
         alert("Ride started successfully!");
@@ -536,14 +675,12 @@ export default function RiderDashboard() {
   // Reject parcel
   const handleRejectParcel = async (parcelId) => {
     try {
-      const res = await axios.post(
+      await axios.post(
         `${API_URL}/parcels/${parcelId}/reject`,
         {},
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
-      const updated = res.data?.parcel;
-      setParcels((prev) => prev.map((p) => (p._id === parcelId ? updated : p)));
-      if (selectedParcel?._id === parcelId) setSelectedParcel(updated);
+      fetchParcels();
     } catch (err) {
       alert("Failed to reject parcel");
     }
@@ -864,16 +1001,16 @@ export default function RiderDashboard() {
         open={chatOpen}
         onClose={() => setChatOpen(false)}
         rideId={selectedRide?._id}
-        otherName={selectedRide?.riderId?.fullName}
+        otherName={getRideUserName(selectedRide)}
       />
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6"> Ride Accepted</Typography>
               <Typography>
-                <b>User:</b> {selectedRide.riderId?.fullName}
+                <b>User:</b> {getRideUserName(selectedRide)}
               </Typography>
               <Typography>
-                <b>Phone:</b> {selectedRide.riderId?.mobile}
+                <b>Phone:</b> {getRideUserPhone(selectedRide)}
               </Typography>
               <Typography>
                 <b>Pickup:</b> {selectedRide.pickup}
@@ -897,7 +1034,7 @@ export default function RiderDashboard() {
                   color="success"
                   sx={{ mr: 2 }}
                   onClick={() => {
-                    const mobile = selectedRide?.riderId?.mobile;
+                    const mobile = getRideUserPhone(selectedRide);
                     if (mobile) window.location.href = `tel:${mobile}`;
                   }}
                 >
@@ -1035,8 +1172,15 @@ export default function RiderDashboard() {
               <Typography><b>Receiver:</b> {selectedParcel.receiverName} ({selectedParcel.receiverMobile})</Typography>
               <Typography><b>Category:</b> {selectedParcel.parcelCategory}</Typography>
               <Typography><b>Details:</b> {selectedParcel.parcelDetails}</Typography>
-              <Typography><b>Pickup:</b> {selectedParcel.pickupAddress}</Typography>
-              <Typography><b>Drop:</b> {selectedParcel.dropAddress}</Typography>
+              <Typography><b>Pickup:</b> {selectedParcel.pickupAddress || selectedParcel?.pickup?.address || selectedParcel?.pickupCoords?.address || (selectedParcel?.pickup?.lat && selectedParcel?.pickup?.lng ? `${selectedParcel.pickup.lat}, ${selectedParcel.pickup.lng}` : (selectedParcel?.pickupCoords?.lat && selectedParcel?.pickupCoords?.lng ? `${selectedParcel.pickupCoords.lat}, ${selectedParcel.pickupCoords.lng}` : 'N/A'))}</Typography>
+              <Typography><b>Drop:</b> {selectedParcel.dropAddress || selectedParcel?.drop?.address || selectedParcel?.dropCoords?.address || (selectedParcel?.drop?.lat && selectedParcel?.drop?.lng ? `${selectedParcel.drop.lat}, ${selectedParcel.drop.lng}` : (selectedParcel?.dropCoords?.lat && selectedParcel?.dropCoords?.lng ? `${selectedParcel.dropCoords.lat}, ${selectedParcel.dropCoords.lng}` : 'N/A'))}</Typography>
+              {/* Show only booking page addresses; remove raw coordinates to avoid duplicate location display */}
+              {distance && (
+                <Typography><b>Distance:</b> {distance} km</Typography>
+              )}
+              {duration && (
+                <Typography><b>ETA:</b> {duration}</Typography>
+              )}
               <Typography><b>Status:</b> {selectedParcel.status || "pending"}</Typography>
               {selectedParcel.status === "pending" && (
                 <Box mt={2} className="flex flex-col sm:flex-row gap-2">
@@ -1058,11 +1202,16 @@ export default function RiderDashboard() {
                 <Box mt={2}>
                   <Typography variant="body2" sx={{ mb: 1 }}>Parcel ride details</Typography>
                   {String(selectedParcel.documents[0]?.mimetype || '').startsWith('image/') ? (
-                    <img
-                      src={selectedParcel.documents[0].url.startsWith('/') ? `${API_BASE}${selectedParcel.documents[0].url}` : selectedParcel.documents[0].url}
-                      alt={selectedParcel.documents[0]?.originalName || 'Parcel Details'}
-                      style={{ maxWidth: 240, maxHeight: 200, display: 'block' }}
-                    />
+                    <>
+                      <img
+                        src={selectedParcel.documents[0].url.startsWith('/') ? `${API_BASE}${selectedParcel.documents[0].url}` : selectedParcel.documents[0].url}
+                        alt={selectedParcel.documents[0]?.originalName || 'Parcel Details'}
+                        style={{ maxWidth: 240, maxHeight: 200, display: 'block' }}
+                      />
+                      <Box sx={{ mt: 1 }}>
+                        <Button variant="contained" size="small" onClick={() => handleDownloadDoc(selectedParcel.documents[0], 0)}>Download</Button>
+                      </Box>
+                    </>
                   ) : (
                     <Button variant="outlined" size="small" onClick={() => window.open(selectedParcel.documents[0].url.startsWith('/') ? `${API_BASE}${selectedParcel.documents[0].url}` : selectedParcel.documents[0].url, '_blank')}>
                       View Details Document
@@ -1220,6 +1369,7 @@ export default function RiderDashboard() {
               rideStarted={selectedParcel?.status === "in_progress"}
               vehicleType={auth?.user?.vehicleType || auth?.user?.vehicle?.type}
               vehicleImage={auth?.user?.vehicle?.images?.[0]}
+              lockToProvidedPoints={true}
             />
           </Paper>
         </>
@@ -1270,19 +1420,22 @@ export default function RiderDashboard() {
           <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>
             Recent Parcels
           </Typography>
-          {parcels.filter(p => String(p.status || '').toLowerCase() !== 'completed').length === 0 ? (
+          {parcels.filter(p => String(p.status || '').toLowerCase() === 'pending').length === 0 ? (
             <Typography>No parcels</Typography>
           ) : (
-            parcels.filter(p => String(p.status || '').toLowerCase() !== 'completed').map((p) => (
+            parcels.filter(p => String(p.status || '').toLowerCase() === 'pending').map((p) => (
               <Card key={p._id} sx={{ mb: 2 }}>
                 <CardContent>
                   <Typography><b>Sender:</b> {p.senderName} ({p.senderMobile})</Typography>
                   <Typography><b>Receiver:</b> {p.receiverName} ({p.receiverMobile})</Typography>
                   <Typography><b>Category:</b> {p.parcelCategory}</Typography>
-                  <Typography><b>Pickup:</b> {p.pickupAddress}</Typography>
-                  <Typography><b>Drop:</b> {p.dropAddress}</Typography>
+                  <Typography><b>Pickup:</b> {p.pickupAddress || p?.pickup?.address || p?.pickupCoords?.address || (p?.pickup?.lat && p?.pickup?.lng ? `${p.pickup.lat}, ${p.pickup.lng}` : (p?.pickupCoords?.lat && p?.pickupCoords?.lng ? `${p.pickupCoords.lat}, ${p.pickupCoords.lng}` : 'N/A'))}</Typography>
+                  <Typography><b>Drop:</b> {p.dropAddress || p?.drop?.address || p?.dropCoords?.address || (p?.drop?.lat && p?.drop?.lng ? `${p.drop.lat}, ${p.drop.lng}` : (p?.dropCoords?.lat && p?.dropCoords?.lng ? `${p.dropCoords.lat}, ${p.dropCoords.lng}` : 'N/A'))}</Typography>
                   <Typography>Status: {p.status || 'pending'}</Typography>
                   <Box mt={2}>
+                     <Button variant="outlined" color="primary" onClick={() => handleViewParcel(p)}>
+                       View on Map
+                     </Button>
                      {p.status === "pending" && (
                        <>
                          <Button variant="contained" color="success" sx={{ ml: 2 }} onClick={() => handleAcceptParcel(p._id)}>Accept</Button>
@@ -1389,7 +1542,14 @@ export default function RiderDashboard() {
 </Dialog>
 
         </Paper>
-      </Box>
+    </Box>
+    <Snackbar
+      open={snackbarOpen}
+      autoHideDuration={4000}
+      onClose={() => setSnackbarOpen(false)}
+      message={snackbarMessage}
+      anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+    />
     </Box>
   );
 }
@@ -1407,6 +1567,50 @@ const sanitizeUrl = (raw) => {
     return s;
   } catch (_) {
     return String(raw || "").trim();
+  }
+};
+
+// Get customer/user name for the current ride using robust fallbacks
+const getRideUserName = (ride) => {
+  try {
+    return (
+      // Primary: booking user populated by backend
+      ride?.riderId?.fullName ||
+      ride?.user?.fullName ||
+      ride?.user?.name ||
+      ride?.userId?.fullName ||
+      ride?.userId?.name ||
+      ride?.customer?.name ||
+      ride?.userInfo?.fullName ||
+      ride?.userName ||
+      ride?.name ||
+      null
+    ) || "";
+  } catch (_) {
+    return "";
+  }
+};
+
+// Get customer/user phone for the current ride using robust fallbacks
+const getRideUserPhone = (ride) => {
+  try {
+    return (
+      // Primary: booking user populated by backend
+      ride?.riderId?.mobile ||
+      ride?.user?.mobile ||
+      ride?.user?.phone ||
+      ride?.userId?.mobile ||
+      ride?.userId?.phone ||
+      ride?.customer?.mobile ||
+      ride?.customer?.phone ||
+      ride?.userInfo?.mobile ||
+      ride?.userPhone ||
+      ride?.phone ||
+      ride?.mobile ||
+      null
+    ) || "";
+  } catch (_) {
+    return "";
   }
 };
 
@@ -1641,3 +1845,6 @@ const handleDownloadDoc = async (doc, idx) => {
     alert("Failed to download document");
   }
 };
+
+// Alias used by download handlers; keeps compatibility with existing calls
+const toCloudinaryAttachmentUrl = (url, filename) => _toCloudinaryAttachmentUrlLegacy(url, filename);

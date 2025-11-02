@@ -119,7 +119,13 @@ io.on("connection", (socket) => {
 });
 
 // === Middleware ===
-app.use(cors());
+const corsOptions = {
+  origin: (origin, cb) => cb(null, true),
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"],
+};
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
  // Raw body for Razorpay webhook
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
@@ -128,6 +134,14 @@ app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook') return next();
    return express.json({ limit: '10mb' })(req, res, next);
  });
+
+// Normalize multiple slashes in URL to avoid route mismatches (e.g., /api/parcels//:id/...)
+app.use((req, _res, next) => {
+  try {
+    req.url = req.url.replace(/\/{2,}/g, '/');
+  } catch {}
+  next();
+});
 
 // Request logger
 app.use((req, res, next) => {
@@ -267,3 +281,5 @@ server.listen(PORT, () =>
 );
 
 module.exports = app;
+
+

@@ -81,6 +81,9 @@ const rideSchema = new mongoose.Schema(
       enum: ["pending", "accepted", "in_progress", "completed", "cancelled"],
       default: "pending",
     },
+
+    // Riders who have locally rejected this ride (hidden only for them)
+    rejectedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
  
     etaMinutes: { type: Number, default: null },
  

@@ -9,18 +9,19 @@ const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || null;
 const isMockMode = !(keyId && keySecret);
 const isTestKey = keyId ? keyId.startsWith('rzp_test') : false;
 
-if (keyId && keySecret && !isTestKey) {
+// Configure Razorpay for both LIVE and TEST keys when provided
+if (keyId && keySecret) {
   razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
-  console.log('✅ Razorpay configured');
+  console.log(isTestKey ? '🧪 Razorpay TEST mode configured' : '✅ Razorpay LIVE configured');
 } else {
-  console.warn('⚠️ Razorpay not configured for LIVE payments — test/mock keys detected or missing');
+  console.warn('⚠️ Razorpay not configured — keys missing');
   razorpay = null;
 }
 
 // Create a Razorpay order (amount in INR; converted to paise)
 async function createOrder({ rideId, amount, currency = 'INR' }) {
-  if (!keyId || !keySecret || isTestKey || !razorpay) {
-    throw new Error('Live Razorpay keys required. Test/mock keys are not allowed.');
+  if (!keyId || !keySecret || !razorpay) {
+    throw new Error('Razorpay keys are required');
   }
   const paiseAmount = Math.round(Number(amount) * 100);
   const order = await razorpay.orders.create({
@@ -35,8 +36,8 @@ async function createOrder({ rideId, amount, currency = 'INR' }) {
 
 // Verify Checkout signature returned to frontend
 function verifyCheckoutSignature({ orderId, paymentId, signature }) {
-  if (!keySecret || isTestKey) {
-    throw new Error('Cannot verify payment without LIVE Razorpay secret');
+  if (!keySecret) {
+    throw new Error('Cannot verify payment without Razorpay secret');
   }
   const hmac = crypto.createHmac('sha256', keySecret);
   hmac.update(`${orderId}|${paymentId}`);
@@ -46,8 +47,8 @@ function verifyCheckoutSignature({ orderId, paymentId, signature }) {
 
 // Verify Webhook signature
 function verifyWebhookSignature(rawBody, signatureHeader) {
-  if (!webhookSecret || isTestKey) {
-    throw new Error('Cannot verify webhook without LIVE Razorpay webhook secret');
+  if (!webhookSecret) {
+    throw new Error('Cannot verify webhook without Razorpay webhook secret');
   }
   const hmac = crypto.createHmac('sha256', webhookSecret);
   const digest = hmac.update(rawBody).digest('hex');

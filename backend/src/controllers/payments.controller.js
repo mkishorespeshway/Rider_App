@@ -40,13 +40,14 @@ exports.initiate = async (req, res, next) => {
     const ride = await Ride.findById(rideId);
     const amount = Number(ride?.finalPrice || 0);
     if (!Number.isFinite(amount) || amount <= 0) {
-      return res.status(400).json({ ok: false, message: 'Invalid ride amount' });
+      // Soft-fail to avoid client error popups; allow UPI/manual flow
+      return res.status(200).json({ ok: false, message: 'Ride amount unavailable. Use UPI or Confirm Paid (Online).' });
     }
 
-    // Enforce LIVE payments only
+    // Allow TEST and LIVE keys; if keys missing, return ok:false without erroring
     const keyId = process.env.RAZORPAY_KEY_ID || null;
-    if (!keyId || isMockMode || isTestKey) {
-      return res.status(400).json({ ok: false, message: 'Live payments disabled: configure LIVE Razorpay keys.' });
+    if (!keyId || isMockMode) {
+      return res.status(200).json({ ok: false, message: 'Razorpay not configured. Use UPI or Confirm Paid (Online).' });
     }
 
     // Create Razorpay order

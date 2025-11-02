@@ -44,9 +44,11 @@ const parcelSchema = new mongoose.Schema(
     // New fields for OTP-based flow
     status: {
       type: String,
-      enum: ["pending", "accepted", "in_progress", "completed", "cancelled"],
+      enum: ["pending", "accepted", "in_progress", "completed", "cancelled", "rejected"],
       default: "pending",
     },
+    // Riders who have locally rejected this parcel (hidden only for them)
+    rejectedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     parcelOtp: { type: String, default: null },
     // Pricing and payment
     finalPrice: { type: Number, default: null },

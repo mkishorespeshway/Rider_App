@@ -275,9 +275,9 @@ router.post("/:id/verify-otp", authMiddleware, async (req, res) => {
 });
 
 // 📦 Get all parcels (for testing/admin)
-router.get("/", async (req, res) => {
+router.get("/", authMiddleware, async (req, res) => {
   try {
-    const parcels = await Parcel.find().sort({ createdAt: -1 });
+    const parcels = await Parcel.find({ rejectedBy: { $nin: [req.user._id] } }).sort({ createdAt: -1 });
     const vt = String(req.query?.vehicleType || "").trim().toLowerCase();
     const filtered = vt
       ? parcels.filter((p) => {
@@ -348,19 +348,26 @@ router.post('/:id/accept', authMiddleware, async (req, res) => {
 });
 
 // ❌ Reject parcel (rider-side)
+// Allow rejecting when parcel is still pending OR has been accepted but not started.
+// This matches rider UX where a rider may change mind after accepting but before OTP verification.
 router.post('/:id/reject', authMiddleware, async (req, res) => {
   try {
     const parcel = await Parcel.findById(req.params.id);
     if (!parcel) return res.status(404).json({ success: false, message: 'Parcel not found' });
-    if (parcel.status !== 'pending') {
-      return res.status(400).json({ success: false, message: 'Parcel is not pending' });
+
+    // Locally mark this parcel as rejected by the current rider.
+    // Do not change global status — other riders should still see it.
+    if (!Array.isArray(parcel.rejectedBy)) parcel.rejectedBy = [];
+    const me = req.user?._id?.toString();
+    const already = parcel.rejectedBy.some((id) => id.toString() === me);
+    if (!already && me) {
+      parcel.rejectedBy.push(req.user._id);
     }
-    parcel.status = 'rejected';
     await parcel.save();
-    res.json({ success: true, parcel });
+    return res.json({ success: true, parcel });
   } catch (err) {
-    console.error('Reject parcel error:', err);
-    res.status(500).json({ success: false, message: 'Failed to reject parcel' });
+    console.error('Reject parcel error:', err?.message || err);
+    return res.status(500).json({ success: false, message: 'Failed to reject parcel' });
   }
 });
 

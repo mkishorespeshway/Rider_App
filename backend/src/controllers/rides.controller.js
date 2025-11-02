@@ -257,11 +257,14 @@ exports.rejectRide = async (req, res) => {
       });
     }
 
-    ride.status = "cancelled";
+    // Locally mark this ride as rejected by the current rider so only they don't see it
+    if (!Array.isArray(ride.rejectedBy)) ride.rejectedBy = [];
+    const me = req.user?._id?.toString();
+    const already = ride.rejectedBy.some((id) => id.toString() === me);
+    if (!already && me) {
+      ride.rejectedBy.push(req.user._id);
+    }
     await ride.save();
-
-    const io = req.app.get("io");
-    io.to(ride.riderId.toString()).emit("rideRejected", ride);
 
     res.json({ success: true, ride });
   } catch (err) {
@@ -451,6 +454,8 @@ exports.getPendingRides = async (req, res) => {
         const vLower = String(vType).trim().toLowerCase();
         query = { ...query, requestedVehicleType: vLower };
       }
+      // Exclude rides this rider has rejected locally
+      query = { ...query, rejectedBy: { $nin: [req.user._id] } };
 
     }
     const rides = await Ride.find(query).populate("riderId", "fullName mobile");

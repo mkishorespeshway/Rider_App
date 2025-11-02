@@ -436,6 +436,7 @@ export default function Parcel() {
               setNormalDuration={() => {}}
               showRiderOnly={false}
               rideStarted={false}
+              lockToProvidedPoints={true}
             />
           </Box>
         </Box>

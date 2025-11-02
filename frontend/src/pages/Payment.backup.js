@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Container, Paper, Typography, Button, Box, CircularProgress, Alert, Divider, TextField, ToggleButton, ToggleButtonGroup, Chip } from "@mui/material";
 // Map removed on payment page per request
@@ -134,7 +134,7 @@ export default function Payment() {
       return;
     }
     if (Number(resolvedAmount) <= 0) {
-      setMessage({ type: "error", text: "Amount must be greater than ₹0." });
+      setMessage({ type: "error", text: "Amount must be greater than ?0." });
       return;
     }
     if (upiFlow === "collect") {
@@ -381,9 +381,9 @@ export default function Payment() {
           </Typography>
 
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 3, mb: 3 }}>
-            <Typography variant="body1">Ride ID: {effectiveRideId || "—"}</Typography>
+            <Typography variant="body1">Ride ID: {effectiveRideId || "�"}</Typography>
             <Typography variant="h6" sx={{ my: 1 }}>
-              Amount: {resolvedAmount != null ? `₹${Number(resolvedAmount).toFixed(2)}` : "—"}
+              Amount: {resolvedAmount != null ? `?${Number(resolvedAmount).toFixed(2)}` : "�"}
             </Typography>
             {ride && (
               <Box sx={{ my: 2 }}>
@@ -393,7 +393,7 @@ export default function Payment() {
                 <Typography variant="body2">Ride Date: {ride?.createdAt ? new Date(ride.createdAt).toLocaleString() : "-"}</Typography>
                 <Typography variant="body2">Status: {ride.status}</Typography>
                 <Typography variant="body2">Distance: {ride.distance} km</Typography>
-                <Typography variant="body2">Upfront Fare: ₹{Number(ride.finalPrice || 0).toFixed(2)}</Typography>
+                <Typography variant="body2">Upfront Fare: ?{Number(ride.finalPrice || 0).toFixed(2)}</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                   <Typography variant="body2">Payment:</Typography>
                   {paymentStatus === 'completed' && <Chip label="Confirmed" color="success" size="small" />}
@@ -473,5 +473,6 @@ export default function Payment() {
     </Box>
   );
 }
+
 
 
