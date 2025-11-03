@@ -6,8 +6,8 @@ const path = require("path");
 const cloudinary = require("cloudinary").v2;
 const fs = require("fs");
 const dotenv = require("dotenv");
-// Load env from multiple possible locations to avoid "MONGO_URI missing" issues
-// 1) backend/.env, 2) backend/.env.local, 3) repo-root .env/.env.local
+
+// Load env from multiple possible locations
 dotenv.config();
 const envCandidates = [
   path.resolve(__dirname, "../.env.local"),
@@ -22,9 +22,8 @@ for (const p of envCandidates) {
     }
   } catch {}
 }
-const http = require("http");
-const { Server } = require("socket.io");
 
+// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -32,29 +31,28 @@ cloudinary.config({
 });
 
 const app = express();
+const http = require("http");
+const { Server } = require("socket.io");
 const server = http.createServer(app);
 
-// Fail fast when DB is offline to avoid 10s mongoose buffering timeouts
+// Fail fast for Mongoose
 mongoose.set("bufferCommands", false);
 
-// ✅ Socket.IO setup
+// Socket.IO setup
 const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-app.set("io", io); // make io available inside controllers
+app.set("io", io);
 
-// === Socket.IO Events ===
 io.on("connection", (socket) => {
   console.log("✅ Socket connected:", socket.id);
 
-  // ✅ Join personal room after login
   socket.on("join", (userId) => {
     console.log(`📌 User joined room: ${userId}`);
     socket.join(userId);
   });
 
-  // ✅ Register rider into vehicle-specific room for targeted ride requests
   socket.on("registerRiderVehicleType", (vehicleType) => {
     const vType = String(vehicleType || "").trim().toLowerCase();
     if (vType) {
@@ -64,7 +62,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // ✅ Join a specific ride room to scope chat/messages for that ride
   socket.on("joinRideRoom", (rideId) => {
     try {
       if (!rideId) return;
@@ -76,7 +73,6 @@ io.on("connection", (socket) => {
     }
   });
 
-  // 💬 Relay chat messages within a ride room
   socket.on("chatMessage", ({ rideId, fromUserId, text }) => {
     try {
       if (!rideId || !text) return;
@@ -89,25 +85,16 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("disconnect", () => {
-    console.log("❌ Socket disconnected:", socket.id);
-  });
-
-
-
-  // Rider accepts ride
   socket.on("riderAccepted", (ride) => {
     console.log("🚖 Rider accepted ride:", ride._id);
-    io.to(ride.riderId.toString()).emit("rideAccepted", ride); // notify booking rider
+    io.to(ride.riderId.toString()).emit("rideAccepted", ride);
   });
 
-  // Rider rejects
   socket.on("riderRejected", (ride) => {
     console.log("❌ Ride rejected:", ride._id);
     io.to(ride.riderId.toString()).emit("rideRejected", ride);
   });
 
-  // Rider sends GPS updates
   socket.on("riderLocation", ({ rideId, coords }) => {
     console.log(`📍 Rider location update for ride ${rideId}:`, coords);
     io.emit("riderLocationUpdate", { rideId, coords });
@@ -118,24 +105,53 @@ io.on("connection", (socket) => {
   });
 });
 
-// === Middleware ===
-const corsOptions = {
-  origin: (origin, cb) => cb(null, true),
-  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"],
-};
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+// --- CORS Setup ---
+const allowedOrigins = [
+  "http://localhost:3000",        // React dev
+  "https://yourdomain.com",       // Deployed site
+  "https://www.yourdomain.com"
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Allow pre-flight for all routes
+app.options("*", cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Middleware
 app.use(express.json({ limit: "10mb" }));
- // Raw body for Razorpay webhook
+
+// Raw body for webhook route
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
- // JSON parser for all other routes
+// JSON parser for all other routes
 app.use((req, res, next) => {
   if (req.originalUrl === '/api/payments/webhook') return next();
-   return express.json({ limit: '10mb' })(req, res, next);
- });
+  return express.json({ limit: '10mb' })(req, res, next);
+});
 
-// Normalize multiple slashes in URL to avoid route mismatches (e.g., /api/parcels//:id/...)
+// Normalize multiple slashes in URL
 app.use((req, _res, next) => {
   try {
     req.url = req.url.replace(/\/{2,}/g, '/');
@@ -152,7 +168,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// === MongoDB connection (with in-memory fallback) ===
+// MongoDB connection (with in-memory fallback)
 async function connectDatabase() {
   const opts = { useNewUrlParser: true, useUnifiedTopology: true, serverSelectionTimeoutMS: 5000 };
   const uri = process.env.MONGO_URI;
@@ -174,7 +190,6 @@ async function connectDatabase() {
       await mongoose.connect(memUri, opts);
       connected = true;
       console.log("✅ In-memory MongoDB started");
-      // Gracefully stop memory server on exit
       process.on("SIGINT", async () => {
         try { await mongod.stop(); } catch {}
         process.exit(0);
@@ -185,10 +200,8 @@ async function connectDatabase() {
     }
   }
 
-  // Expose DB online status for controllers/middleware if needed
   app.set("dbOnline", connected);
 
-  // If not connected, skip collection ensure step
   if (!connected) {
     return;
   }
@@ -221,10 +234,9 @@ async function connectDatabase() {
   }
 }
 
-// Kick off DB connection
 connectDatabase().catch((e) => console.error("❌ DB init error:", e));
 
-// === Routes ===
+// Routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/otp", require("./routes/otpRoutes"));
 app.use("/api/rides", require("./routes/rides.routes"));
@@ -236,10 +248,9 @@ app.use("/api/pricing", require("./routes/pricingRoutes"));
 app.use("/api/payments", require("./routes/payments.routes"));
 app.use("/api/wallet", require("./routes/wallet.routes"));
 
-// Uploads folder
 app.use("/uploads", express.static("uploads"));
 
-// Example protected route
+// Protected route example
 const authMiddleware = require("./middleware/authMiddleware");
 app.get("/api/protected", authMiddleware, (req, res) => {
   res.json({
@@ -249,7 +260,7 @@ app.get("/api/protected", authMiddleware, (req, res) => {
   });
 });
 
-// === Serve React Frontend (only if build exists) ===
+// Serve React Frontend if build exists
 const frontendPath = path.resolve(__dirname, "../../frontend/build");
 if (fs.existsSync(frontendPath)) {
   app.use(express.static(frontendPath));
@@ -262,7 +273,7 @@ if (fs.existsSync(frontendPath)) {
     res.sendFile(path.join(frontendPath, "index.html"));
   });
 } else {
-  // In development without a frontend build, avoid ENOENT
+  // Without a build
   app.get("*", (req, res) => {
     if (req.url.startsWith("/api")) {
       return res
@@ -273,13 +284,10 @@ if (fs.existsSync(frontendPath)) {
   });
 }
 
-// === Start server ===
+// Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () =>
-  
-  console.log(`🚀 Server running on port ${PORT}`)
-);
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
 
 module.exports = app;
-
-

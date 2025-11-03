@@ -8,7 +8,7 @@ import LocalTaxiIcon from "@mui/icons-material/LocalTaxi";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
 
 export default function AdminSidebar() {
   const navigate = useNavigate();

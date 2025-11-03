@@ -27,7 +27,7 @@ export default function Activity() {
   const [status, setStatus] = useState("Waiting for rider acceptance…");
   const [accepted, setAccepted] = useState(false);
   const [otp, setOtp] = useState("");
-  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
   const API_URL = `${API_BASE}/api`;
 
   // Helper to reliably open Google Maps (mobile-first, popup-safe)

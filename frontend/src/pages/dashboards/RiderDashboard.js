@@ -22,7 +22,7 @@ import ChatDialog from "../../components/ChatDialog.jsx";
 import Map from "../../components/Map"; //  Google Maps component
 import { getMerchantDetails, confirmOnlinePayment, markCashPayment } from "../../services/api";
  
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
 const API_URL = `${API_BASE}/api`;
 const SHOW_PARCELS_ON_DASHBOARD = true;
 

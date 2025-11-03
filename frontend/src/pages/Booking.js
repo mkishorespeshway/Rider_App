@@ -21,7 +21,7 @@ import SOSButton from "../components/SOSButton";
 import "../theme.css";
 import "../booking-mobile.css";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
   const API_URL = `${API_BASE}/api`;
   const MAX_RIDE_DISTANCE_KM = 25;
   // Create a new socket connection for each tab instance

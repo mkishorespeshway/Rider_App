@@ -219,7 +219,7 @@ export default function Parcel() {
     const dropData = drop || { lat: null, lng: null };
 
     try {
-      const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
       const API_URL = `${API_BASE}/api`;
 
       const formData = new FormData();

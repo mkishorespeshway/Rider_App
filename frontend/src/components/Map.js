@@ -38,7 +38,7 @@ const containerStyle = {
   minHeight: "320px",
 };
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_URL = (process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "")) + "/api";
 
 // Default Hyderabad
 const DEFAULT_PICKUP = { lat: 17.385044, lng: 78.486671 };

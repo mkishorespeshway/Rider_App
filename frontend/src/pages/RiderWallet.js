@@ -12,7 +12,7 @@ export default function RiderWallet() {
   const [withdrawAmount, setWithdrawAmount] = useState(0);
   const [bankOpen, setBankOpen] = useState(false);
   const [bank, setBank] = useState({ holderName: "", bankName: "", accountNumber: "", ifsc: "" });
-  const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
 
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
 

@@ -5,7 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { io } from "socket.io-client";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5000";
+const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
 // Create a new socket connection for each tab instance
 const socket = io(API_BASE, {
   query: { tabId: `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` },

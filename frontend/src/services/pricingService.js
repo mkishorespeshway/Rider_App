@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Ensure env base (e.g., http://localhost:5002) is always prefixed with '/api'
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 const API_URL = `${API_BASE}/api`;
 
 // Service to handle pricing calculations
