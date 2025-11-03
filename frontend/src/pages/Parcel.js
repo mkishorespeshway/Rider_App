@@ -161,9 +161,32 @@ export default function Parcel() {
     }
   };
 
-  // 📍 Set GPS as default pickup
+  // 🔒 Initialize from Booking selections if present and lock edits
+  const [lockedFromBooking, setLockedFromBooking] = useState(false);
+
   useEffect(() => {
-    if (currentLocation) {
+    try {
+      const locked = localStorage.getItem("parcelLockFromBooking") === "true";
+      const puStr = localStorage.getItem("parcelPickupCoords");
+      const drStr = localStorage.getItem("parcelDropCoords");
+      const puAddr = localStorage.getItem("parcelPickupAddress");
+      const drAddr = localStorage.getItem("parcelDropAddress");
+
+      const pu = puStr ? JSON.parse(puStr) : null;
+      const dr = drStr ? JSON.parse(drStr) : null;
+
+      if (pu && typeof pu === "object") setPickup(pu);
+      if (dr && typeof dr === "object") setDrop(dr);
+      if (puAddr) setForm((prev) => ({ ...prev, pickupAddress: puAddr }));
+      if (drAddr) setForm((prev) => ({ ...prev, dropAddress: drAddr }));
+
+      if (locked && pu && dr) setLockedFromBooking(true);
+    } catch {}
+  }, []);
+
+  // 📍 Set GPS as default pickup ONLY when not locked and no saved pickup
+  useEffect(() => {
+    if (!lockedFromBooking && currentLocation && !pickup) {
       setPickup(currentLocation);
       (async () => {
         const addr = await getAddressFromCoords(
@@ -173,7 +196,7 @@ export default function Parcel() {
         setForm((prev) => ({ ...prev, pickupAddress: addr }));
       })();
     }
-  }, [currentLocation]);
+  }, [currentLocation, lockedFromBooking, pickup]);
 
   const handleChange = (e) =>
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -426,17 +449,17 @@ export default function Parcel() {
             <Map
               apiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
               pickup={pickup}
-              setPickup={setPickup}
-              setPickupAddress={(addr) => setForm((prev) => ({ ...prev, pickupAddress: addr }))}
+              setPickup={lockedFromBooking ? (() => {}) : setPickup}
+              setPickupAddress={lockedFromBooking ? (() => {}) : ((addr) => setForm((prev) => ({ ...prev, pickupAddress: addr })))}
               drop={drop}
-              setDrop={setDrop}
-              setDropAddress={(addr) => setForm((prev) => ({ ...prev, dropAddress: addr }))}
+              setDrop={lockedFromBooking ? (() => {}) : setDrop}
+              setDropAddress={lockedFromBooking ? (() => {}) : ((addr) => setForm((prev) => ({ ...prev, dropAddress: addr })))}
               setDistance={setDistance}
               setDuration={() => {}}
               setNormalDuration={() => {}}
               showRiderOnly={false}
               rideStarted={false}
-              lockToProvidedPoints={true}
+              lockToProvidedPoints={lockedFromBooking || true}
             />
           </Box>
         </Box>

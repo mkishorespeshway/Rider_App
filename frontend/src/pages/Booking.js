@@ -641,7 +641,20 @@ export default function Booking() {
   const handleBookRide = async () => {
     if (!pickup || !drop || !distance) return;
     if (!auth?.token) { navigate("/login-user"); return; }
-    if (selectedRide === "parcel") { navigate("/parcel"); return; }
+  if (selectedRide === "parcel") {
+    try {
+      // Persist currently selected pickup/drop to lock them on Parcel page
+      if (pickup && drop) {
+        localStorage.setItem("parcelPickupCoords", JSON.stringify(pickup));
+        localStorage.setItem("parcelDropCoords", JSON.stringify(drop));
+      }
+      if (pickupAddress) localStorage.setItem("parcelPickupAddress", pickupAddress);
+      if (dropAddress) localStorage.setItem("parcelDropAddress", dropAddress);
+      localStorage.setItem("parcelLockFromBooking", "true");
+    } catch {}
+    navigate("/parcel");
+    return;
+  }
 
     const distanceKm = parseFloat(distance);
     if (Number.isFinite(distanceKm) && distanceKm > MAX_RIDE_DISTANCE_KM) { setServiceLimitOpen(true); return; }
@@ -728,7 +741,16 @@ export default function Booking() {
     }
 
     if (selectedRide === "parcel") {
-      navigate("/parcel");
+  try {
+    if (pickup && drop) {
+      localStorage.setItem("parcelPickupCoords", JSON.stringify(pickup));
+      localStorage.setItem("parcelDropCoords", JSON.stringify(drop));
+    }
+    if (pickupAddress) localStorage.setItem("parcelPickupAddress", pickupAddress);
+    if (dropAddress) localStorage.setItem("parcelDropAddress", dropAddress);
+    localStorage.setItem("parcelLockFromBooking", "true");
+  } catch {}
+  navigate("/parcel");
       return;
     }
 

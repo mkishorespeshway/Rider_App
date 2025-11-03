@@ -289,7 +289,8 @@ export default function RiderDashboard() {
     try {
       if (!activeId && cookieSaved) {
         const parsed = JSON.parse(cookieSaved);
-        if (parsed && parsed.type === "ride") activeId = parsed.id;
+        const sameUser = !parsed?.userId || String(parsed.userId) === String(auth?.user?._id || "");
+        if (parsed && parsed.type === "ride" && sameUser) activeId = parsed.id;
       }
     } catch (_) {}
     if (!activeId || !auth?.token) return;
@@ -575,7 +576,17 @@ export default function RiderDashboard() {
       );
       setSelectedRide(res.data.ride);
       try { localStorage.setItem("riderActiveRideId", res.data.ride._id); } catch {}
- 
+      // Mirror active ride ID in cookie so restore-on-login works even if localStorage is cleared
+      try {
+        const payload = {
+          userId: auth?.user?._id || null,
+          type: "ride",
+          id: String(res?.data?.ride?._id || rideId || ""),
+          ts: Date.now()
+        };
+        setCookie(COOKIE_LAST_VIEW_KEY, JSON.stringify(payload));
+      } catch {}
+
       if (res.data.ride.pickupCoords) setPickup(res.data.ride.pickupCoords);
       if (res.data.ride.dropCoords) setDrop(res.data.ride.dropCoords);
      
@@ -630,6 +641,18 @@ export default function RiderDashboard() {
           updatedRide.phone = selectedRide.phone;
         }
         setSelectedRide(updatedRide);
+        // Persist active ride so logout/login restores "Ride in Progress" screen
+        try { localStorage.setItem("riderActiveRideId", String(updatedRide?._id || res?.data?.ride?._id || selectedRide?._id || "")); } catch {}
+        try {
+          const payload = {
+            userId: auth?.user?._id || null,
+            type: "ride",
+            id: String(updatedRide?._id || res?.data?.ride?._id || selectedRide?._id || ""),
+            ts: Date.now()
+          };
+          // Mirror in cookie to survive any app-level localStorage clears on logout
+          setCookie(COOKIE_LAST_VIEW_KEY, JSON.stringify(payload));
+        } catch {}
         alert("Ride started successfully!");
       } else {
         setOtpError(res.data?.message || "Invalid OTP");
@@ -955,6 +978,34 @@ export default function RiderDashboard() {
     }
   }, [rides, riderLocation]);
 
+  // Call helper: sanitize number and show feedback if missing
+  const handleCallClick = () => {
+    const raw = getRideUserPhone(selectedRide);
+    const mobile = sanitizePhoneForTel(raw);
+    if (!mobile) {
+      setSnackbarMessage("Phone number not available");
+      setSnackbarOpen(true);
+      return;
+    }
+    const telUrl = `tel:${mobile}`;
+    try {
+      // Create a temporary anchor and click it to better trigger dialer
+      const a = document.createElement("a");
+      a.href = telUrl;
+      a.rel = "noopener";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (_) {
+      try {
+        window.open(telUrl, "_self");
+      } catch (__) {
+        window.location.href = telUrl;
+      }
+    }
+  };
+
   return (
     // Blue header + white card layout to match login/register pages
     <Box className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-600" sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0a3d62, #1266f1)' }}>
@@ -1033,10 +1084,7 @@ export default function RiderDashboard() {
                   variant="contained"
                   color="success"
                   sx={{ mr: 2 }}
-                  onClick={() => {
-                    const mobile = getRideUserPhone(selectedRide);
-                    if (mobile) window.location.href = `tel:${mobile}`;
-                  }}
+                  onClick={handleCallClick}
                 >
                   Call
                 </Button>
@@ -1208,9 +1256,7 @@ export default function RiderDashboard() {
                         alt={selectedParcel.documents[0]?.originalName || 'Parcel Details'}
                         style={{ maxWidth: 240, maxHeight: 200, display: 'block' }}
                       />
-                      <Box sx={{ mt: 1 }}>
-                        <Button variant="contained" size="small" onClick={() => handleDownloadDoc(selectedParcel.documents[0], 0)}>Download</Button>
-                      </Box>
+                      {/* Download is intentionally disabled before OTP verification */}
                     </>
                   ) : (
                     <Button variant="outlined" size="small" onClick={() => window.open(selectedParcel.documents[0].url.startsWith('/') ? `${API_BASE}${selectedParcel.documents[0].url}` : selectedParcel.documents[0].url, '_blank')}>
@@ -1253,22 +1299,7 @@ export default function RiderDashboard() {
                     );
                   })}
                 </Box>
-                <Box mt={2} className="flex flex-col sm:flex-row gap-2">
-                  <Button className="w-full sm:w-auto" variant="contained" color="primary" onClick={async () => {
-                    try {
-                      for (let i = 0; i < (selectedParcel?.documents?.length || 0); i++) {
-                        const d = selectedParcel.documents[i];
-                        await handleDownloadDoc(d, i);
-                      }
-                      await handleMarkDocsCopied(selectedParcel._id);
-                    } catch (e) {
-                      alert('Failed to download all documents');
-                      try { console.warn('Download all warning:', e); } catch {}
-                    }
-                  }}>
-                    Download All & Delete (Xerox)
-                  </Button>
-                </Box>
+                {/* Removed bulk download & delete option per request */}
                 <Box mt={2} className="flex flex-col sm:flex-row gap-2">
                   <Button className="w-full sm:w-auto" variant="contained" color="warning" onClick={() => handleMarkDocsCopied(selectedParcel._id)}>
                     Hide/Delete Documents
@@ -1553,7 +1584,22 @@ export default function RiderDashboard() {
     </Box>
   );
 }
- 
+
+// Sanitize phone number for tel: links (digits + leading '+')
+const sanitizePhoneForTel = (raw) => {
+  try {
+    let s = String(raw || "").trim();
+    if (!s) return "";
+    // Remove spaces, hyphens, parentheses, dots; keep digits and '+'
+    let out = s.replace(/[^\d+]/g, "");
+    // Remove any '+' that are not at the start
+    out = out.replace(/(?!^)\+/g, "");
+    return out;
+  } catch (_) {
+    return "";
+  }
+};
+
 
 // Helper: sanitize URL strings coming from DB or user input
 const sanitizeUrl = (raw) => {
@@ -1597,13 +1643,29 @@ const getRideUserPhone = (ride) => {
     return (
       // Primary: booking user populated by backend
       ride?.riderId?.mobile ||
+      ride?.riderId?.phone ||
+      ride?.riderId?.contactNumber ||
+      // Parcel flows and common alt fields
+      ride?.senderMobile ||
+      ride?.receiverMobile ||
+      ride?.parcel?.senderMobile ||
+      ride?.parcel?.receiverMobile ||
       ride?.user?.mobile ||
       ride?.user?.phone ||
+      ride?.user?.phoneNumber ||
       ride?.userId?.mobile ||
       ride?.userId?.phone ||
+      ride?.userId?.phoneNumber ||
       ride?.customer?.mobile ||
       ride?.customer?.phone ||
+      ride?.customer?.phoneNumber ||
       ride?.userInfo?.mobile ||
+      ride?.bookingUser?.mobile ||
+      ride?.bookingUser?.phone ||
+      ride?.contact ||
+      ride?.contactNumber ||
+      ride?.riderPhone ||
+      ride?.riderMobile ||
       ride?.userPhone ||
       ride?.phone ||
       ride?.mobile ||
