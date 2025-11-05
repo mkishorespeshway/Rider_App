@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Box,
   Card,
@@ -318,19 +318,23 @@ export default function RiderDashboard() {
 
 
 
-  //  Broadcast rider GPS to user in real time (Rapido-style)
+  // Broadcast rider GPS to user every 5 seconds while ride is active
   useEffect(() => {
-    try {
-      if (!riderLocation || !selectedRide?._id) return;
-      // Only emit while ride is accepted or in progress
-      const status = selectedRide.status || "accepted";
-      if (["accepted", "in_progress"].includes(status)) {
-        socket.emit("riderLocation", { rideId: selectedRide._id, coords: riderLocation });
+    if (!selectedRide?._id) return;
+    const status = selectedRide.status || "accepted";
+    if (!["accepted", "in_progress"].includes(status)) return;
+    const rid = selectedRide._id;
+    const interval = setInterval(() => {
+      try {
+        if (riderLocation && riderLocation.lat != null && riderLocation.lng != null) {
+          socket.emit("riderLocation", { rideId: rid, coords: riderLocation });
+        }
+      } catch (e) {
+        console.warn("riderLocation interval emit warning:", e?.message || e);
       }
-    } catch (e) {
-      console.warn("riderLocation emit warning:", e.message);
-    }
-  }, [riderLocation, selectedRide]);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [selectedRide?._id, selectedRide?.status, riderLocation]);
  
   // ðŸ”„ Fetch pending rides
   const fetchPendingRides = async () => {
@@ -1042,6 +1046,8 @@ export default function RiderDashboard() {
           {isOnline ? "You are available for new rides." : "You are offline."}
         </Typography>
       </Box>
+
+      {/* GPS Test Panel removed per request */}
  
   {loading ? (
     <CircularProgress />

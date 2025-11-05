@@ -10,7 +10,7 @@ import FlagIcon from "@mui/icons-material/Flag";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-import { io } from "socket.io-client";
+import socket from "../services/socket";
 import MapComponent from "../components/Map";
 import ChatDialog from "../components/ChatDialog.jsx";
 import DynamicPricingDisplay from "../components/DynamicPricingDisplay.jsx";
@@ -24,12 +24,6 @@ import "../booking-mobile.css";
 const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
   const API_URL = `${API_BASE}/api`;
   const MAX_RIDE_DISTANCE_KM = 25;
-  // Create a new socket connection for each tab instance
-  const socket = io(API_BASE, {
-    query: { tabId: `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` },
-    forceNew: true, // Force a new connection for each tab
-    reconnection: true
-  });
 
 // Removed Razorpay loader (no third-party checkout in this flow)
 const loadRazorpayScript = () => Promise.resolve(false);
@@ -99,6 +93,8 @@ export default function Booking() {
   const [lookingForRider, setLookingForRider] = useState(false);
   const [assignedRider, setAssignedRider] = useState(null);
   const [riderLocation, setRiderLocation] = useState(null);
+  // Track multiple available riders by vehicle type for pre-OTP visualization
+  const [availableRiders, setAvailableRiders] = useState([]);
   const [riderPanelOpen, setRiderPanelOpen] = useState(false);
   const [rideStatus, setRideStatus] = useState("Waiting for rider 🚖");
   const [otp, setOtp] = useState("");
@@ -971,6 +967,58 @@ export default function Booking() {
       }
     });
 
+    // Show rider’s available location before a ride is created,
+    // and continue showing assigned rider’s live location pre-OTP.
+    socket.on("riderAvailableLocationUpdate", ({ coords, vehicleType, riderId }) => {
+      try {
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        const activeId = localStorage.getItem(activeKey);
+        const currentId = activeId || (createdRide && createdRide._id) || null;
+        const hasActiveRide = Boolean(currentId);
+
+        // Guard invalid coords
+        if (!coords || coords.lat == null || coords.lng == null || !riderId) return;
+
+        // Maintain a list of all available riders near the user
+        setAvailableRiders((prev) => {
+          const idx = prev.findIndex((r) => String(r.riderId) === String(riderId));
+          const entry = { riderId, vehicleType, coords };
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = { ...next[idx], ...entry };
+            return next;
+          }
+          // cap list to avoid unbounded growth
+          const filtered = prev.filter((r) => r && r.riderId && String(r.riderId) !== String(riderId)).slice(0, 49);
+          return [entry, ...filtered];
+        });
+
+        if (!hasActiveRide) {
+          // No active ride — still reflect last seen rider to center map if needed
+          setRiderLocation(coords);
+          return;
+        }
+
+        // When a rider is assigned but OTP not verified yet, reflect that rider’s location too
+        const assignedId = assignedRider?._id || assignedRider?.id;
+        if (!mapOnlyView && assignedId && String(riderId) === String(assignedId)) {
+          setRiderLocation(coords);
+          try { localStorage.setItem(`riderLocation:last:${currentId}`, JSON.stringify(coords)); } catch {}
+        }
+      } catch {
+        if (coords && coords.lat != null && coords.lng != null) setRiderLocation(coords);
+      }
+    });
+
+    // Remove riders from the local list when they go offline
+    socket.on("riderAvailabilityUpdate", ({ isOnline, riderId }) => {
+      try {
+        if (!isOnline && riderId) {
+          setAvailableRiders((prev) => prev.filter((r) => String(r.riderId) !== String(riderId)));
+        }
+      } catch (_) {}
+    });
+
     return () => {
       
       socket.off("rideAccepted");
@@ -978,8 +1026,10 @@ export default function Booking() {
       socket.off("rideStarted");
       socket.off("rideCompleted");
       socket.off("riderLocationUpdate");
+      socket.off("riderAvailableLocationUpdate");
+      socket.off("riderAvailabilityUpdate");
     };
-  }, []);
+  }, [assignedRider, mapOnlyView, createdRide, auth]);
 
   // Re-check payment status when the prompt is visible; auto-hide if already paid
   useEffect(() => {
@@ -1275,6 +1325,7 @@ export default function Booking() {
             setDrop={setDrop}
             setDropAddress={setDropAddress}
             riderLocation={riderLocation}
+            availableRiders={availableRiders}
             route={route}
             setRoute={setRoute}
             setDistance={setDistance}
@@ -1284,7 +1335,7 @@ export default function Booking() {
             // and switch to full route view after OTP (mapOnlyView)
             showRiderOnly={Boolean(assignedRider) && !mapOnlyView}
             // After OTP verification, keep map in started state
-            rideStarted={mapOnlyView}
+            rideStarted={createdRide?.status === "in_progress"}
             vehicleType={assignedRider?.vehicleType || assignedRider?.vehicle?.type}
             vehicleImage={assignedRider?.vehicle?.images?.[0] || assignedRider?.vehicleImage}
           />

@@ -73,6 +73,7 @@ export default function Map({
   setDrop,
   setDropAddress,
   riderLocation,
+  availableRiders = [],
   setDistance,
   setDuration,
   // NEW: send normal (baseline) duration to parent alongside current duration
@@ -162,9 +163,19 @@ export default function Map({
   };
 
   // Vehicle-aware icon selection for rider marker (both Google & Leaflet)
-  const normalizedType = String(vehicleType || "").trim().toLowerCase();
+  // Normalize common synonyms/variants to core types for consistent icons
+  const rawType = String(vehicleType || "").trim().toLowerCase();
+  const normalizedType = (
+    rawType.includes("bike") || rawType.includes("cycle") || rawType.includes("scooter") || rawType.includes("motor")
+  ) ? "bike" : (
+    rawType.includes("auto") || rawType.includes("rickshaw")
+  ) ? "auto" : (
+    rawType.includes("car") || rawType.includes("suv")
+  ) ? "car" : (
+    rawType.includes("taxi") || rawType.includes("cab")
+  ) ? "taxi" : rawType;
   // Prefer vehicle image if provided; otherwise use Twemoji PNGs per vehicle type
-  const riderIconUrl = vehicleImage || (
+  let riderIconUrl = vehicleImage || (
     normalizedType === "bike"
       ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6b2.png" // bicycle
       : normalizedType === "auto"
@@ -173,7 +184,7 @@ export default function Map({
       ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f697.png" // automobile
       : "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f699.png" // taxi as default
   );
-  const riderLabelText =
+  let riderLabelText =
     normalizedType === "bike"
       ? "🚲"
       : normalizedType === "auto"
@@ -181,6 +192,7 @@ export default function Map({
       : normalizedType === "car"
       ? "🚗"
       : "🚖";
+  // Respect vehicle types in Booking context to show distinct emojis
   // Use same vehicle-aware icon for pickup/drop in post-OTP map-only view
   const pickupDropIconUrl = riderIconUrl;
 
@@ -775,14 +787,14 @@ export default function Map({
       center={normalizeLatLng(pickup) || DEFAULT_PICKUP}
       zoom={14}
       options={{
-        disableDefaultUI: false,
-        zoomControl: true,
-        streetViewControl: true,
-        fullscreenControl: true,
+        disableDefaultUI: true,
+        zoomControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
         gestureHandling: "cooperative",
-        mapTypeControl: true,
-        rotateControl: true,
-        scaleControl: true,
+        mapTypeControl: false,
+        rotateControl: false,
+        scaleControl: false,
       }}
       onLoad={(map) => {
         mapRef.current = map;
@@ -831,6 +843,45 @@ export default function Map({
           label={{ text: riderLabelText, fontSize: "16px" }}
         />
       )}
+
+      {/* 🚖 All available riders — show each vehicle type separately before OTP */}
+      {Array.isArray(availableRiders) && !rideStartedEffective && availableRiders.map((r) => {
+        const pos = normalizeLatLng(r?.coords) || r?.coords;
+        if (!pos) return null;
+        const raw = String(r?.vehicleType || "").trim().toLowerCase();
+        const t = (
+          raw.includes("bike") || raw.includes("cycle") || raw.includes("scooter") || raw.includes("motor")
+        ) ? "bike" : (
+          raw.includes("auto") || raw.includes("rickshaw")
+        ) ? "auto" : (
+          raw.includes("car") || raw.includes("suv")
+        ) ? "car" : (
+          raw.includes("taxi") || raw.includes("cab")
+        ) ? "taxi" : "bike";
+        const url = (
+          t === "bike"
+            ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6b2.png"
+            : t === "auto"
+            ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6fa.png"
+            : t === "car"
+            ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f697.png"
+            : "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f699.png"
+        );
+        const label = t === "bike" ? "🚲" : t === "auto" ? "🛺" : t === "car" ? "🚗" : "🚖";
+        return (
+          <GoogleMarker
+            key={`avail-${r?.riderId || Math.random()}-${pos.lat}-${pos.lng}`}
+            position={pos}
+            icon={{
+              url,
+              scaledSize: new window.google.maps.Size(40, 40),
+              anchor: new window.google.maps.Point(20, 38),
+              labelOrigin: new window.google.maps.Point(20, 8),
+            }}
+            label={{ text: label, fontSize: "14px" }}
+          />
+        );
+      })}
 
       {/* 📍 Pickup & Drop markers (custom) */}
       {pickup && (
@@ -954,83 +1005,7 @@ export default function Map({
           })()}
         </>
       )}
-      {/* Pre-OTP Booking: Pickup Overview card (MUI) */}
-        {!rideStartedEffective && isBookingContext && (
-        <div style={{ position: "absolute", left: 12, top: 12, zIndex: 6 }}>
-          <Card
-            className="backdrop-blur-lg"
-            sx={{
-              borderRadius: 3,
-              boxShadow: 6,
-              maxWidth: 560,
-              bgcolor: "rgba(255,255,255,0.92)",
-              border: "1px solid",
-              borderColor: "#e5e7eb",
-            }}
-          >
-            <CardHeader
-              avatar={<Avatar sx={{ bgcolor: "#ef4444" }}><DirectionsCar fontSize="small" /></Avatar>}
-              title={<Typography variant="subtitle1" fontWeight={700}>Pickup Overview</Typography>}
-              subheader={routeEtaText ? `ETA ${routeEtaText}` : undefined}
-              sx={{ pb: 0 }}
-            />
-            <CardContent sx={{ pt: 1 }}>
-              <Stack spacing={1.25}>
-                <Box>
-                  <Typography variant="caption" sx={{ color: "text.secondary" }}>Pickup</Typography>
-                  <Typography variant="body2" fontWeight={600}>{pickupAddrDisplay || (() => {
-                    const p = normalizeLatLng(pickup) || pickup;
-                    if (!p) return "";
-                    const lat = (p.lat ?? p.latitude)?.toFixed?.(5) ?? p.lat ?? p.latitude;
-                    const lng = (p.lng ?? p.longitude)?.toFixed?.(5) ?? p.lng ?? p.longitude;
-                    return `${lat}, ${lng}`;
-                  })()}</Typography>
-                </Box>
-                {drop && (
-                  <>
-                    <Divider sx={{ my: 0.5 }} />
-                    <Box>
-                      <Typography variant="caption" sx={{ color: "text.secondary" }}>Drop</Typography>
-                      <Typography variant="body2" fontWeight={600}>{dropAddrDisplay || (() => {
-                        const d = normalizeLatLng(drop) || drop;
-                        if (!d) return "";
-                        const lat = (d.lat ?? d.latitude)?.toFixed?.(5) ?? d.lat ?? d.latitude;
-                        const lng = (d.lng ?? d.longitude)?.toFixed?.(5) ?? d.lng ?? d.longitude;
-                        return `${lat}, ${lng}`;
-                      })()}</Typography>
-                    </Box>
-                  </>
-                )}
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ pt: 0.5 }}>
-                  <Chip
-                    icon={<AccessTimeIcon />}
-                    color="warning"
-                    label={(() => {
-                      if (typeof navDurationMins === "number" && navDurationMins > 0) return `${navDurationMins} min`;
-                      const start = normalizeLatLng(riderLocation) || riderLocation;
-                      const end = normalizeLatLng(pickup) || pickup;
-                      if (!start || !end) return routeEtaText || "--";
-                      const m = haversineMeters(start, end);
-                      if (!m) return routeEtaText || "--";
-                      const km = m / 1000;
-                      const avg = 20; // km/h assumed
-                      const mins = Math.max(1, Math.round((km / avg) * 60));
-                      return `${mins} min`;
-                    })()}
-                    sx={{ bgcolor: "#fff" }}
-                  />
-                  <Chip
-                    icon={<AltRouteIcon />}
-                    variant="outlined"
-                    label={routeDistance ? `${routeDistance} km` : (navDistanceKm ? `${navDistanceKm} km` : "--")}
-                    sx={{ bgcolor: "#fff" }}
-                  />
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Pickup Overview overlay removed */}
 
       {/* Post-OTP navigation-style overlays (mimic screenshot) */}
         {rideStartedEffective && pickup && drop && (

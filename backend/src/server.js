@@ -100,6 +100,39 @@ io.on("connection", (socket) => {
     io.emit("riderLocationUpdate", { rideId, coords });
   });
 
+  // Broadcast rider online/offline status (vehicle type included)
+  socket.on("riderAvailability", ({ isOnline, vehicleType, riderId }) => {
+    try {
+      const payload = {
+        isOnline: !!isOnline,
+        vehicleType: String(vehicleType || "").trim().toLowerCase(),
+        riderId: riderId || null,
+        at: Date.now(),
+      };
+      io.emit("riderAvailabilityUpdate", payload);
+      console.log("🟢 riderAvailabilityUpdate:", payload);
+    } catch (e) {
+      console.warn("riderAvailability relay warning:", e?.message || e);
+    }
+  });
+
+  // Broadcast rider's current available location to all clients
+  socket.on("riderAvailableLocation", ({ coords, vehicleType, riderId }) => {
+    try {
+      if (!coords || coords.lat == null || coords.lng == null) return;
+      const payload = {
+        coords,
+        vehicleType: String(vehicleType || "").trim().toLowerCase(),
+        riderId: riderId || null,
+        at: Date.now(),
+      };
+      io.emit("riderAvailableLocationUpdate", payload);
+      console.log("📍 riderAvailableLocationUpdate:", payload);
+    } catch (e) {
+      console.warn("riderAvailableLocation relay warning:", e?.message || e);
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log("❌ Socket disconnected:", socket.id);
   });

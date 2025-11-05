@@ -1,11 +1,29 @@
 // src/services/socket.js
 import { io } from "socket.io-client";
 
-// Prefer explicit socket URL; fall back to API URL; then current origin
-const SOCKET_URL =
-  process.env.REACT_APP_SOCKET_URL ||
-  process.env.REACT_APP_API_URL ||
-  (typeof window !== "undefined" ? window.location.origin : undefined);
+// Prefer explicit socket URL; fall back to API URL; then current origin.
+// In development, ensure we connect to backend port 5000 even if the app runs on 3000/3001.
+function resolveSocketUrl() {
+  const explicit = process.env.REACT_APP_SOCKET_URL;
+  if (explicit) return explicit;
+  const api = process.env.REACT_APP_API_URL;
+  if (api) return api;
+  if (typeof window !== "undefined" && window.location) {
+    const origin = window.location.origin;
+    try {
+      const u = new URL(origin);
+      const isLocalhost = /^localhost$|^127\.0\.0\.1$|^\[::1\]$/.test(u.hostname);
+      if (isLocalhost) {
+        // Always point sockets to backend dev server on 5000
+        return `${u.protocol}//${u.hostname}:5000`;
+      }
+    } catch {}
+    return origin;
+  }
+  return undefined;
+}
+
+const SOCKET_URL = resolveSocketUrl();
 
 // Single shared Socket.IO client with sane reconnection settings
 export const socket = io(SOCKET_URL, {
