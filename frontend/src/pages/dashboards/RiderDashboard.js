@@ -545,7 +545,7 @@ export default function RiderDashboard() {
     };
     socket.on("userLocationUpdate", handler);
     return () => {
-      socket.off("u2serLocationUpdate", handler);
+      socket.off("userLocationUpdate", handler);
     };
   }, [selectedRide]);
 

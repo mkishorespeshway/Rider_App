@@ -100,6 +100,18 @@ io.on("connection", (socket) => {
     io.emit("riderLocationUpdate", { rideId, coords });
   });
 
+  // Relay user's live GPS to riders (scoped by ride or global)
+  socket.on("userLocation", ({ rideId, coords }) => {
+    try {
+      if (!coords || coords.lat == null || coords.lng == null) return;
+      console.log(`🧭 User location update for ride ${rideId}:`, coords);
+      // Keep parity with riderLocation relay; emit globally to simplify listeners
+      io.emit("userLocationUpdate", { rideId, coords });
+    } catch (e) {
+      console.warn("userLocation relay warning:", e?.message || e);
+    }
+  });
+
   // Broadcast rider online/offline status (vehicle type included)
   socket.on("riderAvailability", ({ isOnline, vehicleType, riderId }) => {
     try {
@@ -139,17 +151,33 @@ io.on("connection", (socket) => {
 });
 
 // --- CORS Setup ---
-const allowedOrigins = [
-  "http://localhost:3000",        // React dev
-  "https://yourdomain.com",       // Deployed site
-  "https://www.yourdomain.com"
+// Resolve allowed CORS origins dynamically from env (comma-separated)
+const envOriginsRaw = process.env.CORS_ORIGINS || process.env.CORS_ORIGIN || "";
+const envOrigins = envOriginsRaw
+  .split(",")
+  .map((s) => (s || "").trim())
+  .filter((s) => s.length > 0);
+
+// Fallback list for local/dev if env not provided
+const defaultOrigins = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+  "http://52.205.202.54:3000"
 ];
+const allowedOrigins = envOrigins.length ? envOrigins : defaultOrigins;
 
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    // Allow all if wildcard is set in env
+    if (allowedOrigins.includes("*")) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // If env provided a base domain, allow both http and https variants
+    const bare = origin.replace(/^(https?:)/, "");
+    if (allowedOrigins.some((o) => bare === o.replace(/^(https?:)/, ""))) {
       return callback(null, true);
     }
     return callback(new Error("Not allowed by CORS"));
@@ -163,7 +191,10 @@ app.use(cors({
 app.options("*", cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes("*")) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    const bare = origin.replace(/^(https?:)/, "");
+    if (allowedOrigins.some((o) => bare === o.replace(/^(https?:)/, ""))) {
       return callback(null, true);
     }
     return callback(new Error("Not allowed by CORS"));
