@@ -1264,28 +1264,7 @@ export default function RiderDashboard() {
                   </Button>
                 </Box>
               )}
-              {/* Show first parcel image immediately after accept, before OTP */}
-              {selectedParcel?.status === "accepted"
-                && Array.isArray(selectedParcel?.documents)
-                && selectedParcel.documents.length > 0 && (
-                <Box mt={2}>
-                  <Typography variant="body2" sx={{ mb: 1 }}>Parcel ride details</Typography>
-                  {String(selectedParcel.documents[0]?.mimetype || '').startsWith('image/') ? (
-                    <>
-                      <img
-                        src={selectedParcel.documents[0].url.startsWith('/') ? `${API_BASE}${selectedParcel.documents[0].url}` : selectedParcel.documents[0].url}
-                        alt={selectedParcel.documents[0]?.originalName || 'Parcel Details'}
-                        style={{ maxWidth: 240, maxHeight: 200, display: 'block' }}
-                      />
-                      {/* Download is intentionally disabled before OTP verification */}
-                    </>
-                  ) : (
-                    <Button variant="outlined" size="small" onClick={() => window.open(selectedParcel.documents[0].url.startsWith('/') ? `${API_BASE}${selectedParcel.documents[0].url}` : selectedParcel.documents[0].url, '_blank')}>
-                      View Details Document
-                    </Button>
-                  )}
-                </Box>
-              )}
+              {/* Hide parcel documents until OTP verification; documents will appear once status is in_progress */}
               {/* Parcel documents — show only until rider marks copied */}
               {selectedParcel?.status === "in_progress"
                 && String(selectedParcel?.parcelCategory || '').trim().toLowerCase() === 'xerox'
