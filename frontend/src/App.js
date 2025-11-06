@@ -51,7 +51,7 @@ export default function App() {
       <CssBaseline />
       <div className="bw-theme app-ui">
         <Navbar />
-        <main className="app-main" style={{ padding: 16 }}>
+        <main className="app-main" >
           <Routes>
             {/* Root */}
             <Route
@@ -199,3 +199,4 @@ export default function App() {
 }
 
  
+

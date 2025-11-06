@@ -97,10 +97,10 @@ export default function RiderLogin() {
 
   return (
     <Box className="min-h-screen bg-gray-50" sx={{ minHeight: "100vh", background: "#f8fafc" }}>
-      {/* Blue Header Section */}
+      {/* Brand Header Section */}
       <Box
         sx={{
-          background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
+          background: "linear-gradient(135deg, #007C91 0%, #00B8D4 100%)",
           height: "40vh",
           display: "flex",
           alignItems: "center",
@@ -173,13 +173,13 @@ export default function RiderLogin() {
                 sx={{
                   height: 56,
                   borderRadius: 3,
-                  background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
+                  backgroundColor: "#007C91",
                   fontWeight: "bold",
                   fontSize: 16,
                   textTransform: "none",
-                  boxShadow: "0 4px 12px rgba(79, 70, 229, 0.4)",
+                  boxShadow: "0 4px 12px rgba(0, 124, 145, 0.35)",
                   "&:hover": {
-                    background: "linear-gradient(135deg, #4338CA 0%, #6D28D9 100%)",
+                    backgroundColor: "#00687A",
                   },
                 }}
               >
@@ -206,13 +206,13 @@ export default function RiderLogin() {
                 sx={{
                   height: 56,
                   borderRadius: 3,
-                  background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
+                  backgroundColor: "#007C91",
                   fontWeight: "bold",
                   fontSize: 16,
                   textTransform: "none",
-                  boxShadow: "0 4px 12px rgba(79, 70, 229, 0.4)",
+                  boxShadow: "0 4px 12px rgba(0, 124, 145, 0.35)",
                   "&:hover": {
-                    background: "linear-gradient(135deg, #4338CA 0%, #6D28D9 100%)",
+                    backgroundColor: "#00687A",
                   },
                 }}
               >
@@ -224,13 +224,13 @@ export default function RiderLogin() {
           <Box sx={{ mt: 4, textAlign: "center" }}>
             <Typography variant="body2" sx={{ color: "#6b7280", mb: 2 }}>
               Don't have an account?{" "}
-              <Link to="/rider-register" style={{ color: "#4F46E5", textDecoration: "none", fontWeight: 600 }}>
+              <Link to="/rider-register" style={{ color: "#007C91", textDecoration: "none", fontWeight: 600 }}>
                 Sign Up
               </Link>
             </Typography>
             <Typography variant="body2" sx={{ color: "#6b7280" }}>
               Are you a User?{" "}
-              <Link to="/login" style={{ color: "#4F46E5", textDecoration: "none", fontWeight: 600 }}>
+              <Link to="/login" style={{ color: "#007C91", textDecoration: "none", fontWeight: 600 }}>
                 Login as User
               </Link>
             </Typography>

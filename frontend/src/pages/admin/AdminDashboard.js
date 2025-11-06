@@ -203,11 +203,11 @@ export default function AdminDashboard() {
   }, []);
 
   const cards = [
-    { label: "Users", value: overview.users, icon: <GroupsIcon />, type: "users", color: "#3498db" },
-    { label: "Riders", value: overview.riders, icon: <PersonIcon />, type: "riders", color: "#1abc9c" },
+    { label: "Users", value: overview.users, icon: <GroupsIcon />, type: "users", color: "#007C91" },
+    { label: "Riders", value: overview.riders, icon: <PersonIcon />, type: "riders", color: "#10b981" },
     { label: "Approved Captains", value: overview.captains, icon: <VerifiedUserIcon />, type: "captains", color: "#2ecc71" },
     { label: "Pending Captains", value: overview.pendingCaptains, icon: <HourglassTopIcon />, type: "pending", color: "#e67e22" },
-    { label: "Rides", value: overview.rides, icon: <CommuteIcon />, type: "rides", color: "#9b59b6" },
+    { label: "Rides", value: overview.rides, icon: <CommuteIcon />, type: "rides", color: "#6b7280" },
     { label: "SOS Alerts", value: overview.sos, icon: <WarningAmberIcon />, type: "sos", color: "#e74c3c" },
   ];
 

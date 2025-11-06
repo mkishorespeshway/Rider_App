@@ -1,11 +1,12 @@
 /* Global UI tokens and mobile bottom-sheet layout */
 .app-ui {
-  --app-bg: #ffffff;
-  --app-text: #111111;
+  /* Align with Tailwind brand palette */
+  --app-bg: #FFFFFF;     /* Surface Background */
+  --app-text: #1A1A1A;   /* Primary Text */
   --app-muted: #6b6b6b;
   --app-black: #000000;
-  --app-accent: #06C167;
-  --app-primary: #1976d2;
+  --app-accent: #00E5FF; /* Accent Cyan */
+  --app-primary: #007C91;/* Primary Teal */
 }
 
 .app-ui header, .app-ui .Navbar-root { background: var(--app-bg); }
@@ -16,5 +17,5 @@
   border-top-right-radius: 20px !important;
 }
 
-/* Primary button color */
+/* Primary button color (kept minimal; Tailwind overrides handle most styling) */
 .MuiButton-contained { background: var(--app-primary) !important; color: #fff !important; }

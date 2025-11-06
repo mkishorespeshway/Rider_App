@@ -27,7 +27,7 @@ export default function Navbar() {
   };
 
   return (
-    <AppBar position="static" sx={{ backgroundColor: "black", px: 2 }}>
+    <AppBar position="static" sx={{ backgroundColor: "#00bfa6", px: 2 }}>
       <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
         <Typography
           variant="h6"

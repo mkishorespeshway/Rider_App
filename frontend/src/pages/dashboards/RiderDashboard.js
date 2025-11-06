@@ -829,14 +829,29 @@ export default function RiderDashboard() {
       }
       setSelectedRide(updated);
       alert("Ride completed. User will proceed to payment.");
-      // Keep selected ride visible so scanner appears here after completion
+      // Clear map state so last route doesn’t linger after completion
+      try {
+        setPickup(null);
+        setDrop(null);
+        setPickupAddress("");
+        setDropAddress("");
+      } catch {}
+      try { localStorage.removeItem("riderActiveRideId"); } catch {}
+      // Keep selectedRide for payment scanner UI, but without map route
     } catch (err) {
       console.warn("Complete ride warning:", err);
       // graceful fallback
       const updated = { ...selectedRide, status: "completed" };
       setSelectedRide(updated);
       alert("Ride marked completed locally.");
-      // Keep selected ride so scanner can be shown
+      // Clear map route even on fallback
+      try {
+        setPickup(null);
+        setDrop(null);
+        setPickupAddress("");
+        setDropAddress("");
+      } catch {}
+      try { localStorage.removeItem("riderActiveRideId"); } catch {}
     }
   };
  

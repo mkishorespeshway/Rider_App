@@ -333,10 +333,10 @@ export default function Payment() {
 
   return (
     <Box sx={{ minHeight: "100vh", background: "#f8fafc" }}>
-      {/* Blue Header Section */}
+      {/* Brand Header Section */}
       <Box
         sx={{
-          background: "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)",
+          background: "linear-gradient(135deg, #007C91 0%, #00B8D4 100%)",
           height: "40vh",
           display: "flex",
           alignItems: "center",
@@ -381,9 +381,9 @@ export default function Payment() {
           </Typography>
 
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 3, mb: 3 }}>
-            <Typography variant="body1">Ride ID: {effectiveRideId || "—"}</Typography>
+            <Typography variant="body1">Ride ID: {effectiveRideId || "ï¿½"}</Typography>
             <Typography variant="h6" sx={{ my: 1 }}>
-              Amount: {resolvedAmount != null ? `?${Number(resolvedAmount).toFixed(2)}` : "—"}
+              Amount: {resolvedAmount != null ? `?${Number(resolvedAmount).toFixed(2)}` : "ï¿½"}
             </Typography>
             {ride && (
               <Box sx={{ my: 2 }}>

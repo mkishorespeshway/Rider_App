@@ -5,7 +5,7 @@ import {
   Polyline,
   useJsApiLoader,
 } from "@react-google-maps/api";
-import { MapContainer as LMap, TileLayer, Marker as LMarker, Popup } from "react-leaflet";
+import { MapContainer as LMap, TileLayer, Marker as LMarker, Popup, Polyline as LPolyline } from "react-leaflet";
 import L from "leaflet";
 import axios from "axios";
 import "leaflet/dist/leaflet.css";
@@ -107,6 +107,32 @@ export default function Map({
   const [navDistanceKm, setNavDistanceKm] = useState(null);
   const [navManeuver, setNavManeuver] = useState("");
   const routeBoundsRef = useRef(null);
+
+  // Choose a fallback rider origin when riderLocation isn't available yet.
+  // Picks the available rider closest to pickup to render pre-OTP route.
+  const getNearestAvailableRiderToPickup = (riders, pick) => {
+    try {
+      if (!Array.isArray(riders) || !riders.length) return null;
+      const p = normalizeLatLng(pick) || pick;
+      if (!p || p.lat == null || p.lng == null) return null;
+      let best = null;
+      let bestScore = Infinity;
+      for (const r of riders) {
+        const pos = normalizeLatLng(r?.coords) || r?.coords;
+        if (!pos || pos.lat == null || pos.lng == null) continue;
+        const dLat = Number(pos.lat) - Number(p.lat);
+        const dLng = Number(pos.lng) - Number(p.lng);
+        const score = dLat * dLat + dLng * dLng; // squared distance; cheap and stable
+        if (score < bestScore) {
+          bestScore = score;
+          best = pos;
+        }
+      }
+      return best;
+    } catch {
+      return null;
+    }
+  };
 
   // Helper to open navigation URLs reliably on mobile and inside iframes
   const openNavUrl = (url) => {
@@ -297,6 +323,8 @@ export default function Map({
           center={[center.lat, center.lng]}
           zoom={14}
           style={containerStyle}
+          scrollWheelZoom={true}
+          dragging={true}
           whenCreated={(map) => { mapRef.current = map; }}
         >
           <TileLayer
@@ -358,6 +386,17 @@ export default function Map({
             >
               <Popup>{`Vehicle ${riderLabelText}`}</Popup>
             </LMarker>
+          )}
+
+          {/* Solid approach route (Leaflet fallback): rider → pickup */}
+          {!rideStartedEffective && riderLocation && pickup && (
+            <LPolyline
+              positions={[
+                [normalizeLatLng(riderLocation)?.lat ?? riderLocation.lat ?? riderLocation.latitude, normalizeLatLng(riderLocation)?.lng ?? riderLocation.lng ?? riderLocation.longitude],
+                [normalizeLatLng(pickup)?.lat ?? pickup.lat ?? pickup.latitude, normalizeLatLng(pickup)?.lng ?? pickup.lng ?? pickup.longitude],
+              ]}
+              pathOptions={{ color: "#1a73e8", weight: 4, opacity: 1 }}
+            />
           )}
 
           {riderLocation && !rideStartedEffective && (
@@ -485,17 +524,37 @@ export default function Map({
     let origin = null;
     let destination = null;
 
-    // Prefer rider → pickup route before OTP on all pages
-    if (!rideStartedEffective && riderLocation && pickup) {
-      origin = normalizeLatLng(riderLocation) || riderLocation; // rider → pickup
-      destination = normalizeLatLng(pickup) || pickup;
-    } else if (pickup && drop) {
-      origin = normalizeLatLng(pickup) || pickup; // pickup → drop
-      destination = normalizeLatLng(drop) || drop;
+    // Routing selection rules:
+    // - Pre-OTP: prefer rider → pickup. If rider GPS or nearest available rider
+    //   is not available yet, on Booking page fall back to pickup → drop to
+    //   populate distance and show a polyline so pricing and booking can proceed.
+    // - Post-OTP: show pickup → drop
+    if (!rideStartedEffective) {
+      const liveRider = normalizeLatLng(riderLocation) || riderLocation;
+      const nearestRider = getNearestAvailableRiderToPickup(availableRiders, pickup);
+      if (liveRider && pickup) {
+        origin = liveRider; // rider (live) → pickup
+        destination = normalizeLatLng(pickup) || pickup;
+      } else if (nearestRider && pickup) {
+        origin = nearestRider; // nearest available rider → pickup
+        destination = normalizeLatLng(pickup) || pickup;
+      } else if (isBookingContext && pickup && drop) {
+        // Fallback on Booking: draw pickup → drop so distance is computed
+        origin = normalizeLatLng(pickup) || pickup;
+        destination = normalizeLatLng(drop) || drop;
+      } else {
+        // Pre-OTP but missing origins and no Booking fallback: keep map clean
+        directionsRendererRef.current.setMap(null);
+        return;
+      }
     } else {
-      // No valid routing state
-      directionsRendererRef.current.setMap(null);
-      return;
+      if (pickup && drop) {
+        origin = normalizeLatLng(pickup) || pickup; // pickup → drop
+        destination = normalizeLatLng(drop) || drop;
+      } else {
+        directionsRendererRef.current.setMap(null);
+        return;
+      }
     }
 
     directionsService.route(
@@ -516,6 +575,11 @@ export default function Map({
           // âœ… repeat suppression each time and update polyline color
           directionsRendererRef.current.setOptions({
             suppressMarkers: true,
+            polylineOptions: {
+              strokeColor: routeColor || "#000",
+              strokeOpacity: 1,
+              strokeWeight: 6,
+            },
           });
 
           const leg = result.routes[0].legs[0];
@@ -643,7 +707,7 @@ export default function Map({
         }
       }
     );
-  }, [isLoaded, pickup, drop, riderLocation, setDistance, setDuration, routeColor, setNormalDuration, showRiderOnly, rideStartedEffective]);
+  }, [isLoaded, pickup, drop, riderLocation, availableRiders, setDistance, setDuration, routeColor, setNormalDuration, showRiderOnly, rideStartedEffective]);
 
   // Post-OTP: auto-zoom to show ONLY pickup & drop with full zoom
   useEffect(() => {
@@ -788,10 +852,11 @@ export default function Map({
       zoom={14}
       options={{
         disableDefaultUI: true,
-        zoomControl: false,
+        zoomControl: true,
         streetViewControl: false,
         fullscreenControl: false,
-        gestureHandling: "cooperative",
+        gestureHandling: "greedy",
+        scrollwheel: true,
         mapTypeControl: false,
         rotateControl: false,
         scaleControl: false,
@@ -892,8 +957,9 @@ export default function Map({
                 url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
                 scaledSize: new window.google.maps.Size(38, 38),
           }}
-          label={undefined}
-            draggable={!rideStartedEffective}
+          title={"Pickup"}
+          label={{ text: "Pickup", fontSize: "13px", fontWeight: "700", color: "#0f5132" }}
+          draggable={!rideStartedEffective}
           onDragEnd={(e) => {
             try {
               const lat = e.latLng.lat();
@@ -928,8 +994,9 @@ export default function Map({
                 url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
                 scaledSize: new window.google.maps.Size(38, 38),
           }}
-          label={undefined}
-            draggable={!rideStartedEffective}
+          title={"Drop"}
+          label={{ text: "Drop", fontSize: "13px", fontWeight: "700", color: "#7c2d12" }}
+          draggable={!rideStartedEffective}
           onDragEnd={(e) => {
             try {
               const lat = e.latLng.lat();
@@ -965,19 +1032,9 @@ export default function Map({
           <Polyline
             path={[normalizeLatLng(riderLocation) || riderLocation, normalizeLatLng(pickup) || pickup]}
             options={{
-              strokeOpacity: 0,
-              icons: [
-                {
-                  icon: {
-                    path: window.google.maps.SymbolPath.CIRCLE,
-                    scale: 4,
-                    fillOpacity: 1,
-                    strokeOpacity: 1,
-                  },
-                  offset: "0",
-                  repeat: "26px",
-                },
-              ],
+              strokeColor: "#1a73e8",
+              strokeOpacity: 1,
+              strokeWeight: 4,
             }}
           />
           {(() => {

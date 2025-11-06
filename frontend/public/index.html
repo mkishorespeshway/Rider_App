@@ -9,6 +9,34 @@
     body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; }
     #root { min-height: 100vh; }
   </style>
+  <script>
+    // Suppress benign ResizeObserver noise from dev overlay to avoid blocking UI
+    (function(){
+      function suppressRo(evt){
+        var msg = (evt && (evt.message || (evt.reason && evt.reason.message))) || '';
+        if (typeof msg === 'string' && msg.indexOf('ResizeObserver loop completed with undelivered notifications') !== -1) {
+          try {
+            evt.stopImmediatePropagation && evt.stopImmediatePropagation();
+            evt.preventDefault && evt.preventDefault();
+          } catch(_) {}
+          return true;
+        }
+        return false;
+      }
+      window.addEventListener('error', function(e){ suppressRo(e); }, { capture: true });
+      window.addEventListener('unhandledrejection', function(e){ suppressRo(e); }, { capture: true });
+      var orig = console.error && console.error.bind(console);
+      if (orig) {
+        console.error = function(){
+          try {
+            var first = arguments && arguments[0];
+            if (typeof first === 'string' && first.indexOf('ResizeObserver loop completed with undelivered notifications') !== -1) return;
+          } catch(_) {}
+          return orig.apply(console, arguments);
+        };
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="root"></div>

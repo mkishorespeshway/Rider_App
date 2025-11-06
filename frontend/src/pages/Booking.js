@@ -161,6 +161,8 @@ export default function Booking() {
 
         const ride = resp.data?.ride;
         if (!ride) return;
+        // Ensure rideStarted prop reflects server state after refresh
+        try { setCreatedRide(ride); } catch {}
         // ✅ Restore pickup/drop to the exact ride coordinates to keep map identical
         try {
           if (ride.pickupCoords && ride.pickupCoords.lat && ride.pickupCoords.lng) {
@@ -263,7 +265,22 @@ export default function Booking() {
           localStorage.removeItem(activeKey);
           // Clear persisted map-only flag if ride no longer active
           try { localStorage.removeItem(mapOnlyKey); } catch {}
+          // Ensure UI returns to free-map mode for fresh booking
+          setMapOnlyView(false);
           setRiderPanelOpen(false);
+          // Reset booking-related state so the map is cleared
+          try {
+            setLookingForRider(false);
+            setAssignedRider(null);
+            setCreatedRide(null);
+            setSelectedRide(null);
+            setPickup(null);
+            setDrop(null);
+            setPickupAddress("");
+            setDropAddress("");
+            setRiderLocation(null);
+            setAvailableRiders([]);
+          } catch {}
         }
       } catch (e) {
         // If fetch fails, keep current state; do not close prematurely
@@ -927,6 +944,8 @@ export default function Booking() {
       // Open the payment prompt in the same screen (Rapido-style)
       setShowPaymentPrompt(true);
       setRiderPanelOpen(false);
+      // Exit map-only mode once a ride is completed
+      setMapOnlyView(false);
       // 🔓 Reset booking state so user can immediately make another booking
       try {
         setLookingForRider(false);
@@ -934,6 +953,13 @@ export default function Booking() {
         setDrawerOpen(false);
         setCreatedRide(null);
         setSelectedRide(null);
+        // Clear map markers and any lingering route after completion
+        setPickup(null);
+        setDrop(null);
+        setPickupAddress("");
+        setDropAddress("");
+        setRiderLocation(null);
+        setAvailableRiders([]);
       } catch {}
       try {
         // Smoothly scroll to the payment prompt area to avoid perceived reload
@@ -947,6 +973,11 @@ export default function Booking() {
           localStorage.removeItem(`rideOtp:${rideId}`);
         }
         localStorage.removeItem(activeKey);
+        // Also clear per-ride map-only persistence so refresh won’t show old route
+        try {
+          localStorage.removeItem(`rideMapOnly:${ride?._id}`);
+          if (rideId) localStorage.removeItem(`rideMapOnly:${rideId}`);
+        } catch {}
       } catch {}
     });
 
@@ -1335,7 +1366,7 @@ export default function Booking() {
             // and switch to full route view after OTP (mapOnlyView)
             showRiderOnly={Boolean(assignedRider) && !mapOnlyView}
             // After OTP verification, keep map in started state
-            rideStarted={createdRide?.status === "in_progress"}
+            rideStarted={createdRide?.status === "in_progress" || mapOnlyView}
             vehicleType={assignedRider?.vehicleType || assignedRider?.vehicle?.type}
             vehicleImage={assignedRider?.vehicle?.images?.[0] || assignedRider?.vehicleImage}
           />

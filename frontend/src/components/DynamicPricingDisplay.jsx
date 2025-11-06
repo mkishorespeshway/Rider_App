@@ -146,12 +146,12 @@ const DynamicPricingDisplay = ({ pickup, destination, distance, durationMins, no
 
       {/* Visible zone metadata block */}
       {zoneInfo?.zone && (
-        <div className="mb-3 border border-indigo-200 bg-indigo-50 rounded-md p-3">
+        <div className="mb-3 border border-teal-200 bg-teal-50 rounded-md p-3">
           <div className="flex items-center justify-between">
-            <span className="font-medium text-indigo-700">Area: {zoneInfo.zone.id}</span>
-            <span className="text-xs text-indigo-700">Center: {formatCoord(zoneInfo.zone.center?.lat)}, {formatCoord(zoneInfo.zone.center?.lng)}</span>
+            <span className="font-medium text-teal-700">Area: {zoneInfo.zone.id}</span>
+            <span className="text-xs text-teal-700">Center: {formatCoord(zoneInfo.zone.center?.lat)}, {formatCoord(zoneInfo.zone.center?.lng)}</span>
           </div>
-          <div className="mt-1 text-xs text-indigo-700">
+          <div className="mt-1 text-xs text-teal-700">
             Bounds: [ {formatCoord(zoneInfo.zone.bounds?.minLat)}, {formatCoord(zoneInfo.zone.bounds?.minLng)} ] → [ {formatCoord(zoneInfo.zone.bounds?.maxLat)}, {formatCoord(zoneInfo.zone.bounds?.maxLng)} ]
           </div>
         </div>

@@ -8,6 +8,13 @@
   --bw-fg: #000000;
   --bw-muted: #666666;
   --bw-border: #1a1a1a;
+
+  /* Brand palette (Tailwind-backed) */
+  --brand-primary: #007C91; /* Teal */
+  --brand-accent: #00E5FF;  /* Cyan */
+  --brand-surface: #FFFFFF; /* White */
+  --brand-ui: #ECEFF1;      /* Soft Grey */
+  --brand-text: #1A1A1A;    /* Dark Black */
 }
 
 /* Apply theme to body and root */
@@ -23,7 +30,8 @@
 
 /* AppBar: black background + white text */
 .bw-theme .MuiAppBar-root {
-  background-color: #1976d2 !important;
+  /* Tailwind theme color */
+  background-color: theme('colors.brand.primary') !important;
   color: #ffffff !important;
 }
 .bw-theme .MuiAppBar-root .MuiToolbar-root,
@@ -33,28 +41,28 @@
 }
 
 /* Default text should remain black on light surfaces */
-.bw-theme .MuiTypography-root { color: #000000 !important; }
+.bw-theme .MuiTypography-root { color: theme('colors.brand.text') !important; }
 
 /* Paper: white surface + black text */
 .bw-theme .MuiPaper-root {
-  background-color: #ffffff !important;
-  color: #000000 !important;
-  border: 1px solid var(--bw-border);
+  background-color: theme('colors.brand.surface') !important;
+  color: theme('colors.brand.text') !important;
+  border: 1px solid theme('colors.brand.ui') !important;
   box-shadow: none !important;
-  border-radius: 12px;
+  border-radius: theme('borderRadius.xl');
 }
 
 /* Buttons: black background + white text */
 .bw-theme .MuiButton-root {
-  background-color: #1976d2 !important;
+  background-color: theme('colors.brand.primary') !important;
   color: #ffffff !important;
-  border-radius: 10px;
+  border-radius: theme('borderRadius.xl');
   min-height: 40px;
 }
 .bw-theme .MuiButton-root.MuiButton-outlined {
   background-color: transparent !important;
-  color: #1976d2 !important;
-  border-color: #1976d2 !important;
+  color: theme('colors.brand.primary') !important;
+  border-color: theme('colors.brand.primary') !important;
 }
 
 /* Chips: black text, black border on white surface */
@@ -87,7 +95,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: #1976d2;
+  background: theme('colors.brand.primary');
   color: #ffffff;
   padding: 10px 12px;
   display: flex;
@@ -112,4 +120,24 @@
 @media (max-width: 900px) {
   .admin-layout { flex-direction: column !important; }
   .admin-layout .admin-sidebar { width: 100% !important; margin-bottom: 12px; }
+}
+
+/* Mobile-first global fixes */
+html, body, #root { height: 100%; }
+body { margin: 0; -webkit-text-size-adjust: 100%; }
+
+@media (max-width: 600px) {
+  /* Compact surfaces and type for small screens */
+  .bw-theme .MuiPaper-root { padding: 12px !important; margin: 8px 0 !important; }
+  .bw-theme .MuiCardContent-root { padding: 12px !important; }
+  .bw-theme .MuiTypography-h4 { font-size: 1.4rem !important; }
+
+  /* Full-width dialogs as mobile sheets */
+  .bw-theme .MuiDialog-paper { width: 100% !important; max-width: 100% !important; margin: 0 !important; border-radius: 0 !important; }
+
+  /* Toolbar sizing for mobile ergonomics */
+  .bw-theme .MuiToolbar-root { min-height: 56px !important; }
+
+  /* Avoid leftover horizontal gaps between buttons on mobile */
+  .bw-theme .MuiButton-root + .MuiButton-root { margin-left: 0 !important; }
 }
