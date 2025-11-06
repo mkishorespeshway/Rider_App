@@ -943,6 +943,12 @@ export default function Booking() {
       setPaymentAmount(computedAmount);
       // Open the payment prompt in the same screen (Rapido-style)
       setShowPaymentPrompt(true);
+      // Persist unpaid lock so the prompt survives refresh until payment is completed
+      try {
+        if (ride && ride._id) {
+          localStorage.setItem(`unpaid:${ride._id}`, "true");
+        }
+      } catch {}
       setRiderPanelOpen(false);
       // Exit map-only mode once a ride is completed
       setMapOnlyView(false);
@@ -1565,7 +1571,8 @@ export default function Booking() {
               fullWidth
               sx={{ mt: 2, bgcolor: '#FF8A1F', color: '#fff', '&:hover': { bgcolor: '#E67600' } }}
               onClick={handleBookRide}
-              disabled={!selectedRide}
+              disabled={!selectedRide || showPaymentPrompt}
+              title={showPaymentPrompt ? 'Complete payment to book your next ride' : ''}
             >
               {selectedRide === "parcel" ? "Go to Parcel Page" : "Book Ride"}
             </Button>
