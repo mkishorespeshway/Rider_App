@@ -664,9 +664,9 @@ export default function RiderDashboard() {
 
   return (
     <Box p={4}>
-      <Typography variant="h4" gutterBottom>
-        Rider Dashboard
-      </Typography>
+          <Typography variant="h4" gutterBottom className="page-title">
+            Rider Dashboard
+          </Typography>
  
       <Button
         variant="contained"

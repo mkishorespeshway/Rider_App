@@ -59,7 +59,7 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
 
   return (
     <Box p={3} maxWidth={800} mx="auto">
-      <Typography variant="h5" sx={{ mb: 2 }}>Wallet</Typography>
+      <Typography variant="h5" className="page-title" sx={{ mb: 2 }}>Wallet</Typography>
 
       {/* Recharge prompt when overdraft exceeds ₹2000 */}
       {Number(wallet?.balance || 0) < -2000 && (

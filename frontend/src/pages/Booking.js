@@ -1240,7 +1240,7 @@ export default function Booking() {
             </>
           ) : (
             <>
-              <Typography variant="h6" sx={{ mb: 2 }}> Rider App!</Typography>
+              <Typography variant="h6" sx={{ mb: 2, color: '#1A1A1A', fontWeight: 700 }}>Rider App</Typography>
 
               {/* ✅ Pickup Input with Suggestions */}
               <TextField

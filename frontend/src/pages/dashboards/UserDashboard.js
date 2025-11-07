@@ -16,7 +16,7 @@ export default function UserDashboard() {
   return (
     <Box className="min-h-screen bg-gray-50" sx={{ p: 4 }}>
       <Box className="max-w-screen-sm mx-auto px-3 sm:px-6">
-      <Typography variant="h4" sx={{ fontWeight: "bold", mb: 2 }}>
+      <Typography variant="h4" className="page-title" sx={{ mb: 2 }}>
         User Dashboard
       </Typography>
       <Typography variant="body1" sx={{ mb: 3 }}>

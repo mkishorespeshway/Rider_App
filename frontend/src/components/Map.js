@@ -272,7 +272,7 @@ export default function Map({
 
   // Leaflet fallback removed; Google Maps branch always used
 
-  const { isLoaded } = useJsApiLoader({
+  const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: isValidGoogleKey ? apiKey : undefined,
     libraries: ["places"], // âœ… only "places", no "marker"
   });
@@ -306,32 +306,52 @@ export default function Map({
   // âœ… Ensure pickup always exists â†’ try GPS first
   useEffect(() => {
     if (!pickup) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setPickup(loc);
-          getAddressFromCoords(loc.lat, loc.lng, (addr) => {
-            setPickupAddress && setPickupAddress(addr);
-            setPickupAddrDisplay(addr);
-          });
-
-          if (mapRef.current) {
-            mapRef.current.panTo(loc);
-          }
-        },
-        (err) => {
-          console.warn("Geolocation failed, fallback used:", err.message);
-          setPickup(DEFAULT_PICKUP);
-          getAddressFromCoords(
-            DEFAULT_PICKUP.lat,
-            DEFAULT_PICKUP.lng,
-            (addr) => {
+      const canUseGps = (typeof window !== "undefined" && (window.isSecureContext || window.location.hostname === "localhost"));
+      if (canUseGps && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            setPickup(loc);
+            getAddressFromCoords(loc.lat, loc.lng, (addr) => {
               setPickupAddress && setPickupAddress(addr);
               setPickupAddrDisplay(addr);
+            });
+
+            if (mapRef.current) {
+              mapRef.current.panTo(loc);
             }
-          );
+          },
+          (err) => {
+            console.warn("Geolocation failed, fallback used:", err.message);
+            setPickup(DEFAULT_PICKUP);
+            getAddressFromCoords(
+              DEFAULT_PICKUP.lat,
+              DEFAULT_PICKUP.lng,
+              (addr) => {
+                setPickupAddress && setPickupAddress(addr);
+                setPickupAddrDisplay(addr);
+              }
+            );
+            if (mapRef.current) {
+              mapRef.current.panTo(DEFAULT_PICKUP);
+            }
+          }
+        );
+      } else {
+        // Insecure context (HTTP on server) or geolocation unavailable → fallback immediately
+        setPickup(DEFAULT_PICKUP);
+        getAddressFromCoords(
+          DEFAULT_PICKUP.lat,
+          DEFAULT_PICKUP.lng,
+          (addr) => {
+            setPickupAddress && setPickupAddress(addr);
+            setPickupAddrDisplay(addr);
+          }
+        );
+        if (mapRef.current) {
+          try { mapRef.current.panTo(DEFAULT_PICKUP); } catch {}
         }
-      );
+      }
     }
   }, [pickup, setPickup, setPickupAddress]);
 
@@ -662,9 +682,24 @@ export default function Map({
   //   }
   // }, [pickup]);
 
-  // If Google fails to load, render an empty container to maintain layout
+  // If Google fails to load, show helpful status chips
   if (!isLoaded) {
-    return <div style={{ width: "100%", height: "100%", minHeight: "320px" }} />;
+    return (
+      <div style={{ position: "relative", width: "100%", height: "100%", minHeight: "320px" }}>
+        <div style={{ position: "absolute", left: 12, top: 12, zIndex: 6 }}>
+          <Chip size="small" label={loadError ? "Map failed to load" : "Loading map…"} />
+        </div>
+        {(!isValidGoogleKey || loadError) && (
+          <div style={{ position: "absolute", left: 12, top: 44, zIndex: 6 }}>
+            <Chip
+              size="small"
+              color="warning"
+              label={!isValidGoogleKey ? "Google API key missing/invalid" : "Check API key referrer restrictions"}
+            />
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -917,4 +952,4 @@ async function getAddressFromCoords(lat, lng, setter) {
     console.warn("Reverse geocoding failed:", e.message);
   }
 }
-
+ 

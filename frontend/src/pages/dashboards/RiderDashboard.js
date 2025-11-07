@@ -1038,7 +1038,7 @@ export default function RiderDashboard() {
       {/* White form/content card overlapping header */}
       <Box className="max-w-screen-md px-3 sm:px-6" sx={{ maxWidth: 980, mx: 'auto', px: 2 }}>
         <Paper elevation={6} className="p-3 sm:p-4 rounded-2xl" sx={{ p: 3, borderRadius: 3, mt: '-80px', background: '#fff' }}>
-          <Typography variant="h4" gutterBottom sx={{ fontWeight: 800, color: '#0a3d62' }}>
+          <Typography variant="h4" gutterBottom className="page-title" sx={{ fontWeight: 800 }}>
             Rider Dashboard
           </Typography>
  

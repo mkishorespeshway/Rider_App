@@ -30,8 +30,8 @@
 
 /* AppBar: black background + white text */
 .bw-theme .MuiAppBar-root {
-  /* Tailwind theme color */
-  background-color: theme('colors.brand.primary') !important;
+  /* Use CSS variable palette for reliability in production */
+  background-color: var(--brand-primary) !important;
   color: #ffffff !important;
 }
 .bw-theme .MuiAppBar-root .MuiToolbar-root,
@@ -41,28 +41,35 @@
 }
 
 /* Default text should remain black on light surfaces */
-.bw-theme .MuiTypography-root { color: theme('colors.brand.text') !important; }
+.bw-theme .MuiTypography-root { color: var(--brand-text) !important; }
+
+/* Shared page title styling for consistent headers */
+.page-title {
+  color: var(--brand-text) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+}
 
 /* Paper: white surface + black text */
 .bw-theme .MuiPaper-root {
-  background-color: theme('colors.brand.surface') !important;
-  color: theme('colors.brand.text') !important;
-  border: 1px solid theme('colors.brand.ui') !important;
+  background-color: var(--brand-surface) !important;
+  color: var(--brand-text) !important;
+  border: 1px solid var(--brand-ui) !important;
   box-shadow: none !important;
-  border-radius: theme('borderRadius.xl');
+  border-radius: 12px;
 }
 
 /* Buttons: black background + white text */
 .bw-theme .MuiButton-root {
-  background-color: theme('colors.brand.primary') !important;
+  background-color: var(--brand-primary) !important;
   color: #ffffff !important;
-  border-radius: theme('borderRadius.xl');
+  border-radius: 12px;
   min-height: 40px;
 }
 .bw-theme .MuiButton-root.MuiButton-outlined {
   background-color: transparent !important;
-  color: theme('colors.brand.primary') !important;
-  border-color: theme('colors.brand.primary') !important;
+  color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
 }
 
 /* Chips: black text, black border on white surface */
@@ -95,7 +102,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: theme('colors.brand.primary');
+  background: var(--brand-primary);
   color: #ffffff;
   padding: 10px 12px;
   display: flex;

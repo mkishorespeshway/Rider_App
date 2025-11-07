@@ -147,7 +147,7 @@ export default function HistoryRider() {
         </Paper>
       </Box>
  
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+      <Typography variant="h5" className="page-title" sx={{ mb: 2 }}>
         Rider Ride History
       </Typography>
       {rides.length === 0 && <Typography>No rides yet</Typography>}

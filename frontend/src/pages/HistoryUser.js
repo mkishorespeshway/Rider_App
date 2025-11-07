@@ -98,7 +98,7 @@ export default function HistoryUser() {
         </Paper>
       </Box>
  
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 700 }}>
+      <Typography variant="h5" className="page-title" sx={{ mb: 2 }}>
         Your Ride History
       </Typography>
       {rides.length === 0 && <Typography>No rides yet</Typography>}
