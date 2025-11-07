@@ -5,10 +5,7 @@ import {
   Polyline,
   useJsApiLoader,
 } from "@react-google-maps/api";
-import { MapContainer as LMap, TileLayer, Marker as LMarker, Popup, Polyline as LPolyline } from "react-leaflet";
-import L from "leaflet";
 import axios from "axios";
-import "leaflet/dist/leaflet.css";
 import {
   Card,
   CardHeader,
@@ -222,28 +219,6 @@ export default function Map({
   // Use same vehicle-aware icon for pickup/drop in post-OTP map-only view
   const pickupDropIconUrl = riderIconUrl;
 
-  // Leaflet icons (CDN) for pickup/drop when Google key is missing
-  const leafletPickupIcon = L.icon({
-    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-  });
-  const leafletDropIcon = L.icon({
-    iconUrl: "https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png",
-    iconRetinaUrl: "https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png",
-    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-  });
-  // Vehicle icon for rider in Leaflet fallback (pin-shaped)
-  const leafletRiderIcon = L.icon({
-    iconUrl: riderIconUrl,
-    iconSize: [46, 46],
-    iconAnchor: [23, 44],
-  });
-
   const nominatimReverse = async (lat, lng) => {
     try {
       const { data } = await axios.get("https://nominatim.openstreetmap.org/reverse", {
@@ -295,145 +270,7 @@ export default function Map({
     } catch {}
   }, [drop, isValidGoogleKey, setDropAddress]);
 
-  // Auto-zoom to PICKUP in Leaflet fallback after OTP (Booking & Dashboard)
-  useEffect(() => {
-    try {
-      if (isValidGoogleKey) return; // Google branch handles its own view management
-      if (!rideStartedEffective) return; // Only post-OTP
-      const o = normalizeLatLng(pickup) || pickup;
-      if (!o || !mapRef.current) return;
-      // Focus tightly on pickup; maintains live GPS if pickup updates
-      mapRef.current.panTo([o.lat, o.lng]);
-      const currentZoom = mapRef.current.getZoom?.();
-      if (typeof currentZoom !== "number" || currentZoom < 16) {
-        mapRef.current.setZoom?.(16);
-      }
-    } catch (e) {
-      // Non-blocking: maintain current view on failure
-      console.warn("Leaflet pickup auto-zoom post-OTP failed:", e.message);
-    }
-  }, [apiKey, rideStartedEffective, pickup]);
-
-  // 🚦 If API key is missing or invalid, render Leaflet fallback (OSM)
-  if (!isValidGoogleKey) {
-    const center = normalizeLatLng(pickup) || DEFAULT_PICKUP;
-    return (
-      <div style={{ position: "relative", width: "100%", height: "100%" }}>
-        <LMap
-          center={[center.lat, center.lng]}
-          zoom={14}
-          style={containerStyle}
-          scrollWheelZoom={true}
-          dragging={true}
-          whenCreated={(map) => { mapRef.current = map; }}
-        >
-          <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          {pickup && (
-            <LMarker
-              position={[normalizeLatLng(pickup)?.lat ?? pickup.lat ?? pickup.latitude, normalizeLatLng(pickup)?.lng ?? pickup.lng ?? pickup.longitude]}
-              icon={leafletPickupIcon}
-              draggable={!rideStartedEffective}
-              eventHandlers={{
-                dragend: async (ev) => {
-                  try {
-                    const { lat, lng } = ev.target.getLatLng();
-                    setPickup && setPickup({ lat, lng });
-                    const addr = await nominatimReverse(lat, lng);
-                    setPickupAddress && setPickupAddress(addr);
-                  } catch {}
-                },
-              }}
-            >
-              <Popup>{rideStartedEffective ? `Pickup ${riderLabelText}` : "Pickup"}</Popup>
-            </LMarker>
-          )}
-          {rideStartedEffective && !isBookingContext && pickup && (
-            <LMarker
-              position={[offsetLatLng(pickup)?.lat ?? normalizeLatLng(pickup)?.lat ?? pickup.lat, offsetLatLng(pickup)?.lng ?? normalizeLatLng(pickup)?.lng ?? pickup.lng]}
-              icon={leafletRiderIcon}
-            >
-              <Popup>{`Vehicle ${riderLabelText}`}</Popup>
-            </LMarker>
-          )}
-
-          {drop && (
-            <LMarker
-              position={[normalizeLatLng(drop)?.lat ?? drop.lat ?? drop.latitude, normalizeLatLng(drop)?.lng ?? drop.lng ?? drop.longitude]}
-              icon={leafletDropIcon}
-              draggable={!rideStartedEffective}
-              eventHandlers={{
-                dragend: async (ev) => {
-                  try {
-                    const { lat, lng } = ev.target.getLatLng();
-                    setDrop && setDrop({ lat, lng });
-                    const addr = await nominatimReverse(lat, lng);
-                    setDropAddress && setDropAddress(addr);
-                  } catch {}
-                },
-              }}
-            >
-              <Popup>{rideStartedEffective ? `Drop ${riderLabelText}` : "Drop"}</Popup>
-            </LMarker>
-          )}
-          {rideStartedEffective && !isBookingContext && drop && (
-            <LMarker
-              position={[offsetLatLng(drop)?.lat ?? normalizeLatLng(drop)?.lat ?? drop.lat, offsetLatLng(drop)?.lng ?? normalizeLatLng(drop)?.lng ?? drop.lng]}
-              icon={leafletRiderIcon}
-            >
-              <Popup>{`Vehicle ${riderLabelText}`}</Popup>
-            </LMarker>
-          )}
-
-          {/* Solid approach route (Leaflet fallback): rider → pickup */}
-          {!rideStartedEffective && riderLocation && pickup && (
-            <LPolyline
-              positions={[
-                [normalizeLatLng(riderLocation)?.lat ?? riderLocation.lat ?? riderLocation.latitude, normalizeLatLng(riderLocation)?.lng ?? riderLocation.lng ?? riderLocation.longitude],
-                [normalizeLatLng(pickup)?.lat ?? pickup.lat ?? pickup.latitude, normalizeLatLng(pickup)?.lng ?? pickup.lng ?? pickup.longitude],
-              ]}
-              pathOptions={{ color: "#1a73e8", weight: 4, opacity: 1 }}
-            />
-          )}
-
-          {riderLocation && !rideStartedEffective && (
-            <LMarker
-              position={[normalizeLatLng(riderLocation)?.lat ?? riderLocation.lat ?? riderLocation.latitude, normalizeLatLng(riderLocation)?.lng ?? riderLocation.lng ?? riderLocation.longitude]}
-              icon={leafletRiderIcon}
-            >
-              <Popup>{`Rider ${normalizedType ? `(${normalizedType})` : ""}`}</Popup>
-            </LMarker>
-          )}
-        </LMap>
-
-        {pickup && drop && (
-          <div style={{ position: "absolute", right: 12, bottom: 16, zIndex: 9999 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<NavigationIcon />}
-              onClick={() => {
-                try {
-                  const o = normalizeLatLng(pickup) || pickup;
-                  const d = normalizeLatLng(drop) || drop;
-                  if (!o || !d) return;
-                  const origin = `${o.lat},${o.lng}`;
-                  const destination = `${d.lat},${d.lng}`;
-                  const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`;
-                  openNavUrl(url);
-                } catch {}
-              }}
-            >
-              Start
-            </Button>
-          </div>
-        )}
-      </div>
-    );
-  }
+  // Leaflet fallback removed; Google Maps branch always used
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: isValidGoogleKey ? apiKey : undefined,
@@ -825,24 +662,9 @@ export default function Map({
   //   }
   // }, [pickup]);
 
-  // If Google fails to load, show Leaflet fallback immediately
+  // If Google fails to load, render an empty container to maintain layout
   if (!isLoaded) {
-    const center = normalizeLatLng(pickup) || DEFAULT_PICKUP;
-    return (
-      <div style={{ position: "relative", width: "100%", height: "100%" }}>
-        <LMap
-          center={[center.lat, center.lng]}
-          zoom={14}
-          style={containerStyle}
-          whenCreated={(map) => { mapRef.current = map; }}
-        >
-          <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-        </LMap>
-      </div>
-    );
+    return <div style={{ width: "100%", height: "100%", minHeight: "320px" }} />;
   }
 
   return (
@@ -882,71 +704,11 @@ export default function Map({
         }
       }}
     >
-      {/* Hide user live marker to keep pre-OTP view strictly rider + pickup */}
-        {false && userLiveCoords && !rideStartedEffective && !showRiderOnly && (
-        <GoogleMarker
-          key={`userlive-${userLiveCoords.lat ?? userLiveCoords.latitude}-${userLiveCoords.lng ?? userLiveCoords.longitude}`}
-          position={normalizeLatLng(userLiveCoords) || userLiveCoords}
-          icon={{
-            url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
-            scaledSize: new window.google.maps.Size(38, 38),
-          }}
-        />
-      )}
+      {/* User live marker removed to keep view focused on pickup/drop */}
 
-      {/* 🚖 Rider Marker with vehicle-specific pin & emoji label — shown only before OTP */}
-        {riderLocation && !rideStartedEffective && (
-        <GoogleMarker
-          key={`rider-${riderLocation.lat ?? riderLocation.latitude}-${riderLocation.lng ?? riderLocation.longitude}`}
-          position={normalizeLatLng(riderLocation) || riderLocation}
-          icon={{
-            url: riderIconUrl,
-            scaledSize: new window.google.maps.Size(46, 46),
-            anchor: new window.google.maps.Point(23, 44),
-            labelOrigin: new window.google.maps.Point(23, 10),
-          }}
-          label={{ text: riderLabelText, fontSize: "16px" }}
-        />
-      )}
+      {/* Rider marker removed — only pickup and drop pins remain */}
 
-      {/* 🚖 All available riders — show each vehicle type separately before OTP */}
-      {Array.isArray(availableRiders) && !rideStartedEffective && availableRiders.map((r) => {
-        const pos = normalizeLatLng(r?.coords) || r?.coords;
-        if (!pos) return null;
-        const raw = String(r?.vehicleType || "").trim().toLowerCase();
-        const t = (
-          raw.includes("bike") || raw.includes("cycle") || raw.includes("scooter") || raw.includes("motor")
-        ) ? "bike" : (
-          raw.includes("auto") || raw.includes("rickshaw")
-        ) ? "auto" : (
-          raw.includes("car") || raw.includes("suv")
-        ) ? "car" : (
-          raw.includes("taxi") || raw.includes("cab")
-        ) ? "taxi" : "bike";
-        const url = (
-          t === "bike"
-            ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6b2.png"
-            : t === "auto"
-            ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6fa.png"
-            : t === "car"
-            ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f697.png"
-            : "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f699.png"
-        );
-        const label = t === "bike" ? "🚲" : t === "auto" ? "🛺" : t === "car" ? "🚗" : "🚖";
-        return (
-          <GoogleMarker
-            key={`avail-${r?.riderId || Math.random()}-${pos.lat}-${pos.lng}`}
-            position={pos}
-            icon={{
-              url,
-              scaledSize: new window.google.maps.Size(40, 40),
-              anchor: new window.google.maps.Point(20, 38),
-              labelOrigin: new window.google.maps.Point(20, 8),
-            }}
-            label={{ text: label, fontSize: "14px" }}
-          />
-        );
-      })}
+      {/* Available rider markers removed — map shows only pickup and drop */}
 
       {/* 📍 Pickup & Drop markers (custom) */}
       {pickup && (
@@ -1026,42 +788,7 @@ export default function Map({
 
       {/* In-map Autocomplete search inputs removed per request. */}
 
-      {/* Approach path styled like Google walking dots + ETA badge */}
-        {!rideStartedEffective && riderLocation && pickup && (
-        <>
-          <Polyline
-            path={[normalizeLatLng(riderLocation) || riderLocation, normalizeLatLng(pickup) || pickup]}
-            options={{
-              strokeColor: "#1a73e8",
-              strokeOpacity: 1,
-              strokeWeight: 4,
-            }}
-          />
-          {(() => {
-            const start = normalizeLatLng(riderLocation) || riderLocation;
-            const end = normalizeLatLng(pickup) || pickup;
-            if (!start || !end) return null;
-            const m = haversineMeters(start, end);
-            if (!m) return null;
-            const km = m / 1000;
-            const avg = 20; // km/h assumed
-            const mins = Math.max(1, Math.round((km / avg) * 60));
-            const mid = { lat: (start.lat + end.lat) / 2, lng: (start.lng + end.lng) / 2 };
-            const etaText = `${mins} min`;
-            const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='80' height='28'><rect rx='14' ry='14' width='80' height='28' fill='#1a73e8'/><text x='40' y='18' text-anchor='middle' font-size='14' fill='#fff' font-family='Arial, sans-serif'>${etaText}</text></svg>`;
-            return (
-              <GoogleMarker
-                position={mid}
-                icon={{
-                  url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-                  scaledSize: new window.google.maps.Size(80, 28),
-                }}
-                label={undefined}
-              />
-            );
-          })()}
-        </>
-      )}
+      {/* Pre-OTP rider approach path removed to show only pickup/drop */}
       {/* Pickup Overview overlay removed */}
 
       {/* Post-OTP navigation-style overlays (mimic screenshot) */}
@@ -1190,4 +917,4 @@ async function getAddressFromCoords(lat, lng, setter) {
     console.warn("Reverse geocoding failed:", e.message);
   }
 }
- 
+
