@@ -15,7 +15,44 @@
   --brand-surface: #FFFFFF; /* White */
   --brand-ui: #ECEFF1;      /* Soft Grey */
   --brand-text: #1A1A1A;    /* Dark Black */
+  /* Global text highlight color */
+  --text-blue: #2196F3;     /* Material Blue for readability */
 }
+
+/* Dark–Orange theme tokens */
+:root {
+  --do-bg: #0B0B0F;
+  --do-surface: #121317;
+  --do-muted: #2A2B31;
+  --do-border: #1E1F24;
+  --do-text: #F4F4F7;
+  --do-subtext: #B9BBC4;
+  --do-orange: #FF6A00;
+  --do-orange-soft: #FF8A33;
+}
+
+/* ============================= */
+/* Global black text across pages */
+/* ============================= */
+/* Apply black to common textual elements while keeping button colors intact */
+.bw-theme .MuiTypography-root,
+.bw-theme .page-title,
+.bw-theme .MuiInputBase-input,
+.bw-theme .MuiInputLabel-root,
+.bw-theme .MuiListItemButton-root,
+.bw-theme .MuiChip-label,
+.bw-theme .MuiTableCell-root { color: #000000 !important; }
+.bw-theme .MuiInputBase-input::placeholder { color: #000000 !important; opacity: 0.65 !important; }
+
+/* Dark theme not in use, but keep consistent text color if applied */
+.do-theme .MuiTypography-root,
+.do-theme .page-title,
+.do-theme .MuiInputBase-input,
+.do-theme .MuiInputLabel-root,
+.do-theme .MuiListItemButton-root,
+.do-theme .MuiChip-label,
+.do-theme .MuiTableCell-root { color: #000000 !important; }
+.do-theme .MuiInputBase-input::placeholder { color: #000000 !important; opacity: 0.65 !important; }
 
 /* Apply theme to body and root */
 .bw-theme, .bw-theme body {
@@ -50,6 +87,80 @@
   letter-spacing: 0.2px;
 }
 
+/* ===================== */
+/* Dark–Orange (do-theme) */
+/* ===================== */
+.do-theme, .do-theme body {
+  background-color: var(--do-bg);
+  color: var(--do-text);
+}
+.do-theme .MuiAppBar-root {
+  background-color: var(--do-surface) !important;
+  color: var(--do-text) !important;
+  border-bottom: 1px solid var(--do-border) !important;
+}
+.do-theme .MuiAppBar-root .MuiToolbar-root,
+.do-theme .MuiAppBar-root .MuiTypography-root,
+.do-theme .MuiAppBar-root .MuiIconButton-root {
+  color: var(--do-text) !important;
+}
+.do-theme .MuiTypography-root { color: var(--do-text) !important; }
+.do-theme .page-title { color: var(--do-text) !important; font-weight: 800 !important; }
+.do-theme .MuiPaper-root {
+  background-color: var(--do-surface) !important;
+  color: var(--do-text) !important;
+  border: 1px solid var(--do-border) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35) !important;
+}
+.do-theme .MuiButton-root {
+  border-radius: 12px !important;
+  min-height: 40px;
+  background-color: var(--do-orange) !important;
+  color: #0B0B0F !important;
+}
+.do-theme .MuiButton-root.MuiButton-outlined {
+  background-color: transparent !important;
+  color: var(--do-orange) !important;
+  border-color: var(--do-orange) !important;
+}
+.do-theme .MuiChip-root {
+  color: var(--do-text) !important;
+  border-color: var(--do-border) !important;
+}
+.do-theme .MuiOutlinedInput-notchedOutline { border-color: var(--do-border) !important; }
+.do-theme .MuiInputLabel-root { color: var(--do-subtext) !important; }
+.do-theme .MuiTableCell-root { border-color: var(--do-border) !important; }
+.do-theme .MuiTableContainer-root { overflow-x: auto; }
+
+/* Component layer: shared Tailwind classes used across pages */
+@layer components {
+  .section {
+    @apply min-h-screen px-4 sm:px-6 py-6;
+    background: linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%);
+    color: var(--brand-text);
+  }
+  .card {
+    @apply rounded-xl shadow-card-glow ring-1 ring-do-border;
+    background: #ffffff;
+    color: var(--brand-text);
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold bg-do-orange text-black shadow-orange-soft hover:brightness-110 active:scale-[0.98] transition;
+  }
+  .btn-outline {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold border border-do-orange text-do-orange hover:bg-do-orange hover:text-black transition;
+  }
+  .field-shell {
+    @apply w-full rounded-lg bg-do-muted text-do-text placeholder-do-subtext border border-do-border focus:border-do-orange focus:ring-1 focus:ring-do-orange/50 transition;
+  }
+  .img-thumb {
+    @apply rounded-lg ring-1 ring-do-border shadow-md hover:shadow-orange-soft transition;
+  }
+  .hover-lift { @apply transition-transform duration-300 hover:-translate-y-0.5; }
+  .pulse-glow { @apply animate-glow; }
+}
+
 /* Paper: white surface + black text */
 .bw-theme .MuiPaper-root {
   background-color: var(--brand-surface) !important;
@@ -61,15 +172,38 @@
 
 /* Buttons: black background + white text */
 .bw-theme .MuiButton-root {
-  background-color: var(--brand-primary) !important;
-  color: #ffffff !important;
+  background-color: #FF6A00 !important; /* orange */
+  color: #000000 !important; /* keep text black per request */
   border-radius: 12px;
   min-height: 40px;
 }
+.bw-theme .MuiButton-root:hover {
+  background-color: #FF8A33 !important; /* orange hover */
+}
 .bw-theme .MuiButton-root.MuiButton-outlined {
-  background-color: transparent !important;
-  color: var(--brand-primary) !important;
-  border-color: var(--brand-primary) !important;
+  background-color: #FF6A00 !important; /* make outlined also orange */
+  color: #000000 !important;
+  border-color: #FF6A00 !important;
+}
+.bw-theme .MuiButton-root.MuiButton-outlined:hover {
+  background-color: #FF8A33 !important;
+  border-color: #FF8A33 !important;
+}
+
+/* Status toggle button colors on Rider Dashboard */
+.bw-theme .status-online-btn {
+  background-color: #16A34A !important; /* green */
+  color: #000000 !important;
+}
+.bw-theme .status-online-btn:hover {
+  background-color: #15803D !important; /* darker green */
+}
+.bw-theme .status-offline-btn {
+  background-color: #DC2626 !important; /* red */
+  color: #000000 !important;
+}
+.bw-theme .status-offline-btn:hover {
+  background-color: #B91C1C !important; /* darker red */
 }
 
 /* Chips: black text, black border on white surface */

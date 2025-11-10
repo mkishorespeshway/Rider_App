@@ -159,11 +159,17 @@ export default function UserLogin() {
   };
  
   return (
-    <Box className="min-h-screen bg-gray-50" sx={{ minHeight: "100vh", background: "#f8fafc" }}>
+    <Box
+      className="min-h-screen"
+      sx={{
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%)",
+      }}
+    >
       {/* Brand Header Section */}
       <Box
         sx={{
-          background: "linear-gradient(135deg, #007C91 0%, #00B8D4 100%)",
+          background: "#ffffff",
           height: "40vh",
           display: "flex",
           alignItems: "center",
@@ -202,7 +208,7 @@ export default function UserLogin() {
       <Container maxWidth="xs" className="px-3 sm:px-6">
         <Box
           sx={{
-            background: "white",
+            background: "#ffffff",
             borderRadius: "24px 24px 0 0",
             mt: "-60px",
             position: "relative",
@@ -266,13 +272,14 @@ export default function UserLogin() {
                 sx={{
                   height: 56,
                   borderRadius: 3,
-                  backgroundColor: "#007C91",
+                  backgroundColor: "#FF6A00",
+                  color: "#000",
                   fontWeight: "bold",
                   fontSize: "16px",
                   textTransform: "none",
-                  boxShadow: "0 4px 12px rgba(0, 124, 145, 0.35)",
+                  boxShadow: "0 4px 12px rgba(255, 106, 0, 0.35)",
                   "&:hover": {
-                    backgroundColor: "#00687A",
+                    backgroundColor: "#FF8A33",
                   },
                 }}
               >
@@ -305,13 +312,14 @@ export default function UserLogin() {
                 sx={{
                   height: 56,
                   borderRadius: 3,
-                  backgroundColor: "#007C91",
+                  backgroundColor: "#FF6A00",
+                  color: "#000",
                   fontWeight: "bold",
                   fontSize: "16px",
                   textTransform: "none",
-                  boxShadow: "0 4px 12px rgba(0, 124, 145, 0.35)",
+                  boxShadow: "0 4px 12px rgba(255, 106, 0, 0.35)",
                   "&:hover": {
-                    backgroundColor: "#00687A",
+                    backgroundColor: "#FF8A33",
                   },
                 }}
               >

@@ -1134,7 +1134,7 @@ export default function Booking() {
       {/* ✅ Global payment prompt shown when ride is completed */}
       {showPaymentPrompt && (
         <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: '#fff3e0', border: '1px solid #ffe0b2' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#e65100' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#000000' }}>
             Ride Completed — Proceed to Payment
           </Typography>
           <Typography variant="body2" sx={{ mt: 0.5 }}>
@@ -1212,7 +1212,7 @@ export default function Booking() {
               </Typography>
               <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 2, textAlign: 'center' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Your OTP Code</Typography>
-                <Typography variant="h4" sx={{ letterSpacing: 2, fontWeight: 'bold', color: '#FF5722' }}>
+                <Typography variant="h4" sx={{ letterSpacing: 2, fontWeight: 'bold', color: '#000000' }}>
                   {otp}
                 </Typography>
                 <Typography variant="caption">Share this code with your rider to start the trip</Typography>
@@ -1645,7 +1645,7 @@ export default function Booking() {
               {/* OTP Display */}
               <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 2, textAlign: 'center' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Your OTP Code</Typography>
-                <Typography variant="h4" sx={{ letterSpacing: 2, fontWeight: 'bold', color: '#FF5722' }}>
+                <Typography variant="h4" sx={{ letterSpacing: 2, fontWeight: 'bold', color: 'var(--text-blue)' }}>
                   {otp}
                 </Typography>
                 <Typography variant="caption">Share this code with your rider to start the trip</Typography>
@@ -1674,7 +1674,7 @@ export default function Booking() {
 
               {showPaymentPrompt && (
                 <Box sx={{ mt: 2, p: 2, borderRadius: 2, bgcolor: '#e8f5e9', border: '1px solid #c8e6c9' }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#2e7d32' }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#000000' }}>
                     Ride Completed — awaiting user payment
                   </Typography>
                   <Typography variant="body2" sx={{ mt: 0.5 }}>

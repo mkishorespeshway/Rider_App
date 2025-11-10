@@ -168,7 +168,7 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
             <Typography variant="body2" sx={{ mb: 1 }}>
               Share this 4-digit OTP with the rider to start parcel pickup.
             </Typography>
-            <Typography variant="h4" sx={{ fontWeight: "bold", letterSpacing: 2 }}>
+            <Typography variant="h4" sx={{ fontWeight: "bold", letterSpacing: 2, color: '#000000' }}>
               {otp}
             </Typography>
           </Box>
@@ -212,8 +212,8 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
                   } catch {}
                 }}
                 style={{
-                  backgroundColor: "#1E3A8A",
-                  color: "#fff",
+                  backgroundColor: "#FF6A00",
+                  color: "#000",
                   padding: "10px 14px",
                   borderRadius: 8,
                   border: "1px solid #000",
@@ -230,7 +230,7 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
         {/* Pay Now prompt after completion (mirrors booking page behavior) */}
         {liveParcel?.status === 'completed' && (
           <Box sx={{ mt: 3, p: 2, borderRadius: 2, bgcolor: '#f1f5f9', border: '1px solid #e2e8f0' }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>Parcel Completed — Proceed to Payment</Typography>
+            <Typography variant="h6" sx={{ mb: 1, color: '#000000' }}>Parcel Completed — Proceed to Payment</Typography>
             <Typography variant="body1" sx={{ mb: 2 }}>
               {price != null ? `Amount: ₹${Number(price).toFixed(2)}` : 'Amount will be shown on the payment screen.'}
             </Typography>
@@ -240,8 +240,8 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
                 try { window.location.href = amt != null ? `/payment` : `/payment`; } catch {}
               }}
               style={{
-                backgroundColor: "#0B2A6E",
-                color: "#fff",
+                backgroundColor: "#FF6A00",
+                color: "#000",
                 padding: "10px 14px",
                 borderRadius: 8,
                 border: "1px solid #000",

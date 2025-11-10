@@ -3,6 +3,11 @@ import {
   Box,
   Card,
   CardContent,
+  CardHeader,
+  Divider,
+  Grid,
+  Chip,
+  Stack,
   Typography,
   Button,
   CircularProgress,
@@ -35,6 +40,8 @@ const socket = io(API_BASE, {
 
 // Rapido-style 50 km radius filtering (user pickup ↔ rider location)
 const RIDE_RADIUS_KM = 50;
+// Notification gate: only notify if rider-to-pickup distance ≤ 1.5 km
+const NOTIFY_RADIUS_KM = 1.5;
 const toRad = (v) => (Number(v) * Math.PI) / 180;
 const haversineKm = (a, b) => {
   try {
@@ -213,6 +220,52 @@ export default function RiderDashboard() {
   useEffect(() => {
     try { localStorage.setItem("riderOnline", String(isOnline)); } catch {}
   }, [isOnline]);
+
+  // Cache user name and phone for the current ride so they persist
+  // even if backend responses drop populated fields after OTP verification
+  const [rideUserNameCache, setRideUserNameCache] = useState("");
+  const [rideUserPhoneCache, setRideUserPhoneCache] = useState("");
+
+  // On ride change, try restoring cached user/phone from localStorage
+  useEffect(() => {
+    try {
+      const id = selectedRide?._id;
+      if (!id) return;
+      const raw = localStorage.getItem(`rideUserCache-${id}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed?.name) setRideUserNameCache(parsed.name);
+      if (parsed?.phone) setRideUserPhoneCache(parsed.phone);
+    } catch (_) {}
+  }, [selectedRide?._id]);
+
+  // Whenever selectedRide changes, refresh caches if values are available
+  useEffect(() => {
+    try {
+      const name = selectedRide ? getRideUserName(selectedRide) : "";
+      const phone = selectedRide ? getRideUserPhone(selectedRide) : "";
+      if (name) setRideUserNameCache(name);
+      if (phone) setRideUserPhoneCache(phone);
+    } catch (_) {}
+  }, [
+    selectedRide?._id,
+    selectedRide?.riderId,
+    selectedRide?.user,
+    selectedRide?.userId,
+    selectedRide?.userName,
+    selectedRide?.phone,
+    selectedRide?.status
+  ]);
+
+  // Persist caches for current ride so refresh keeps details visible
+  useEffect(() => {
+    try {
+      const id = selectedRide?._id;
+      if (!id) return;
+      const toSave = { name: rideUserNameCache || "", phone: rideUserPhoneCache || "" };
+      localStorage.setItem(`rideUserCache-${id}`, JSON.stringify(toSave));
+    } catch (_) {}
+  }, [selectedRide?._id, rideUserNameCache, rideUserPhoneCache]);
 
   // Emit rider availability to server (online/offline + vehicle type)
   useEffect(() => {
@@ -409,6 +462,8 @@ export default function RiderDashboard() {
 
         // Radius gate: only consider rides within 50 km of rider's current location
         let withinRadius = true;
+        // Notification gate: only notify when within 1.5 km of pickup
+        let withinNotifyRadius = false;
         try {
           const p = ride?.pickupCoords;
           if (p && riderLocation && riderLocation.lat != null && riderLocation.lng != null && p.lat != null && p.lng != null) {
@@ -417,9 +472,11 @@ export default function RiderDashboard() {
               { lat: Number(p.lat), lng: Number(p.lng) }
             );
             withinRadius = Number.isFinite(d) ? d <= RIDE_RADIUS_KM : true; // keep if cannot compute
+            withinNotifyRadius = Number.isFinite(d) ? d <= NOTIFY_RADIUS_KM : false; // require exact distance for notification
           }
         } catch (e) {
           withinRadius = true;
+          withinNotifyRadius = false;
         }
 
         // Strict filter: show only rides that match this rider's vehicle type AND within radius
@@ -429,16 +486,17 @@ export default function RiderDashboard() {
             return exists ? prev : [ride, ...prev];
           });
           
-          // Show notification for new ride request
-          setSnackbarMessage(`New ${requestedType} ride request from ${ride.pickup || 'Unknown location'}`);
-          setSnackbarOpen(true);
-          
-          // Browser notification
-          if (Notification.permission === 'granted') {
-            new Notification('New Ride Request', {
-              body: `${requestedType} ride from ${ride.pickup || 'Unknown location'}`,
-              icon: '/favicon.ico'
-            });
+          // Show notification only when rider is within ≤1.5 km of pickup
+          if (withinNotifyRadius) {
+            setSnackbarMessage(`New ${requestedType} ride request from ${ride.pickup || 'Unknown location'}`);
+            setSnackbarOpen(true);
+            // Browser notification
+            if (Notification.permission === 'granted') {
+              new Notification('New Ride Request', {
+                body: `${requestedType} ride from ${ride.pickup || 'Unknown location'}`,
+                icon: '/favicon.ico'
+              });
+            }
           }
         }
       };
@@ -491,17 +549,28 @@ export default function RiderDashboard() {
           return exists ? prev : [parcel, ...prev];
         });
         
-        // Show notification for new parcel request
-        setSnackbarMessage(`New parcel request: ${parcel.parcelDetails || 'Package delivery'}`);
-        setSnackbarOpen(true);
-        
-        // Browser notification
-        if (Notification.permission === 'granted') {
-          new Notification('New Parcel Request', {
-            body: `Package: ${parcel.parcelDetails || 'Package delivery'}`,
-            icon: '/favicon.ico'
-          });
-        }
+        // Notify only when rider is within ≤1.5 km of parcel pickup
+        try {
+          const p = parcel?.pickupCoords;
+          let withinNotifyRadius = false;
+          if (p && riderLocation && riderLocation.lat != null && riderLocation.lng != null && p.lat != null && p.lng != null) {
+            const d = haversineKm(
+              { lat: Number(riderLocation.lat), lng: Number(riderLocation.lng) },
+              { lat: Number(p.lat), lng: Number(p.lng) }
+            );
+            withinNotifyRadius = Number.isFinite(d) ? d <= NOTIFY_RADIUS_KM : false; // require exact distance for notification
+          }
+          if (withinNotifyRadius) {
+            setSnackbarMessage(`New parcel request: ${parcel.parcelDetails || 'Package delivery'}`);
+            setSnackbarOpen(true);
+            if (Notification.permission === 'granted') {
+              new Notification('New Parcel Request', {
+                body: `Package: ${parcel.parcelDetails || 'Package delivery'}`,
+                icon: '/favicon.ico'
+              });
+            }
+          }
+        } catch {}
       });
     } else {
       socket.off("parcelRequest");
@@ -1026,8 +1095,8 @@ export default function RiderDashboard() {
   };
 
   return (
-    // Blue header + white card layout to match login/register pages
-    <Box className="min-h-screen bg-gradient-to-br from-blue-900 to-blue-600" sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0a3d62, #1266f1)' }}>
+    // Subtle neutral background to keep dashboard professional and clean
+    <Box className="min-h-screen" sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%)' }}>
       {/* Header with circular brand */}
       <Box sx={{ height: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Box sx={{ width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 32, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
@@ -1047,11 +1116,9 @@ export default function RiderDashboard() {
       <Box className="flex flex-col sm:flex-row gap-2" sx={{ display: "flex", alignItems: "center", gap: 2, mb: 2 }}>
         <Button
           variant="contained"
-          className="w-full sm:w-auto"
+          className={`w-full sm:w-auto ${isOnline ? 'status-online-btn' : 'status-offline-btn'}`}
           onClick={() => setIsOnline((prev) => !prev)}
           sx={{
-            bgcolor: isOnline ? "success.main" : "error.main",
-            "&:hover": { bgcolor: isOnline ? "success.dark" : "error.dark" },
             fontWeight: 700,
           }}
         >
@@ -1079,10 +1146,10 @@ export default function RiderDashboard() {
             <CardContent>
               <Typography variant="h6"> Ride Accepted</Typography>
               <Typography>
-                <b>User:</b> {getRideUserName(selectedRide)}
+                <b>User:</b> {rideUserNameCache || getRideUserName(selectedRide)}
               </Typography>
               <Typography>
-                <b>Phone:</b> {getRideUserPhone(selectedRide)}
+                <b>Phone:</b> {rideUserPhoneCache || getRideUserPhone(selectedRide)}
               </Typography>
               <Typography>
                 <b>Pickup:</b> {selectedRide.pickup}
@@ -1234,36 +1301,73 @@ export default function RiderDashboard() {
         </>
       ) : selectedParcel ? (
         <>
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Typography variant="h6">Parcel Details</Typography>
-              <Typography><b>Sender:</b> {selectedParcel.senderName} ({selectedParcel.senderMobile})</Typography>
-              <Typography><b>Receiver:</b> {selectedParcel.receiverName} ({selectedParcel.receiverMobile})</Typography>
-              <Typography><b>Category:</b> {selectedParcel.parcelCategory}</Typography>
-              <Typography><b>Details:</b> {selectedParcel.parcelDetails}</Typography>
-              <Typography><b>Pickup:</b> {selectedParcel.pickupAddress || selectedParcel?.pickup?.address || selectedParcel?.pickupCoords?.address || (selectedParcel?.pickup?.lat && selectedParcel?.pickup?.lng ? `${selectedParcel.pickup.lat}, ${selectedParcel.pickup.lng}` : (selectedParcel?.pickupCoords?.lat && selectedParcel?.pickupCoords?.lng ? `${selectedParcel.pickupCoords.lat}, ${selectedParcel.pickupCoords.lng}` : 'N/A'))}</Typography>
-              <Typography><b>Drop:</b> {selectedParcel.dropAddress || selectedParcel?.drop?.address || selectedParcel?.dropCoords?.address || (selectedParcel?.drop?.lat && selectedParcel?.drop?.lng ? `${selectedParcel.drop.lat}, ${selectedParcel.drop.lng}` : (selectedParcel?.dropCoords?.lat && selectedParcel?.dropCoords?.lng ? `${selectedParcel.dropCoords.lat}, ${selectedParcel.dropCoords.lng}` : 'N/A'))}</Typography>
-              {/* Show only booking page addresses; remove raw coordinates to avoid duplicate location display */}
-              {distance && (
-                <Typography><b>Distance:</b> {distance} km</Typography>
-              )}
-              {duration && (
-                <Typography><b>ETA:</b> {duration}</Typography>
-              )}
-              <Typography><b>Status:</b> {selectedParcel.status || "pending"}</Typography>
-              {selectedParcel.status === "pending" && (
-                <Box mt={2} className="flex flex-col sm:flex-row gap-2">
-                  <Button className="w-full sm:w-auto" variant="contained" color="success" onClick={() => handleAcceptParcel(selectedParcel._id)}>Accept</Button>
-                  <Button className="w-full sm:w-auto" variant="contained" color="error" sx={{ ml: 2 }} onClick={() => handleRejectParcel(selectedParcel._id)}>Reject</Button>
-                </Box>
-              )}
-              {selectedParcel.status === "accepted" && (
-                <Box mt={2} className="flex flex-col sm:flex-row gap-2">
+          <Card
+            className="group bg-gradient-to-br from-white to-gray-50 ring-1 ring-gray-200 hover:ring-blue-300 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5"
+            sx={{ mb: 3, borderRadius: 3, boxShadow: 6 }}
+          >
+            <CardHeader
+              title="Parcel Details"
+              subheader={selectedParcel.parcelCategory || "Package"}
+              action={
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-600 shadow-sm animate-bounce">📦</span>
+              }
+              sx={{
+                pb: 0,
+                '& .MuiCardHeader-title': { fontWeight: 800 },
+                '& .MuiCardHeader-subheader': { color: 'text.secondary' }
+              }}
+            />
+            <CardContent sx={{ pt: 2 }}>
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                    <b>Sender:</b> {selectedParcel.senderName} ({selectedParcel.senderMobile})
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                    <b>Receiver:</b> {selectedParcel.receiverName} ({selectedParcel.receiverMobile})
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                    <b>Details:</b> {selectedParcel.parcelDetails}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                    <b>Pickup:</b> {selectedParcel.pickupAddress || selectedParcel?.pickup?.address || selectedParcel?.pickupCoords?.address || (selectedParcel?.pickup?.lat && selectedParcel?.pickup?.lng ? `${selectedParcel.pickup.lat}, ${selectedParcel.pickup.lng}` : (selectedParcel?.pickupCoords?.lat && selectedParcel?.pickupCoords?.lng ? `${selectedParcel.pickupCoords.lat}, ${selectedParcel.pickupCoords.lng}` : 'N/A'))}
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                    <b>Drop:</b> {selectedParcel.dropAddress || selectedParcel?.drop?.address || selectedParcel?.dropCoords?.address || (selectedParcel?.drop?.lat && selectedParcel?.drop?.lng ? `${selectedParcel.drop.lat}, ${selectedParcel.drop.lng}` : (selectedParcel?.dropCoords?.lat && selectedParcel?.dropCoords?.lng ? `${selectedParcel.dropCoords.lat}, ${selectedParcel.dropCoords.lng}` : 'N/A'))}
+                  </Typography>
+                  {distance && (
+                    <Typography variant="body1" sx={{ mb: 0.5 }}>
+                      <b>Distance:</b> {distance} km
+                    </Typography>
+                  )}
+                  {duration && (
+                    <Typography variant="body1" sx={{ mb: 0.5 }}>
+                      <b>ETA:</b> {duration}
+                    </Typography>
+                  )}
+                </Grid>
+              </Grid>
+              <Divider sx={{ my: 2 }} />
+              <Stack direction="row" alignItems="center" spacing={2} sx={{ flexWrap: 'wrap' }}>
+                <Chip
+                  label={(selectedParcel.status || 'pending').replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                  color={String(selectedParcel.status || '').toLowerCase() === 'in_progress' ? 'primary' : String(selectedParcel.status || '').toLowerCase() === 'completed' ? 'success' : 'default'}
+                  variant="outlined"
+                />
+                {selectedParcel.status === "pending" && (
+                  <Stack direction="row" spacing={1} sx={{ width: '100%', maxWidth: 520 }}>
+                    <Button className="w-full sm:w-auto" variant="contained" color="success" onClick={() => handleAcceptParcel(selectedParcel._id)}>Accept</Button>
+                    <Button className="w-full sm:w-auto" variant="contained" color="error" onClick={() => handleRejectParcel(selectedParcel._id)}>Reject</Button>
+                  </Stack>
+                )}
+                {selectedParcel.status === "accepted" && (
                   <Button className="w-full sm:w-auto" variant="contained" color="primary" onClick={() => setParcelOtpDialogOpen(true)}>
                     Verify Parcel OTP
                   </Button>
-                </Box>
-              )}
+                )}
+              </Stack>
               {/* Hide parcel documents until OTP verification; documents will appear once status is in_progress */}
               {/* Parcel documents — show only until rider marks copied */}
               {selectedParcel?.status === "in_progress"
@@ -1271,9 +1375,9 @@ export default function RiderDashboard() {
                 && Array.isArray(selectedParcel?.documents)
                 && selectedParcel.documents.length > 0
                 && (selectedParcel.documentsVisibleToRider !== false) && (
-              <Box mt={3}>
+              <Box mt={3} className="section">
                 {/* After OTP, show the second specified image first if exists */}
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }} className="gap-3 md:gap-4">
                   {selectedParcel.documents
                     .map((doc, idx) => ({ doc, idx }))
                     .sort((a, b) => {
@@ -1286,14 +1390,14 @@ export default function RiderDashboard() {
                     const isImage = String(doc.mimetype || '').startsWith('image/');
                     const isPdf = String(doc.mimetype || '') === 'application/pdf';
                     return (
-                      <Box key={idx} sx={{ border: '1px solid #eee', borderRadius: 2, p: 1 }}>
+                      <Box key={idx} sx={{ border: '1px solid #eee', borderRadius: 2, p: 1 }} className="card p-2">
                         {isImage ? (
-                          <img src={doc.url.startsWith('/') ? `${API_BASE}${doc.url}` : doc.url} alt={doc.originalName || `Doc ${idx+1}`} style={{ maxWidth: 220, maxHeight: 180, display: 'block' }} />
+                          <img src={doc.url.startsWith('/') ? `${API_BASE}${doc.url}` : doc.url} alt={doc.originalName || `Doc ${idx+1}`} style={{ maxWidth: 220, maxHeight: 180, display: 'block' }} className="img-thumb" />
                         ) : (
-                          <Button variant="outlined" size="small" onClick={() => window.open(doc.url.startsWith('/') ? `${API_BASE}${doc.url}` : doc.url, '_blank')}>{doc.originalName || 'View Document'}</Button>
+                          <Button variant="outlined" size="small" className="btn-outline" onClick={() => window.open(doc.url.startsWith('/') ? `${API_BASE}${doc.url}` : doc.url, '_blank')}>{doc.originalName || 'View Document'}</Button>
                         )}
                         <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
-                          <Button variant="contained" size="small" onClick={() => handleDownloadDoc(doc, idx)}>Download</Button>
+                          <Button variant="contained" size="small" className="btn-primary focus:ring-2 focus:ring-brand-accent/40 hover:-translate-y-0.5" onClick={() => handleDownloadDoc(doc, idx)}>Download</Button>
                         </Box>
                       </Box>
                     );
@@ -1301,7 +1405,7 @@ export default function RiderDashboard() {
                 </Box>
                 {/* Removed bulk download & delete option per request */}
                 <Box mt={2} className="flex flex-col sm:flex-row gap-2">
-                  <Button className="w-full sm:w-auto" variant="contained" color="warning" onClick={() => handleMarkDocsCopied(selectedParcel._id)}>
+                  <Button className="w-full sm:w-auto btn-warning hover:-translate-y-0.5" variant="contained" color="warning" onClick={() => handleMarkDocsCopied(selectedParcel._id)}>
                     Hide/Delete Documents
                   </Button>
                 </Box>
@@ -1455,43 +1559,59 @@ export default function RiderDashboard() {
             <Typography>No parcels</Typography>
           ) : (
             parcels.filter(p => String(p.status || '').toLowerCase() === 'pending').map((p) => (
-              <Card key={p._id} sx={{ mb: 2 }}>
-                <CardContent>
-                  <Typography><b>Sender:</b> {p.senderName} ({p.senderMobile})</Typography>
-                  <Typography><b>Receiver:</b> {p.receiverName} ({p.receiverMobile})</Typography>
-                  <Typography><b>Category:</b> {p.parcelCategory}</Typography>
-                  <Typography><b>Pickup:</b> {p.pickupAddress || p?.pickup?.address || p?.pickupCoords?.address || (p?.pickup?.lat && p?.pickup?.lng ? `${p.pickup.lat}, ${p.pickup.lng}` : (p?.pickupCoords?.lat && p?.pickupCoords?.lng ? `${p.pickupCoords.lat}, ${p.pickupCoords.lng}` : 'N/A'))}</Typography>
-                  <Typography><b>Drop:</b> {p.dropAddress || p?.drop?.address || p?.dropCoords?.address || (p?.drop?.lat && p?.drop?.lng ? `${p.drop.lat}, ${p.drop.lng}` : (p?.dropCoords?.lat && p?.dropCoords?.lng ? `${p.dropCoords.lat}, ${p.dropCoords.lng}` : 'N/A'))}</Typography>
-                  <Typography>Status: {p.status || 'pending'}</Typography>
-                  <Box mt={2}>
-                     <Button variant="outlined" color="primary" onClick={() => handleViewParcel(p)}>
-                       View on Map
-                     </Button>
-                     {p.status === "pending" && (
-                       <>
-                         <Button variant="contained" color="success" sx={{ ml: 2 }} onClick={() => handleAcceptParcel(p._id)}>Accept</Button>
-                         <Button variant="contained" color="error" sx={{ ml: 2 }} onClick={() => handleRejectParcel(p._id)}>Reject</Button>
-                       </>
-                     )}
-                     {p.status === "accepted" && (
-                       <Button variant="contained" color="primary" sx={{ ml: 2 }} onClick={() => { handleViewParcel(p); setParcelOtpDialogOpen(true); }}>
-                         Verify OTP
-                       </Button>
-                     )}
-                     {p?.status === "in_progress" && Array.isArray(p?.documents) && p.documents.length > 0 && (p.documentsVisibleToRider !== false) && (String(p?.assignedRider?.id || '') === String(auth?.user?._id || '')) && (
-                       <>
-                         <Button variant="outlined" sx={{ ml: 2 }} onClick={() => handleViewParcel(p)}>
-                           View Documents
-                         </Button>
-                         {String(p?.parcelCategory || '').trim().toLowerCase() === 'xerox' && (
-                           <Button variant="contained" color="primary" sx={{ ml: 2 }} onClick={() => handleDownloadXeroxCopy(p)}>
-                             Download & mark copied
-                           </Button>
-                         )}
-                       </>
-                     )}
-
-                  </Box>
+              <Card
+                key={p._id}
+                className="group bg-gradient-to-br from-white to-gray-50 ring-1 ring-gray-200 hover:ring-blue-300 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
+                sx={{ mb: 2, borderRadius: 3, boxShadow: 3 }}
+              >
+                <CardHeader
+                  title={p.parcelCategory || 'Parcel'}
+                  subheader={`${p.senderName || 'Sender'} → ${p.receiverName || 'Receiver'}`}
+                  action={<span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-blue-600 shadow-sm animate-pulse">📦</span>}
+                  sx={{
+                    pb: 0,
+                    '& .MuiCardHeader-title': { fontWeight: 700 },
+                    '& .MuiCardHeader-subheader': { color: 'text.secondary' }
+                  }}
+                />
+                <CardContent sx={{ pt: 2 }}>
+                  <Grid container spacing={1}>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2"><b>Pickup:</b> {p.pickupAddress || p?.pickup?.address || p?.pickupCoords?.address || (p?.pickup?.lat && p?.pickup?.lng ? `${p.pickup.lat}, ${p.pickup.lng}` : (p?.pickupCoords?.lat && p?.pickupCoords?.lng ? `${p.pickupCoords.lat}, ${p.pickupCoords.lng}` : 'N/A'))}</Typography>
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2"><b>Drop:</b> {p.dropAddress || p?.drop?.address || p?.dropCoords?.address || (p?.drop?.lat && p?.drop?.lng ? `${p.drop.lat}, ${p.drop.lng}` : (p?.dropCoords?.lat && p?.dropCoords?.lng ? `${p.dropCoords.lat}, ${p.dropCoords.lng}` : 'N/A'))}</Typography>
+                    </Grid>
+                  </Grid>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2, flexWrap: 'wrap' }}>
+                    <Chip label={(p.status || 'pending').replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())} variant="outlined" />
+                    <Button variant="outlined" color="primary" onClick={() => handleViewParcel(p)}>
+                      View on Map
+                    </Button>
+                    {p.status === "pending" && (
+                      <>
+                        <Button variant="contained" color="success" onClick={() => handleAcceptParcel(p._id)}>Accept</Button>
+                        <Button variant="contained" color="error" onClick={() => handleRejectParcel(p._id)}>Reject</Button>
+                      </>
+                    )}
+                    {p.status === "accepted" && (
+                      <Button variant="contained" color="primary" onClick={() => { handleViewParcel(p); setParcelOtpDialogOpen(true); }}>
+                        Verify OTP
+                      </Button>
+                    )}
+                    {p?.status === "in_progress" && Array.isArray(p?.documents) && p.documents.length > 0 && (p.documentsVisibleToRider !== false) && (String(p?.assignedRider?.id || '') === String(auth?.user?._id || '')) && (
+                      <>
+                        <Button variant="outlined" onClick={() => handleViewParcel(p)}>
+                          View Documents
+                        </Button>
+                        {String(p?.parcelCategory || '').trim().toLowerCase() === 'xerox' && (
+                          <Button variant="contained" color="primary" onClick={() => handleDownloadXeroxCopy(p)}>
+                            Download & mark copied
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </Stack>
                 </CardContent>
               </Card>
             ))

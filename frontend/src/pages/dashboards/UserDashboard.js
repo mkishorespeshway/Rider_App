@@ -14,7 +14,14 @@ export default function UserDashboard() {
   };
 
   return (
-    <Box className="min-h-screen bg-gray-50" sx={{ p: 4 }}>
+    <Box
+      className="min-h-screen"
+      sx={{
+        p: 4,
+        minHeight: "100vh",
+        background: "linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%)",
+      }}
+    >
       <Box className="max-w-screen-sm mx-auto px-3 sm:px-6">
       <Typography variant="h4" className="page-title" sx={{ mb: 2 }}>
         User Dashboard

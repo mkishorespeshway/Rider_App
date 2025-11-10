@@ -367,7 +367,22 @@ export default function RiderDashboard() {
  
       if (res.data.ride.pickupCoords) setPickup(res.data.ride.pickupCoords);
       if (res.data.ride.dropCoords) setDrop(res.data.ride.dropCoords);
-     
+      // Immediately fetch rider GPS so map can draw route rider → pickup pre-OTP
+      try {
+        if (navigator?.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+              setRiderLocation(loc);
+            },
+            (err) => console.warn("Geolocation after accept warning:", err),
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
+          );
+        }
+      } catch (e) {
+        console.warn("Geolocation init after accept error:", e);
+      }
+
       // Generate and send OTP to user
       generateAndSendOtp(res.data.ride._id);
     } catch (err) {
@@ -965,8 +980,19 @@ export default function RiderDashboard() {
             <Typography>No parcels</Typography>
           ) : (
             parcels.map((p) => (
-              <Card key={p._id} sx={{ mb: 2 }}>
-                <CardContent>
+              <Card
+                key={p._id}
+                className="group bg-gradient-to-br from-white to-gray-50 ring-1 ring-gray-200 hover:ring-blue-300 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
+                sx={{ mb: 2, borderRadius: 3 }}
+              >
+                <CardContent className="pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm text-gray-600">
+                      <span className="font-semibold mr-1">{p.parcelCategory || 'Parcel'}</span>
+                      <span>{`${p.senderName || 'Sender'} → ${p.receiverName || 'Receiver'}`}</span>
+                    </div>
+                    <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-blue-600 shadow-sm animate-pulse">📦</span>
+                  </div>
                   <Typography><b>Sender:</b> {p.senderName} ({p.senderMobile})</Typography>
                   <Typography><b>Receiver:</b> {p.receiverName} ({p.receiverMobile})</Typography>
                   <Typography><b>Category:</b> {p.parcelCategory}</Typography>

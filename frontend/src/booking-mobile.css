@@ -25,6 +25,11 @@
   border-radius: 12px;
 }
 
+/* Desktop/Default booking form on white background */
+.booking-form {
+  background: #ffffff !important;
+}
+
 /* Primary Book button in Rapido yellow (legacy) */
 .rapido-book-btn {
   background-color: var(--rapido-yellow) !important;
@@ -35,8 +40,8 @@
 
 /* Minimal card UI blue button (new) */
 .booking-blue-btn {
-  background-color: #1E3A8A !important; /* deep blue */
-  color: #fff !important;
+  background-color: #FF6A00 !important; /* orange */
+  color: #000 !important; /* keep label black */
   font-weight: 700 !important;
   border-radius: 12px !important;
 }

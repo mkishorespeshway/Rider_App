@@ -1,15 +1,15 @@
 /* Global UI tokens and mobile bottom-sheet layout */
 .app-ui {
-  /* Align with Tailwind brand palette */
-  --app-bg: #FFFFFF;     /* Surface Background */
-  --app-text: #1A1A1A;   /* Primary Text */
-  --app-muted: #6b6b6b;
-  --app-black: #000000;
-  --app-accent: #00E5FF; /* Accent Cyan */
-  --app-primary: #007C91;/* Primary Teal */
+  /* Dark–Orange palette to match Tailwind tokens */
+  --app-bg: #0B0B0F;        /* App background */
+  --app-text: #F4F4F7;      /* Primary text */
+  --app-muted: #B9BBC4;     /* Muted text */
+  --app-black: #0B0B0F;     /* Deep black */
+  --app-accent: #FF6A00;    /* Accent orange */
+  --app-primary: #FF6A00;   /* Primary orange */
 }
 
-.app-ui header, .app-ui .Navbar-root { background: var(--app-bg); }
+.app-ui header, .app-ui .Navbar-root { background: var(--app-bg); color: var(--app-text); }
 
 /* Drawer rounded corners */
 .MuiDrawer-paper {
@@ -18,4 +18,4 @@
 }
 
 /* Primary button color (kept minimal; Tailwind overrides handle most styling) */
-.MuiButton-contained { background: var(--app-primary) !important; color: #fff !important; }
+.MuiButton-contained { background: var(--app-primary) !important; color: #0B0B0F !important; }

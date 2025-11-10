@@ -180,13 +180,14 @@ export default function UserRegister() {
               sx={{
                 height: 56,
                 borderRadius: 3,
-                backgroundColor: "#007C91",
+                backgroundColor: "#FF6A00",
+                color: "#000",
                 fontWeight: "bold",
                 fontSize: "16px",
                 textTransform: "none",
-                boxShadow: "0 4px 12px rgba(0, 124, 145, 0.35)",
+                boxShadow: "0 4px 12px rgba(255, 106, 0, 0.35)",
                 "&:hover": {
-                  backgroundColor: "#00687A",
+                  backgroundColor: "#FF8A33",
                 },
               }}
             >
