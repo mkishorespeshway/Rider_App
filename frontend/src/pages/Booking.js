@@ -14,6 +14,7 @@ import socket from "../services/socket";
 import MapComponent from "../components/Map";
 import ChatDialog from "../components/ChatDialog.jsx";
 import DynamicPricingDisplay from "../components/DynamicPricingDisplay.jsx";
+import LocationPrompt from "../components/LocationPrompt.jsx";
 // Razorpay removed from booking flow
 // import { initiatePayment, verifyPayment } from "../services/api";
 import PricingService from "../services/pricingService";
@@ -1712,6 +1713,10 @@ export default function Booking() {
           )}
         </Box>
       </Drawer>
+      {/* Enable Location chip/dialog for devices */}
+      <LocationPrompt role="user" onGranted={(coords) => {
+        try { setUserLiveCoords(coords); } catch {}
+      }} />
     </Container>
   );
 }

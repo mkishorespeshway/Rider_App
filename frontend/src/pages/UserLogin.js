@@ -48,6 +48,58 @@ export default function UserLogin() {
   };
  
   const isValidMobile = (num) => /^[0-9]{10}$/.test(num);
+
+  // Request geolocation permission right after successful login
+  const requestLocationPermission = async () => {
+    if (!("geolocation" in navigator)) {
+      return;
+    }
+    try {
+      if (navigator.permissions?.query) {
+        const status = await navigator.permissions.query({ name: "geolocation" });
+        if (status.state === "granted") {
+          navigator.geolocation.getCurrentPosition((pos) => {
+            try {
+              localStorage.setItem(
+                "userLastLocation",
+                JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+              );
+            } catch {}
+          });
+        } else if (status.state === "prompt") {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              try {
+                localStorage.setItem(
+                  "userLastLocation",
+                  JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                );
+              } catch {}
+            },
+            (err) => {
+              setMessage({ type: "warning", text: "Location permission is needed for accurate pickup. You can allow it from your browser prompt." });
+            }
+          );
+        } else {
+          setMessage({ type: "warning", text: "Location permission denied. Enable it in browser settings for better experience." });
+        }
+      } else {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            try {
+              localStorage.setItem(
+                "userLastLocation",
+                JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+              );
+            } catch {}
+          },
+          () => {
+            setMessage({ type: "warning", text: "Please allow location access after login for best results." });
+          }
+        );
+      }
+    } catch {}
+  };
  
   const handleSendOtp = async () => {
     if (isRoleBlocked()) {
@@ -135,7 +187,8 @@ export default function UserLogin() {
         }
 
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
-
+        // Prompt for location permission before navigating to booking
+        await requestLocationPermission();
         navigate("/booking");
 
       } else {

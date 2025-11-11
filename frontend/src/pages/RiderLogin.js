@@ -24,6 +24,58 @@ export default function RiderLogin() {
 
   const isValidMobile = (num) => /^[0-9]{10}$/.test(num);
 
+  // Request geolocation permission right after successful login (rider)
+  const requestLocationPermission = async () => {
+    if (!("geolocation" in navigator)) {
+      return;
+    }
+    try {
+      if (navigator.permissions?.query) {
+        const status = await navigator.permissions.query({ name: "geolocation" });
+        if (status.state === "granted") {
+          navigator.geolocation.getCurrentPosition((pos) => {
+            try {
+              localStorage.setItem(
+                "riderLastLocation",
+                JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+              );
+            } catch {}
+          });
+        } else if (status.state === "prompt") {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              try {
+                localStorage.setItem(
+                  "riderLastLocation",
+                  JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                );
+              } catch {}
+            },
+            (err) => {
+              setMessage({ type: "warning", text: "Location permission helps show your live position. Please allow it from the browser prompt." });
+            }
+          );
+        } else {
+          setMessage({ type: "warning", text: "Location permission denied. Enable it in browser settings to go online." });
+        }
+      } else {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            try {
+              localStorage.setItem(
+                "riderLastLocation",
+                JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+              );
+            } catch {}
+          },
+          () => {
+            setMessage({ type: "warning", text: "Please allow location access after login for best results." });
+          }
+        );
+      }
+    } catch {}
+  };
+
   const handleSendOtp = async () => {
     if (isRoleBlocked()) {
       setMessage({ type: "error", text: "A user session is already active in this browser. Please logout to login as rider." });
@@ -83,7 +135,9 @@ export default function RiderLogin() {
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
         // Ensure dashboard opens to pending rides list (not a restored active ride)
         try { localStorage.removeItem("riderActiveRideId"); } catch {}
-        setTimeout(() => navigate("/rider-dashboard"), 1000);
+        // Prompt for location permission before navigating to dashboard
+        await requestLocationPermission();
+        setTimeout(() => navigate("/rider-dashboard"), 500);
       } else {
         setMessage({ type: "error", text: res.data.message });
       }

@@ -25,6 +25,7 @@ import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import ChatDialog from "../../components/ChatDialog.jsx";
 import Map from "../../components/Map"; //  Google Maps component
+import LocationPrompt from "../../components/LocationPrompt.jsx";
 import { getMerchantDetails, confirmOnlinePayment, markCashPayment } from "../../services/api";
  
 const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
@@ -1298,6 +1299,10 @@ export default function RiderDashboard() {
 
             />
           </Paper>
+          {/* Enable Location chip/dialog for rider devices */}
+          <LocationPrompt role="rider" onGranted={(coords) => {
+            try { setRiderLocation(coords); } catch {}
+          }} />
         </>
       ) : selectedParcel ? (
         <>

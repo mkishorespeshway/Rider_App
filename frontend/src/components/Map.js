@@ -277,6 +277,30 @@ export default function Map({
     libraries: ["places"], // âœ… only "places", no "marker"
   });
 
+  // Clear directions and route overlays when ride completes or points are reset
+  useEffect(() => {
+    try {
+      const noRoute = !pickup || !drop || (!rideStartedEffective && !pickup && !drop);
+      if (noRoute && directionsRendererRef.current) {
+        try {
+          directionsRendererRef.current.setDirections({ routes: [] });
+        } catch {}
+        directionsRendererRef.current.setMap(null);
+        routeBoundsRef.current = null;
+        setRouteDistance(null);
+        setRouteEtaText(null);
+        setNavNextText("");
+        setNavThenText("");
+        setNavArrivalTimeText("");
+        setNavDurationMins(null);
+        setNavDistanceKm(null);
+        if (typeof setDistance === "function") setDistance("");
+        if (typeof setDuration === "function") setDuration("");
+        if (typeof setNormalDuration === "function") setNormalDuration("");
+      }
+    } catch {}
+  }, [pickup, drop, rideStartedEffective]);
+
   // Fetch pricing factors; keep route color black to match requested style
   useEffect(() => {
     async function fetchFactorsAndSetColor() {
