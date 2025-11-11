@@ -75,6 +75,11 @@ const rideSchema = new mongoose.Schema(
       enum: ["pending", "completed"],
       default: "pending"
     },
+
+    // User feedback after ride completion
+    userRating: { type: Number, min: 1, max: 5, default: null },
+    userReview: { type: String, default: "" },
+    ratedAt: { type: Date, default: null },
  
     status: {
       type: String,

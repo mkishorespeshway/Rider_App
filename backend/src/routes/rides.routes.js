@@ -31,8 +31,12 @@ router.post("/:id/request-type", authMiddleware, rideController.setRequestedVehi
 router.post("/:id/update-details", authMiddleware, rideController.updateRideDetails);
  
 // ✅ Complete ride (rider triggers when trip ends)
+
 router.post("/:id/complete", authMiddleware, rideController.completeRide);
- 
+
+// ⭐ Rate a completed ride (user only)
+router.post("/:id/rate", authMiddleware, rideController.rateRide);
+
 // 🔍 Get a single ride by ID
 router.get("/:id", authMiddleware, rideController.getRideById);
  

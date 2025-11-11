@@ -510,6 +510,67 @@ exports.getRideById = async (req, res) => {
   }
 };
 
+// ⭐ Rate a completed ride (user only)
+exports.rateRide = async (req, res) => {
+  try {
+    const rideId = req.params.id;
+    const { rating, review = "" } = req.body || {};
+
+    if (!rating || Number(rating) < 1 || Number(rating) > 5) {
+      return res.status(400).json({ success: false, message: "Rating must be between 1 and 5" });
+    }
+
+    const ride = await Ride.findById(rideId);
+    if (!ride) {
+      return res.status(404).json({ success: false, message: "Ride not found" });
+    }
+
+    // Only the booking user can rate, after completion
+    if (!req.user || String(ride.riderId) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: "Not authorized to rate this ride" });
+    }
+    if (String(ride.status) !== "completed") {
+      return res.status(400).json({ success: false, message: "Ride not completed yet" });
+    }
+    if (ride.userRating != null) {
+      return res.status(409).json({ success: false, message: "Ride already rated" });
+    }
+
+    ride.userRating = Number(rating);
+    ride.userReview = String(review || "").slice(0, 500);
+    ride.ratedAt = new Date();
+    await ride.save();
+
+    // Soft-update rider's aggregate rating if fields exist (non-breaking)
+    try {
+      if (ride.driverId) {
+        const User = require("../models/User");
+        const driver = await User.findById(ride.driverId);
+        if (driver) {
+          const hasAvg = Object.prototype.hasOwnProperty.call(driver, "ratingAvg");
+          const hasCount = Object.prototype.hasOwnProperty.call(driver, "ratingCount");
+          if (hasAvg && hasCount) {
+            const count = Number(driver.ratingCount || 0);
+            const avg = Number(driver.ratingAvg || 0);
+            const newAvg = count > 0 ? ((avg * count + Number(rating)) / (count + 1)) : Number(rating);
+            driver.ratingAvg = Number(newAvg.toFixed(2));
+            driver.ratingCount = count + 1;
+            await driver.save();
+          }
+        }
+      }
+    } catch (aggErr) {
+      // Do not fail rating on aggregate update issues
+      console.warn("Driver aggregate rating update warning:", aggErr.message);
+    }
+
+    return res.json({ success: true, ride });
+  } catch (err) {
+    console.error("❌ Rate ride error:", err);
+    res.status(500).json({ error: "Failed to rate ride", details: err.message });
+  }
+};
+
 // ✏️ Update ride details (pickup/drop) before OTP verification
 exports.updateRideDetails = async (req, res) => {
   try {
