@@ -95,6 +95,8 @@ export const createRide = (data) => RIDES_API.post("/create", data);
 export const findDrivers = () => RIDES_API.get("/drivers");
 export const getRideHistory = () => RIDES_API.get("/history");
 export const getRideById = (id) => RIDES_API.get(`/${id}`);
+// ⭐ Rate a completed ride (user only)
+export const rateRide = (id, { rating, review }) => RIDES_API.post(`/${id}/rate`, { rating, review });
  
 // --- Payments ---
 export const initiatePayment = (data) => PAYMENTS_API.post("/initiate", data);
@@ -161,6 +163,7 @@ export default {
   findDrivers,
   getRideHistory,
   getRideById,
+  rateRide,
   initiatePayment,
   verifyPayment,
   markCashPayment,

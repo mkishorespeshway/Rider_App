@@ -15,9 +15,11 @@ import MapComponent from "../components/Map";
 import ChatDialog from "../components/ChatDialog.jsx";
 import DynamicPricingDisplay from "../components/DynamicPricingDisplay.jsx";
 import LocationPrompt from "../components/LocationPrompt.jsx";
+import RatingDialog from "../components/RatingDialog.jsx";
 // Razorpay removed from booking flow
 // import { initiatePayment, verifyPayment } from "../services/api";
 import PricingService from "../services/pricingService";
+import { rateRide } from "../services/api";
 import SOSButton from "../components/SOSButton";
 import "../theme.css";
 import "../booking-mobile.css";
@@ -101,6 +103,11 @@ export default function Booking() {
   const [otp, setOtp] = useState("");
   const [userLiveCoords, setUserLiveCoords] = useState(null);
   const [chatOpen, setChatOpen] = useState(false);
+  // Rating dialog state
+  const [showRatingDialog, setShowRatingDialog] = useState(false);
+  const [ratingRideId, setRatingRideId] = useState(null);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [ratingError, setRatingError] = useState("");
   // No popup needed when a rider accepts the ride in multiple tabs
   const [serviceLimitOpen, setServiceLimitOpen] = useState(false);
   const [acceptBannerOpen, setAcceptBannerOpen] = useState(false);
@@ -131,6 +138,41 @@ export default function Booking() {
 
 
   const GOOGLE_API_KEY = "AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"; // 🔑 Replace with your real key
+
+  const handleSubmitRating = async ({ rating, review }) => {
+    try {
+      setRatingError("");
+      setRatingSubmitting(true);
+      // Robustly resolve rideId even after completion clears createdRide
+      let id = ratingRideId || (createdRide && createdRide._id) || null;
+      if (!id) {
+        try {
+          // Use unpaid lock set on rideCompleted event
+          const unpaidKeys = Object.keys(localStorage).filter((k) => k.startsWith("unpaid:"));
+          if (unpaidKeys.length) id = unpaidKeys[0].split(":")[1] || null;
+        } catch {}
+      }
+      if (!id) {
+        try {
+          // Fallback to active ride key if still present
+          const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+          const activeId = localStorage.getItem(activeKey);
+          if (activeId) id = activeId;
+        } catch {}
+      }
+      if (!id) {
+        setRatingError("Unable to resolve ride to rate. Please try again.");
+        return; // keep dialog open so user can retry
+      }
+      await rateRide(id, { rating, review });
+      setShowRatingDialog(false);
+    } catch (e) {
+      const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || "Failed to submit rating";
+      setRatingError(String(msg));
+    } finally {
+      setRatingSubmitting(false);
+    }
+  };
 
   // ✅ Join socket room
   useEffect(() => {
@@ -944,6 +986,11 @@ export default function Booking() {
       setPaymentAmount(computedAmount);
       // Open the payment prompt in the same screen (Rapido-style)
       setShowPaymentPrompt(true);
+      // Also open rating dialog (non-blocking, user can submit or close)
+      try {
+        setRatingRideId(ride?._id || null);
+        setShowRatingDialog(true);
+      } catch {}
       // Persist unpaid lock so the prompt survives refresh until payment is completed
       try {
         if (ride && ride._id) {
@@ -1599,6 +1646,16 @@ export default function Booking() {
           return null;
         }
       })()}
+
+      {/* Rating dialog shown after ride completion; does not block payment */}
+      <RatingDialog
+        open={showRatingDialog}
+        onClose={() => setShowRatingDialog(false)}
+        onSubmit={handleSubmitRating}
+        ride={{ id: ratingRideId }}
+        submitting={ratingSubmitting}
+        error={ratingError}
+      />
 
       {/* Rider details drawer disabled to keep only side-by-side popup */}
       <Drawer anchor="bottom" open={false} onClose={() => setRiderPanelOpen(false)}>
