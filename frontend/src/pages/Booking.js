@@ -3,10 +3,11 @@ import {
   Container, Paper, Typography, TextField, Box,
   Button, Drawer, CircularProgress, ListItemButton,
   FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, Chip, Avatar,
-  Dialog, DialogTitle, DialogContent, DialogActions, Grid, InputAdornment
+  Dialog, DialogTitle, DialogContent, DialogActions, Grid, InputAdornment, IconButton
 } from "@mui/material";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import FlagIcon from "@mui/icons-material/Flag";
+import MyLocationIcon from "@mui/icons-material/MyLocation";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -399,6 +400,25 @@ export default function Booking() {
       return res.data.results[0]?.formatted_address || "";
     } catch {
       return "";
+    }
+  };
+
+  // 📍 Quickly set pickup to user's current GPS location
+  const useCurrentPickup = async () => {
+    try {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setPickup(loc);
+          const addr = await getAddressFromCoords(loc.lat, loc.lng);
+          setPickupAddress(addr);
+          setPickupSuggestions([]);
+        },
+        (err) => console.warn("Geolocation (pickup quick-set) warning:", err?.message || err),
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 }
+      );
+    } catch (e) {
+      console.warn("useCurrentPickup error:", e?.message || e);
     }
   };
 
@@ -1305,6 +1325,13 @@ export default function Booking() {
                   startAdornment: (
                     <InputAdornment position="start">
                       <LocationOnIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton aria-label="Use current location" onClick={useCurrentPickup} size="small" edge="end">
+                        <MyLocationIcon fontSize="small" />
+                      </IconButton>
                     </InputAdornment>
                   ),
                 }}
