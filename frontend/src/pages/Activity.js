@@ -200,6 +200,7 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
             <Box sx={{ mt: 2 }}>
               <Typography variant="body2" sx={{ mb: 1 }}>Open turn-by-turn navigation in Google Maps</Typography>
               <button
+                className="btn-primary"
                 onClick={() => {
                   try {
                     const o = liveParcel?.pickup || parcel?.pickup;
@@ -210,15 +211,6 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
                     const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving&dir_action=navigate`;
                     openNavUrl(url);
                   } catch {}
-                }}
-                style={{
-                  backgroundColor: "#FF6A00",
-                  color: "#000",
-                  padding: "10px 14px",
-                  borderRadius: 8,
-                  border: "1px solid #000",
-                  fontWeight: 600,
-                  cursor: "pointer",
                 }}
               >
                 Navigate in Google Maps
@@ -235,18 +227,10 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
               {price != null ? `Amount: ₹${Number(price).toFixed(2)}` : 'Amount will be shown on the payment screen.'}
             </Typography>
             <button
+              className="btn-primary"
               onClick={() => {
                 const amt = price ? Number(price) : undefined;
                 try { window.location.href = amt != null ? `/payment` : `/payment`; } catch {}
-              }}
-              style={{
-                backgroundColor: "#FF6A00",
-                color: "#000",
-                padding: "10px 14px",
-                borderRadius: 8,
-                border: "1px solid #000",
-                fontWeight: 600,
-                cursor: "pointer",
               }}
             >
               Pay Now

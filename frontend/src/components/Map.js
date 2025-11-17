@@ -85,12 +85,20 @@ export default function Map({
   vehicleImage,
   // Follow rider on map updates during accepted/in_progress rides
   followRider = true,
+  // Parcel-only: allow user to drag pickup marker to set dynamic pickup
+  enablePickupEdit = false,
+  // When true, keep provided pickup; do not auto-set from GPS
+  lockToProvidedPoints = false,
 }) {
+  // UI toggle: keep post-OTP map clean without extra overlays
+  const SHOW_POST_OTP_OVERLAYS = false;
   // Detect Booking page context (Booking passes showRiderOnly; dashboards don’t)
   const isBookingContext = typeof showRiderOnly !== "undefined";
   const mapRef = useRef(null);
   const directionsRendererRef = useRef(null);
   const [routeColor, setRouteColor] = useState("#000");
+  // Detect mobile viewport for conditional marker visibility without affecting desktop
+  const isMobile = (typeof window !== "undefined" ? (window.innerWidth <= 768) : false);
   // Local address display to mimic Google Maps info panel
   const [pickupAddrDisplay, setPickupAddrDisplay] = useState("");
   const [dropAddrDisplay, setDropAddrDisplay] = useState("");
@@ -185,31 +193,48 @@ export default function Map({
     return R * c;
   };
 
+  // Vehicle type normalization helpers
+  const normalizeVehicleType = (vtRaw) => {
+    const raw = String(vtRaw || "").trim().toLowerCase();
+    return (
+      raw.includes("bike") || raw.includes("cycle") || raw.includes("scooter") || raw.includes("motor")
+    ) ? "bike" : (
+      raw.includes("auto") || raw.includes("rickshaw")
+    ) ? "auto" : (
+      raw.includes("car") || raw.includes("suv")
+    ) ? "car" : (
+      raw.includes("taxi") || raw.includes("cab")
+    ) ? "taxi" : raw;
+  };
+
   // Vehicle-aware icon selection for rider marker (both Google & Leaflet)
   // Normalize common synonyms/variants to core types for consistent icons
-  const rawType = String(vehicleType || "").trim().toLowerCase();
-  const normalizedType = (
-    rawType.includes("bike") || rawType.includes("cycle") || rawType.includes("scooter") || rawType.includes("motor")
-  ) ? "bike" : (
-    rawType.includes("auto") || rawType.includes("rickshaw")
-  ) ? "auto" : (
-    rawType.includes("car") || rawType.includes("suv")
-  ) ? "car" : (
-    rawType.includes("taxi") || rawType.includes("cab")
-  ) ? "taxi" : rawType;
+  const normalizedType = normalizeVehicleType(vehicleType);
   // Prefer vehicle image if provided; otherwise use Twemoji PNGs per vehicle type
   let riderIconUrl = vehicleImage || (
     normalizedType === "bike"
-      ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6b2.png" // bicycle
+      ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3cd.png" // motorcycle
       : normalizedType === "auto"
       ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6fa.png" // auto rickshaw
       : normalizedType === "car"
       ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f697.png" // automobile
       : "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f699.png" // taxi as default
   );
+  const iconUrlForType = (vt) => {
+    const t = normalizeVehicleType(vt);
+    return (
+      t === "bike"
+        ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3cd.png"
+        : t === "auto"
+        ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f6fa.png"
+        : t === "car"
+        ? "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f697.png"
+        : "https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f699.png"
+    );
+  };
   let riderLabelText =
     normalizedType === "bike"
-      ? "🚲"
+      ? "🏍️"
       : normalizedType === "auto"
       ? "🛺"
       : normalizedType === "car"
@@ -327,9 +352,10 @@ export default function Map({
     fetchFactorsAndSetColor();
   }, [pickup]);
 
-  // âœ… Ensure pickup always exists â†’ try GPS first
+  // âœ… Ensure pickup always exists â†’ try GPS first (skip when locked)
   useEffect(() => {
     if (!pickup) {
+      if (lockToProvidedPoints) return;
       const canUseGps = (typeof window !== "undefined" && (window.isSecureContext || window.location.hostname === "localhost"));
       if (canUseGps && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -377,7 +403,7 @@ export default function Map({
         }
       }
     }
-  }, [pickup, setPickup, setPickupAddress]);
+  }, [pickup, lockToProvidedPoints, setPickup, setPickupAddress]);
 
   // âœ… Fetch directions with traffic-aware duration when possible
   useEffect(() => {
@@ -397,8 +423,7 @@ export default function Map({
         suppressMarkers: true,
       });
     }
-
-    directionsRendererRef.current.setMap(mapRef.current);
+    // Attach to map only when we actually intend to draw a route
 
     
 
@@ -406,27 +431,50 @@ export default function Map({
     let destination = null;
 
     // Routing selection rules:
-    // - Pre-OTP: prefer rider → pickup. If rider GPS or nearest available rider
-    //   is not available yet, on Booking page fall back to pickup → drop to
-    //   populate distance and show a polyline so pricing and booking can proceed.
+    // - Booking pre-acceptance: show only pins (no route)
+    // - Booking accepted pre-OTP: show rider → pickup
     // - Post-OTP: show pickup → drop
     if (!rideStartedEffective) {
-      const liveRider = normalizeLatLng(riderLocation) || riderLocation;
-      const nearestRider = getNearestAvailableRiderToPickup(availableRiders, pickup);
-      if (liveRider && pickup) {
-        origin = liveRider; // rider (live) → pickup
-        destination = normalizeLatLng(pickup) || pickup;
-      } else if (nearestRider && pickup) {
-        origin = nearestRider; // nearest available rider → pickup
-        destination = normalizeLatLng(pickup) || pickup;
-      } else if (isBookingContext && pickup && drop) {
-        // Fallback on Booking: draw pickup → drop so distance is computed
-        origin = normalizeLatLng(pickup) || pickup;
-        destination = normalizeLatLng(drop) || drop;
+      if (isBookingContext) {
+        // Booking page routing:
+        // - Not yet accepted: draw pickup → drop when both set
+        // - Accepted (pre-OTP): draw rider → pickup
+        if (!showRiderOnly) {
+          if (pickup && drop) {
+            origin = normalizeLatLng(pickup) || pickup;
+            destination = normalizeLatLng(drop) || drop;
+          } else {
+            try {
+              directionsRendererRef.current.setMap(null);
+              directionsRendererRef.current.setDirections({ routes: [] });
+            } catch {}
+            return;
+          }
+        } else {
+          const liveRider = normalizeLatLng(riderLocation) || riderLocation;
+          if (liveRider && pickup) {
+            origin = liveRider;
+            destination = normalizeLatLng(pickup) || pickup;
+          } else {
+            directionsRendererRef.current.setMap(null);
+            try { directionsRendererRef.current.setDirections({ routes: [] }); } catch {}
+            return;
+          }
+        }
       } else {
-        // Pre-OTP but missing origins and no Booking fallback: keep map clean
-        directionsRendererRef.current.setMap(null);
-        return;
+        // Non-booking contexts retain rider → pickup logic
+        const liveRider = normalizeLatLng(riderLocation) || riderLocation;
+        const nearestRider = getNearestAvailableRiderToPickup(availableRiders, pickup);
+        if (liveRider && pickup) {
+          origin = liveRider; // rider (live) → pickup
+          destination = normalizeLatLng(pickup) || pickup;
+        } else if (nearestRider && pickup) {
+          origin = nearestRider; // nearest available rider → pickup
+          destination = normalizeLatLng(pickup) || pickup;
+        } else {
+          directionsRendererRef.current.setMap(null);
+          return;
+        }
       }
     } else {
       if (pickup && drop) {
@@ -437,6 +485,9 @@ export default function Map({
         return;
       }
     }
+
+    // Attach renderer now that we have a route to draw
+    directionsRendererRef.current.setMap(mapRef.current);
 
     directionsService.route(
       {
@@ -519,25 +570,13 @@ export default function Map({
             const path = result.routes[0].overview_path || [];
             path.forEach((p) => bounds.extend(p));
             if (!bounds.isEmpty() && mapRef.current) {
-    if (!rideStartedEffective && isBookingContext) {
-                const o = normalizeLatLng(pickup) || pickup;
-                if (o?.lat && o?.lng) {
-                  mapRef.current.panTo({ lat: o.lat, lng: o.lng });
-                  const currentZoom = mapRef.current.getZoom();
-                  if (typeof currentZoom !== "number" || currentZoom < 16) {
-                    mapRef.current.setZoom(16);
-                  }
-                }
-                routeBoundsRef.current = bounds;
-              } else {
-                mapRef.current.fitBounds(bounds, {
-                  top: 60,
-                  right: 60,
-                  bottom: 60,
-                  left: 60,
-                });
-                routeBoundsRef.current = bounds;
-              }
+              mapRef.current.fitBounds(bounds, {
+                top: 60,
+                right: 60,
+                bottom: 60,
+                left: 60,
+              });
+              routeBoundsRef.current = bounds;
             }
           } catch (e) {
             // Fallback: fit to origin & destination only
@@ -548,25 +587,13 @@ export default function Map({
               if (o?.lat && o?.lng) b.extend(new window.google.maps.LatLng(o.lat, o.lng));
               if (d?.lat && d?.lng) b.extend(new window.google.maps.LatLng(d.lat, d.lng));
               if (!b.isEmpty() && mapRef.current) {
-    if (!rideStartedEffective && isBookingContext) {
-                  const pickOnly = normalizeLatLng(pickup) || pickup;
-                  if (pickOnly?.lat && pickOnly?.lng) {
-                    mapRef.current.panTo({ lat: pickOnly.lat, lng: pickOnly.lng });
-                    const currentZoom = mapRef.current.getZoom();
-                    if (typeof currentZoom !== "number" || currentZoom < 16) {
-                      mapRef.current.setZoom(16);
-                    }
-                  }
-                  routeBoundsRef.current = b;
-                } else {
-                  mapRef.current.fitBounds(b, {
-                    top: 60,
-                    right: 60,
-                    bottom: 60,
-                    left: 60,
-                  });
-                  routeBoundsRef.current = b;
-                }
+                mapRef.current.fitBounds(b, {
+                  top: 60,
+                  right: 60,
+                  bottom: 60,
+                  left: 60,
+                });
+                routeBoundsRef.current = b;
               }
             } catch {}
           }
@@ -643,9 +670,17 @@ export default function Map({
   // After OTP, keep the directions view stable
   if (rideStartedEffective) return;
 
-      // Booking page: focus on PICKUP only with close zoom (auto-zoom)
+      // Booking page: if rider is assigned, fit rider ↔ pickup; otherwise center pickup
       if (isBookingContext) {
+        const liveRider = normalizeLatLng(riderLocation) || riderLocation;
         const pick = normalizeLatLng(pickup) || pickup;
+        if (liveRider?.lat && liveRider?.lng && pick?.lat && pick?.lng) {
+          const bounds = new window.google.maps.LatLngBounds();
+          bounds.extend(new window.google.maps.LatLng(liveRider.lat, liveRider.lng));
+          bounds.extend(new window.google.maps.LatLng(pick.lat, pick.lng));
+          mapRef.current.fitBounds(bounds, { top: 60, right: 60, bottom: 60, left: 60 });
+          return;
+        }
         if (pick?.lat && pick?.lng) {
           try {
             mapRef.current.panTo({ lat: pick.lat, lng: pick.lng });
@@ -654,14 +689,14 @@ export default function Map({
               mapRef.current.setZoom(16);
             }
           } catch {}
-          return; // Keep pickup-focused view on Booking pre-OTP
+          return;
         }
       }
 
       const loc = normalizeLatLng(riderLocation) || riderLocation;
       if (!loc?.lat || !loc?.lng) return;
 
-      // Always try to show both rider and pickup for accepted ride context
+      // Non-booking dashboards: show rider and pickup when available
       const pick = normalizeLatLng(pickup) || pickup;
       if (pick?.lat && pick?.lng) {
         const bounds = new window.google.maps.LatLngBounds();
@@ -765,9 +800,51 @@ export default function Map({
     >
       {/* User live marker removed to keep view focused on pickup/drop */}
 
-      {/* Rider marker removed — only pickup and drop pins remain */}
+      {/* Rider marker (booking accepted, pre-OTP): show rider → pickup
+          Hide any rider marker on Booking until a rider is actually assigned.
+          Parent sets showRiderOnly=true only when assignedRider exists. */}
+      {!rideStartedEffective && isBookingContext && Boolean(showRiderOnly) && riderLocation && (
+        <GoogleMarker
+          key={`rider-${(riderLocation.lat ?? riderLocation.latitude)}-${(riderLocation.lng ?? riderLocation.longitude)}`}
+          position={normalizeLatLng(riderLocation) || riderLocation}
+          icon={{
+            url: riderIconUrl,
+            scaledSize: new window.google.maps.Size(36, 36),
+            anchor: new window.google.maps.Point(18, 34),
+          }}
+          title={"Rider"}
+        />
+      )}
 
-      {/* Available rider markers removed — map shows only pickup and drop */}
+      {/* Show available riders for the selected vehicle type (pre-OTP, no assigned rider) */}
+      {!rideStartedEffective && isBookingContext && !showRiderOnly && Array.isArray(availableRiders) && availableRiders.length > 0 && (
+        <>
+          {(() => {
+            const seen = {};
+            return availableRiders
+              .filter((r) => normalizeVehicleType(r?.vehicleType || r?.vehicle?.type) === normalizedType && r?.coords && r.coords.lat != null && r.coords.lng != null)
+              .map((r) => {
+                const url = iconUrlForType(r?.vehicleType || r?.vehicle?.type) || riderIconUrl;
+                const base = normalizeLatLng(r.coords) || r.coords;
+                const key = `${Number(base.lat).toFixed(5)}:${Number(base.lng).toFixed(5)}`;
+                const idx = (seen[key] = (seen[key] ?? 0) + 1);
+                const pos = idx > 1 ? offsetLatLng(base, 0, (idx - 1) * 6) : base; // nudge east to avoid overlap
+                return (
+                  <GoogleMarker
+                    key={`avail-${String(r.riderId)}-${base.lat}-${base.lng}-${idx}`}
+                    position={pos}
+                    icon={{
+                      url,
+                      scaledSize: new window.google.maps.Size(32, 32),
+                      anchor: new window.google.maps.Point(16, 30),
+                    }}
+                    title={`Available ${normalizedType}`}
+                  />
+                );
+              });
+          })()}
+        </>
+      )}
 
       {/* 📍 Pickup & Drop markers (custom) */}
       {pickup && (
@@ -780,7 +857,7 @@ export default function Map({
           }}
           title={"Pickup"}
           label={{ text: "Pickup", fontSize: "13px", fontWeight: "700", color: "#0f5132" }}
-          draggable={!rideStartedEffective}
+          draggable={!rideStartedEffective && !lockToProvidedPoints}
           onDragEnd={(e) => {
             try {
               const lat = e.latLng.lat();
@@ -807,7 +884,8 @@ export default function Map({
           }}
         />
       )}
-      {drop && (
+      {/* Hide drop marker on mobile during accepted (pre-OTP) phase to show rider ↔ pickup only */}
+      {drop && !(isBookingContext && showRiderOnly && isMobile) && (
         <GoogleMarker
           key={`drop-${drop.lat ?? drop.latitude}-${drop.lng ?? drop.longitude}`}
           position={normalizeLatLng(drop) || drop}
@@ -833,6 +911,34 @@ export default function Map({
           }}
         />
       )}
+
+      {/* Parcel pre-OTP: show draggable Pickup marker when editing is enabled */}
+      {pickup && enablePickupEdit && !rideStartedEffective && (
+        <GoogleMarker
+          key={`pickup-edit-${pickup.lat ?? pickup.latitude}-${pickup.lng ?? pickup.longitude}`}
+          position={normalizeLatLng(pickup) || pickup}
+          icon={{
+            url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png",
+            scaledSize: new window.google.maps.Size(38, 38),
+          }}
+          title={"Pickup"}
+          label={{ text: "Pickup", fontSize: "13px", fontWeight: "700", color: "#0b6b0b" }}
+          draggable={true}
+          onDragEnd={(e) => {
+            try {
+              const lat = e.latLng.lat();
+              const lng = e.latLng.lng();
+              setPickup && setPickup({ lat, lng });
+              getAddressFromCoords(lat, lng, (addr) => {
+                setPickupAddress && setPickupAddress(addr);
+                setPickupAddrDisplay(addr);
+              });
+            } catch (err) {
+              console.warn("Pickup drag update failed:", err);
+            }
+          }}
+        />
+      )}
         {rideStartedEffective && !isBookingContext && drop && (
         <GoogleMarker
           key={`drop-vehicle-${drop.lat ?? drop.latitude}-${drop.lng ?? drop.longitude}`}
@@ -850,8 +956,8 @@ export default function Map({
       {/* Pre-OTP rider approach path removed to show only pickup/drop */}
       {/* Pickup Overview overlay removed */}
 
-      {/* Post-OTP navigation-style overlays (mimic screenshot) */}
-        {rideStartedEffective && pickup && drop && (
+      {/* Post-OTP overlays disabled for a clean map view */}
+        {SHOW_POST_OTP_OVERLAYS && rideStartedEffective && pickup && drop && (
         <>
           {/* Top instruction bar (MUI) */}
           <Paper elevation={10} className="backdrop-blur" sx={{ position: "absolute", left: "50%", transform: "translateX(-50%)", top: 12, zIndex: 6, bgcolor: "#1a73e8", color: "#fff", borderRadius: 3, px: 2.25, py: 1.25, maxWidth: 460, border: "1px solid rgba(255,255,255,0.25)" }}>
@@ -936,6 +1042,48 @@ export default function Map({
             </Tooltip>
           </div>
         </>
+      )}
+
+      {/* Post-OTP minimal controls: Re-centre and Navigate */}
+      {rideStartedEffective && pickup && drop && (
+        <div style={{ position: "absolute", right: 12, bottom: 16, zIndex: 6, display: "flex", gap: 8 }}>
+          <Tooltip title="Fit route to view">
+            <Button
+              variant="outlined"
+              startIcon={<MyLocationIcon />}
+              onClick={() => {
+                try {
+                  if (routeBoundsRef.current && mapRef.current) {
+                    mapRef.current.fitBounds(routeBoundsRef.current, { top: 60, right: 60, bottom: 60, left: 60 });
+                  }
+                } catch {}
+              }}
+              sx={{ bgcolor: "#fff" }}
+            >
+              Re-centre
+            </Button>
+          </Tooltip>
+          <Tooltip title="Open route in Google Maps">
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<NavigationIcon />}
+              onClick={() => {
+                try {
+                  const o = normalizeLatLng(pickup) || pickup;
+                  const d = normalizeLatLng(drop) || drop;
+                  if (!o || !d) return;
+                  const origin = `${o.lat},${o.lng}`;
+                  const destination = `${d.lat},${d.lng}`;
+                  const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`;
+                  openNavUrl(url);
+                } catch {}
+              }}
+            >
+              Navigate in Google Maps
+            </Button>
+          </Tooltip>
+        </div>
       )}
       {/* Pre-OTP: Start navigation button when both points are set */}
       {!rideStartedEffective && pickup && drop && (

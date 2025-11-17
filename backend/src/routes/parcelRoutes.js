@@ -146,11 +146,38 @@ router.post("/", upload.array("documents", 15), async (req, res) => {
     await parcel.save();
     console.log("✅ Parcel saved with _id:", parcel._id);
 
-    // 🚨 Broadcast parcel request to bike riders only (parcels are bike-only)
+    // 🚨 Notify only nearby riders of required vehicle type (default: bike) within 1.5 km
     const io = req.app.get("io");
     if (io) {
-      io.to("vehicle:bike").emit("parcelRequest", parcel);
-      console.log("📦 Parcel request broadcasted to bike riders");
+      const vType = String(parcel.requiredVehicleType || "bike").trim().toLowerCase();
+      const store = req.app.get("riderAvailableLocations");
+      const MAX_NOTIFY_DISTANCE_KM = 1.5;
+      const toRad = (v) => (Number(v) * Math.PI) / 180;
+      const haversineKm = (a, b) => {
+        if (!a || !b || a.lat == null || a.lng == null || b.lat == null || b.lng == null) return Infinity;
+        const R = 6371;
+        const dLat = toRad(b.lat - a.lat);
+        const dLng = toRad(b.lng - a.lng);
+        const lat1 = toRad(a.lat);
+        const lat2 = toRad(b.lat);
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+        return R * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+      };
+      const targets = [];
+      if (store && typeof store.forEach === "function") {
+        store.forEach((entry, rid) => {
+          try {
+            const vt = String(entry?.vehicleType || "").trim().toLowerCase();
+            if (vt !== vType) return;
+            const dist = haversineKm(parcel.pickup, entry?.coords);
+            if (Number.isFinite(dist) && dist <= MAX_NOTIFY_DISTANCE_KM) {
+              targets.push(String(rid));
+            }
+          } catch {}
+        });
+      }
+      for (const rid of targets) io.to(rid).emit("parcelRequest", parcel);
+      console.log(`📦 Parcel request sent to ${targets.length} ${vType} rider(s) within ${MAX_NOTIFY_DISTANCE_KM} km`);
     }
 
     res.status(201).json({

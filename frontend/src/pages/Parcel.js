@@ -27,19 +27,45 @@ import Map from "../components/Map";
 import "../parcel-mobile.css";
 
 export default function Parcel() {
-  const [form, setForm] = useState({
+  const MAX_PARCEL_DISTANCE_KM = 25;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const distanceKmBetween = (a, b) => {
+    try {
+      if (!a || !b || a.lat == null || a.lng == null || b.lat == null || b.lng == null) return NaN;
+      const R = 6371; // km
+      const dLat = toRad(b.lat - a.lat);
+      const dLon = toRad(b.lng - a.lng);
+      const lat1 = toRad(a.lat);
+      const lat2 = toRad(b.lat);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    } catch {
+      return NaN;
+    }
+  };
+  const [form, setForm] = useState(() => ({
     senderName: "",
     senderMobile: "",
     receiverName: "",
     receiverMobile: "",
     parcelCategory: "",
     parcelDetails: "",
-    pickupAddress: "",
-    dropAddress: "",
-  });
+    pickupAddress: (() => { try { return localStorage.getItem("parcelPickupAddress") || ""; } catch { return ""; } })(),
+    dropAddress: (() => { try { return localStorage.getItem("parcelDropAddress") || ""; } catch { return ""; } })(),
+  }));
 
-  const [pickup, setPickup] = useState(null);
-  const [drop, setDrop] = useState(null);
+  const [pickup, setPickup] = useState(() => {
+    try {
+      const puStr = localStorage.getItem("parcelPickupCoords");
+      return puStr ? JSON.parse(puStr) : null;
+    } catch { return null; }
+  });
+  const [drop, setDrop] = useState(() => {
+    try {
+      const drStr = localStorage.getItem("parcelDropCoords");
+      return drStr ? JSON.parse(drStr) : null;
+    } catch { return null; }
+  });
   const [currentLocation, setCurrentLocation] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [xeroxOptions, setXeroxOptions] = useState({ size: "A4", colorMode: "bw", sides: "single", copies: 1, totalPages: 1 });
@@ -133,13 +159,15 @@ export default function Parcel() {
     } catch {}
   };
 
-  // 📍 Suggestions search (within ~30km radius)
+  // 📍 Suggestions search (within ~25km radius)
   const fetchSuggestions = async (query, type) => {
-    if (!query || !currentLocation) return;
+    if (!query) return;
+    const center = pickup || currentLocation;
+    if (!center) return;
 
-    const lat = currentLocation.lat;
-    const lon = currentLocation.lng;
-    const delta = 0.27; // ~30km
+    const lat = center.lat;
+    const lon = center.lng;
+    const delta = 0.225; // ~25km
 
     const viewbox = [
       lon - delta,
@@ -175,18 +203,21 @@ export default function Parcel() {
       const pu = puStr ? JSON.parse(puStr) : null;
       const dr = drStr ? JSON.parse(drStr) : null;
 
-      if (pu && typeof pu === "object") setPickup(pu);
+      // Prefer user-provided pickup from Booking
+      if (pu && typeof pu === "object" && pu.lat != null && pu.lng != null) setPickup(pu);
       if (dr && typeof dr === "object") setDrop(dr);
       if (puAddr) setForm((prev) => ({ ...prev, pickupAddress: puAddr }));
       if (drAddr) setForm((prev) => ({ ...prev, dropAddress: drAddr }));
 
+      // Lock only when both pickup and drop were provided from Booking
       if (locked && pu && dr) setLockedFromBooking(true);
     } catch {}
   }, []);
 
   // 📍 Set GPS as default pickup ONLY when not locked and no saved pickup
   useEffect(() => {
-    if (!lockedFromBooking && currentLocation && !pickup) {
+    // Use GPS only when no user-provided pickup exists
+    if (!pickup && currentLocation && !lockedFromBooking) {
       setPickup(currentLocation);
       (async () => {
         const addr = await getAddressFromCoords(
@@ -446,20 +477,29 @@ const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined"
 
           {/* --- RIGHT: Map (Google Maps with fallback) --- */}
           <Box sx={{ height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 380, md: 440 }, borderRadius: 2, overflow: 'hidden' }}>
-            <Map
-              apiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
-              pickup={pickup}
-              setPickup={lockedFromBooking ? (() => {}) : setPickup}
-              setPickupAddress={lockedFromBooking ? (() => {}) : ((addr) => setForm((prev) => ({ ...prev, pickupAddress: addr })))}
-              drop={drop}
-              setDrop={lockedFromBooking ? (() => {}) : setDrop}
-              setDropAddress={lockedFromBooking ? (() => {}) : ((addr) => setForm((prev) => ({ ...prev, dropAddress: addr })))}
-              setDistance={setDistance}
-              setDuration={() => {}}
-              setNormalDuration={() => {}}
-              showRiderOnly={false}
+          <Map
+            apiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
+            pickup={pickup}
+            setPickup={lockedFromBooking ? (() => {}) : setPickup}
+            setPickupAddress={lockedFromBooking ? (() => {}) : ((addr) => setForm((prev) => ({ ...prev, pickupAddress: addr })))}
+            drop={drop}
+            setDrop={lockedFromBooking ? (() => {}) : ((pos) => {
+              try {
+                const dist = distanceKmBetween(pickup, pos);
+                if (pickup && Number.isFinite(dist) && dist > MAX_PARCEL_DISTANCE_KM) {
+                  alert("Drop must be within 25 km of pickup.");
+                  return;
+                }
+              } catch {}
+              setDrop(pos);
+            })}
+            setDropAddress={lockedFromBooking ? (() => {}) : ((addr) => setForm((prev) => ({ ...prev, dropAddress: addr })))}
+            setDistance={setDistance}
+            setDuration={() => {}}
+            setNormalDuration={() => {}}
+            showRiderOnly={false}
               rideStarted={false}
-              lockToProvidedPoints={lockedFromBooking || true}
+              lockToProvidedPoints={lockedFromBooking}
             />
           </Box>
         </Box>

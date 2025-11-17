@@ -44,6 +44,9 @@ const io = new Server(server, {
 });
 
 app.set("io", io);
+// Track latest rider available locations in-memory for proximity-based notifications
+const availableRiderLocations = new Map(); // riderId -> { coords: {lat,lng}, vehicleType, at, socketId }
+app.set("riderAvailableLocations", availableRiderLocations);
 
 io.on("connection", (socket) => {
   console.log("✅ Socket connected:", socket.id);
@@ -138,6 +141,10 @@ io.on("connection", (socket) => {
         riderId: riderId || null,
         at: Date.now(),
       };
+      // Persist for proximity filtering on ride/parcel requests
+      if (payload.riderId) {
+        availableRiderLocations.set(String(payload.riderId), { ...payload, socketId: socket.id });
+      }
       io.emit("riderAvailableLocationUpdate", payload);
       console.log("📍 riderAvailableLocationUpdate:", payload);
     } catch (e) {
@@ -147,6 +154,14 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     console.log("❌ Socket disconnected:", socket.id);
+    // Optional: clean up stale entries by socketId
+    try {
+      for (const [rid, entry] of availableRiderLocations.entries()) {
+        if (entry && entry.socketId === socket.id) {
+          availableRiderLocations.delete(rid);
+        }
+      }
+    } catch {}
   });
 });
 

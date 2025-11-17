@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Global Tailwind base: restyle native elements without touching logic */
+@layer base {
+  body { @apply bg-white text-black antialiased; }
+  h1 { @apply text-2xl font-bold tracking-tight; }
+  h2 { @apply text-xl font-semibold; }
+  h3 { @apply text-lg font-semibold; }
+  a { @apply text-blue-600 hover:underline; }
+  label { @apply text-sm font-medium text-gray-700; }
+  /* Global button color switch to violet */
+  button { @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold transition active:scale-[0.98]; }
+  /* Remove orange/blue focus rings to avoid double borders with MUI */
+  input { @apply w-full rounded-lg bg-white text-black placeholder-gray-500 px-3 py-2 focus:outline-none; }
+  select { @apply w-full rounded-lg bg-white text-black px-3 py-2 focus:outline-none; }
+  textarea { @apply w-full rounded-lg bg-white text-black px-3 py-2 focus:outline-none; }
+}
+
 /* Black & White theme (mobile-first) */
 :root {
   --bw-bg: #ffffff;
@@ -9,9 +25,9 @@
   --bw-muted: #666666;
   --bw-border: #1a1a1a;
 
-  /* Brand palette (Tailwind-backed) */
-  --brand-primary: #007C91; /* Teal */
-  --brand-accent: #00E5FF;  /* Cyan */
+  /* Brand palette (single professional tone) */
+  --brand-primary: #2563EB; /* Blue 600 */
+  --brand-accent: #2563EB;  /* Align accent to primary */
   --brand-surface: #FFFFFF; /* White */
   --brand-ui: #ECEFF1;      /* Soft Grey */
   --brand-text: #1A1A1A;    /* Dark Black */
@@ -30,6 +46,18 @@
   --do-orange: #FF6A00;
   --do-orange-soft: #FF8A33;
 }
+
+/* Rapido theme tokens */
+:root {
+  --rap-yellow: #FFD400;
+  --rap-yellow-strong: #FFC400;
+  --rap-black: #111111;
+  --rap-surface: #FFFFFF;
+  --rap-muted: #6B7280;
+}
+
+/* Additional brand token */
+:root { --brand-primary-hover: #1D4ED8; }
 
 /* ============================= */
 /* Global black text across pages */
@@ -146,10 +174,10 @@
     color: var(--brand-text);
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold bg-do-orange text-black shadow-orange-soft hover:brightness-110 active:scale-[0.98] transition;
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold bg-violet-600 text-white shadow-md hover:bg-violet-700 active:scale-[0.98] transition;
   }
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold border border-do-orange text-do-orange hover:bg-do-orange hover:text-black transition;
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold border border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white transition;
   }
   .field-shell {
     @apply w-full rounded-lg bg-do-muted text-do-text placeholder-do-subtext border border-do-border focus:border-do-orange focus:ring-1 focus:ring-do-orange/50 transition;
@@ -159,6 +187,69 @@
   }
   .hover-lift { @apply transition-transform duration-300 hover:-translate-y-0.5; }
   .pulse-glow { @apply animate-glow; }
+
+  /* Global Tailwind styling for MUI components, scoped to app root */
+  .app-ui .MuiButton-root {
+    @apply rounded-lg font-semibold px-4 py-2 transition shadow-sm;
+  }
+  .app-ui .MuiButton-contained {
+    @apply text-white shadow-md;
+  }
+  /* Single-color override */
+  .app-ui .MuiButton-contained { background-color: var(--brand-primary) !important; }
+  .app-ui .MuiButton-contained:hover { background-color: var(--brand-primary-hover) !important; }
+  .app-ui .MuiPaper-root {
+    @apply rounded-xl shadow-card-glow;
+  }
+  .app-ui .MuiDialog-paper {
+    @apply rounded-xl;
+  }
+  .app-ui .MuiTextField-root .MuiInputBase-root {
+    @apply rounded-lg;
+  }
+
+  /* Rapido-style global overrides (yellow + black, rounded + bold) */
+  .rapido-ui .MuiAppBar-root {
+    background-color: var(--brand-primary) !important;
+    color: #ffffff !important;
+    border-bottom: none;
+  }
+  .rapido-ui .MuiToolbar-root, 
+  .rapido-ui .MuiAppBar-root .MuiTypography-root, 
+  .rapido-ui .MuiAppBar-root .MuiIconButton-root {
+    color: #ffffff !important;
+  }
+  .rapido-ui .MuiPaper-root {
+    @apply rounded-2xl shadow-xl;
+    border: 1px solid rgba(17,17,17,0.06) !important;
+    background-color: var(--rap-surface) !important;
+    color: var(--rap-black) !important;
+  }
+  .rapido-ui .MuiButton-root {
+    border-radius: 9999px !important; /* pill */
+    font-weight: 700 !important;
+    letter-spacing: 0.2px;
+    min-height: 42px;
+  }
+  .rapido-ui .MuiButton-contained { background-color: var(--brand-primary) !important; color: #ffffff !important; }
+  .rapido-ui .MuiButton-contained:hover { background-color: var(--brand-primary-hover) !important; }
+  .rapido-ui .MuiButton-outlined { color: var(--brand-primary) !important; border-color: var(--brand-primary) !important; }
+  .rapido-ui .MuiChip-root {
+    border-color: var(--rap-black) !important;
+    color: var(--rap-black) !important;
+  }
+  .rapido-ui .MuiOutlinedInput-notchedOutline { border-color: rgba(17,17,17,0.15) !important; }
+  .rapido-ui .MuiInputLabel-root { color: var(--rap-muted) !important; }
+  .rapido-ui .MuiTextField-root .MuiInputBase-root {
+    border-radius: 14px !important;
+  }
+
+  /* Tailwind utilities for Rapido look */
+  .rapido-card { @apply rounded-2xl bg-white ring-1 ring-black/5 shadow-xl; }
+  .rapido-cta { @apply text-white font-bold rounded-full px-5 py-3 shadow-md active:scale-[0.98]; }
+  .rapido-cta { background-color: var(--brand-primary); }
+  .rapido-input { @apply rounded-xl border-2 border-black/10 px-3 py-2 focus:outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-300; }
+  .rapido-pill { @apply rounded-full px-3 py-1 bg-black text-white; }
 }
 
 /* Paper: white surface + black text */
@@ -172,22 +263,22 @@
 
 /* Buttons: black background + white text */
 .bw-theme .MuiButton-root {
-  background-color: #FF6A00 !important; /* orange */
-  color: #000000 !important; /* keep text black per request */
+  background-color: var(--brand-primary) !important;
+  color: #ffffff !important;
   border-radius: 12px;
   min-height: 40px;
 }
 .bw-theme .MuiButton-root:hover {
-  background-color: #FF8A33 !important; /* orange hover */
+  background-color: var(--brand-primary-hover) !important;
 }
 .bw-theme .MuiButton-root.MuiButton-outlined {
-  background-color: #FF6A00 !important; /* make outlined also orange */
-  color: #000000 !important;
-  border-color: #FF6A00 !important;
+  background-color: transparent !important;
+  color: var(--brand-primary) !important;
+  border-color: var(--brand-primary) !important;
 }
 .bw-theme .MuiButton-root.MuiButton-outlined:hover {
-  background-color: #FF8A33 !important;
-  border-color: #FF8A33 !important;
+  background-color: var(--brand-primary) !important;
+  color: #ffffff !important;
 }
 
 /* Status toggle button colors on Rider Dashboard */
@@ -215,6 +306,8 @@
 /* Inputs */
 .bw-theme .MuiTextField-root .MuiInputBase-root,
 .bw-theme .MuiOutlinedInput-notchedOutline { border-color: #000000 !important; }
+.bw-theme .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline { border-color: #000000 !important; }
+.bw-theme .MuiInputLabel-root.Mui-focused { color: #000000 !important; }
 .bw-theme .MuiInputLabel-root { color: var(--bw-muted) !important; }
 @media (max-width: 600px) {
   .bw-theme .MuiInputBase-input { font-size: 16px; } /* prevent iOS zoom */
@@ -244,6 +337,9 @@
   justify-content: space-between;
 }
 
+/* Rapido action bar */
+.rapido-ui .action-bar { background: var(--brand-primary); color: #ffffff; }
+
 /* Global mobile responsiveness */
 @media (max-width: 900px) {
   .bw-theme .MuiContainer-root { padding-left: 12px !important; padding-right: 12px !important; }
@@ -253,7 +349,11 @@
   .bw-theme .MuiContainer-maxWidthSm,
   .bw-theme .MuiContainer-maxWidthXs { max-width: 100% !important; }
   .bw-theme .MuiButton-root { width: 100%; }
-  .bw-theme .MuiGrid-item { padding-top: 8px !important; padding-left: 8px !important; }
+  .bw-theme .MuiFormControl-root,
+  .bw-theme .MuiTextField-root,
+  .bw-theme .MuiInputBase-root { width: 100% !important; }
+  .bw-theme .MuiGrid-container { flex-direction: column !important; }
+  .bw-theme .MuiGrid-item { padding-top: 8px !important; padding-left: 8px !important; width: 100% !important; }
   .bw-theme .app-main { padding: 12px !important; }
 }
 
@@ -274,11 +374,21 @@ body { margin: 0; -webkit-text-size-adjust: 100%; }
   .bw-theme .MuiTypography-h4 { font-size: 1.4rem !important; }
 
   /* Full-width dialogs as mobile sheets */
-  .bw-theme .MuiDialog-paper { width: 100% !important; max-width: 100% !important; margin: 0 !important; border-radius: 0 !important; }
+  .bw-theme .MuiDialog-paper { width: 100% !important; max-width: 100% !important; margin: 0 !important; border-radius: 14px !important; }
+  .bw-theme .MuiDialogContent-root { padding: 12px !important; }
+  .bw-theme .MuiDialogActions-root { padding: 8px 12px !important; }
 
   /* Toolbar sizing for mobile ergonomics */
   .bw-theme .MuiToolbar-root { min-height: 56px !important; }
 
   /* Avoid leftover horizontal gaps between buttons on mobile */
   .bw-theme .MuiButton-root + .MuiButton-root { margin-left: 0 !important; }
+
+  /* Images and maps scale nicely */
+  .bw-theme img, .bw-theme video, .bw-theme iframe { max-width: 100%; height: auto; }
+  .bw-theme .map-fullscreen { height: calc(100vh - 56px); }
+
+  /* Tables scroll horizontally on small screens */
+  .bw-theme .MuiTableContainer-root { overflow-x: auto !important; }
+  .bw-theme .MuiTableCell-root { padding: 8px !important; font-size: 0.9rem !important; }
 }

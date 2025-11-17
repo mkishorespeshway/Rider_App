@@ -15,12 +15,8 @@ export default function UserDashboard() {
 
   return (
     <Box
-      className="min-h-screen"
-      sx={{
-        p: 4,
-        minHeight: "100vh",
-        background: "linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%)",
-      }}
+      className="section"
+      sx={{ p: 4, minHeight: "100vh" }}
     >
       <Box className="max-w-screen-sm mx-auto px-3 sm:px-6">
       <Typography variant="h4" className="page-title" sx={{ mb: 2 }}>
@@ -33,8 +29,7 @@ export default function UserDashboard() {
       {/* ✅ Logout button */}
       <Button
         variant="contained"
-        className="w-full sm:w-auto"
-        sx={{ bgcolor: "black", color: "white", "&:hover": { bgcolor: "#333" } }}
+        className="btn-primary w-full sm:w-auto"
         onClick={handleLogout}
       >
         Logout

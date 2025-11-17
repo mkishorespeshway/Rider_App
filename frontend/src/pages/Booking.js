@@ -8,6 +8,12 @@ import {
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import FlagIcon from "@mui/icons-material/Flag";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import AddIcon from "@mui/icons-material/Add";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import ContactPageOutlinedIcon from "@mui/icons-material/ContactPageOutlined";
+import PhoneIphoneIcon from "@mui/icons-material/PhoneIphone";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -28,6 +34,21 @@ import "../booking-mobile.css";
 const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
   const API_URL = `${API_BASE}/api`;
   const MAX_RIDE_DISTANCE_KM = 25;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const distanceKmBetween = (a, b) => {
+    try {
+      if (!a || !b || a.lat == null || a.lng == null || b.lat == null || b.lng == null) return NaN;
+      const R = 6371; // km
+      const dLat = toRad(b.lat - a.lat);
+      const dLon = toRad(b.lng - a.lng);
+      const lat1 = toRad(a.lat);
+      const lat2 = toRad(b.lat);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    } catch {
+      return NaN;
+    }
+  };
 
 // Removed Razorpay loader (no third-party checkout in this flow)
 const loadRazorpayScript = () => Promise.resolve(false);
@@ -104,6 +125,31 @@ export default function Booking() {
   const [otp, setOtp] = useState("");
   const [userLiveCoords, setUserLiveCoords] = useState(null);
   const [chatOpen, setChatOpen] = useState(false);
+  // Booking-for picker (Rapido-style)
+  const [bookingForOpen, setBookingForOpen] = useState(false);
+  const [bookingFor, setBookingFor] = useState('myself');
+  const [bookingForName, setBookingForName] = useState('');
+  const [bookingForMobile, setBookingForMobile] = useState('');
+  // Contacts picker (mobile) – safe no-op if unsupported
+  const handlePickContact = async () => {
+    try {
+      const supported = 'contacts' in navigator && 'select' in navigator.contacts;
+      if (!supported) {
+        console.warn('Contact Picker API not supported');
+        return;
+      }
+      const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: false });
+      const c = contacts && contacts[0];
+      if (!c) return;
+      const tel = Array.isArray(c.tel) ? c.tel[0] : (c.tel || c.phoneNumbers || [])[0];
+      if (tel) setBookingForMobile(String(tel));
+      const nm = Array.isArray(c.name) ? c.name[0] : c.name;
+      if (nm && !bookingForName) setBookingForName(String(nm));
+      setBookingFor('other');
+    } catch (err) {
+      console.warn('Contact selection canceled or failed:', err);
+    }
+  };
   // Rating dialog state
   const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [ratingRideId, setRatingRideId] = useState(null);
@@ -493,8 +539,14 @@ export default function Booking() {
               lat: place.geometry.location.lat(),
               lng: place.geometry.location.lng(),
             };
-            setDrop(loc);
-            setDropAddress(description);
+            // Enforce 25 km radius from pickup
+            const dist = distanceKmBetween(pickup, loc);
+            if (pickup && Number.isFinite(dist) && dist > MAX_RIDE_DISTANCE_KM) {
+              setServiceLimitOpen(true);
+            } else {
+              setDrop(loc);
+              setDropAddress(description);
+            }
             setDropSuggestions([]);
           }
         }
@@ -624,7 +676,7 @@ export default function Booking() {
           eta: currentEta,
           price: `₹${mkBreakdown(bikeBase).total.toFixed(2)}`,
           meta: { km: km.toFixed(2), normalEta, deltaText, breakdown: mkBreakdown(bikeBase) },
-          icon: "🚲",
+          icon: "🏍️",
         },
         {
           id: "auto",
@@ -719,13 +771,12 @@ export default function Booking() {
     if (!auth?.token) { navigate("/login-user"); return; }
   if (selectedRide === "parcel") {
     try {
-      // Persist currently selected pickup/drop to lock them on Parcel page
-      if (pickup && drop) {
-        localStorage.setItem("parcelPickupCoords", JSON.stringify(pickup));
-        localStorage.setItem("parcelDropCoords", JSON.stringify(drop));
-      }
+      // Persist provided points individually so Parcel can honor Booking input
+      if (pickup) localStorage.setItem("parcelPickupCoords", JSON.stringify(pickup));
+      if (drop) localStorage.setItem("parcelDropCoords", JSON.stringify(drop));
       if (pickupAddress) localStorage.setItem("parcelPickupAddress", pickupAddress);
       if (dropAddress) localStorage.setItem("parcelDropAddress", dropAddress);
+      // Hint Parcel to prefer Booking-provided values (locking only applies when both exist)
       localStorage.setItem("parcelLockFromBooking", "true");
     } catch {}
     navigate("/parcel");
@@ -817,16 +868,14 @@ export default function Booking() {
     }
 
     if (selectedRide === "parcel") {
-  try {
-    if (pickup && drop) {
-      localStorage.setItem("parcelPickupCoords", JSON.stringify(pickup));
-      localStorage.setItem("parcelDropCoords", JSON.stringify(drop));
-    }
-    if (pickupAddress) localStorage.setItem("parcelPickupAddress", pickupAddress);
-    if (dropAddress) localStorage.setItem("parcelDropAddress", dropAddress);
-    localStorage.setItem("parcelLockFromBooking", "true");
-  } catch {}
-  navigate("/parcel");
+      try {
+        if (pickup) localStorage.setItem("parcelPickupCoords", JSON.stringify(pickup));
+        if (drop) localStorage.setItem("parcelDropCoords", JSON.stringify(drop));
+        if (pickupAddress) localStorage.setItem("parcelPickupAddress", pickupAddress);
+        if (dropAddress) localStorage.setItem("parcelDropAddress", dropAddress);
+        localStorage.setItem("parcelLockFromBooking", "true");
+      } catch {}
+      navigate("/parcel");
       return;
     }
 
@@ -1156,7 +1205,7 @@ export default function Booking() {
   }, [showPaymentPrompt, createdRide, auth]);
 
   return (
-  <Container maxWidth="xl" sx={{ mt: 3 }} className="booking-page mobile-ui rapido-ui">
+  <Container maxWidth="xl" sx={{ mt: 3 }} className="booking-page mobile-ui rapido-ui px-2 sm:px-6 space-y-4">
       {/* 🚨 SOS Button (fixed position) */}
       <SOSButton role="user" />
 
@@ -1174,6 +1223,89 @@ export default function Booking() {
           <Button onClick={() => setServiceLimitOpen(false)} variant="contained">OK</Button>
         </DialogActions>
       </Dialog>
+
+    {/* Booking ride for — Rapido-style bottom sheet */}
+    <Dialog
+      open={bookingForOpen}
+      onClose={() => setBookingForOpen(false)}
+      fullWidth
+      maxWidth="xs"
+      PaperProps={{ sx: { borderTopLeftRadius: 3, borderTopRightRadius: 3, pb: 1, width: { xs: '92%', md: 380 }, mr: { xs: 1, md: 0 }, mb: { xs: 1, md: 0 } } }}
+      sx={{
+        '& .MuiDialog-container': {
+          alignItems: { xs: 'flex-end', md: 'center' },
+          justifyContent: { xs: 'flex-end', md: 'center' }
+        }
+      }}
+    >
+      <DialogTitle sx={{ textAlign: 'center', fontWeight: 'bold' }}>Booking ride for</DialogTitle>
+      <DialogContent>
+        <FormControl component="fieldset" sx={{ width: '100%' }}>
+          <RadioGroup
+            value={bookingFor}
+            onChange={(e) => setBookingFor(e.target.value)}
+          >
+            <FormControlLabel
+              value="myself"
+              control={<Radio />}
+              label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><PersonOutlineIcon sx={{ color: 'text.secondary' }} /><Typography>Myself</Typography></Box>}
+            />
+            <FormControlLabel
+              value="other"
+              control={<Radio sx={{ display: 'none' }} />}
+              label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><AddIcon sx={{ color: 'text.secondary' }} /><Typography sx={{ color: 'primary.main', fontWeight: 600 }}>Add new rider</Typography></Box>}
+            />
+          </RadioGroup>
+        </FormControl>
+        {bookingFor === 'other' && (
+          <Box sx={{ mt: 1 }}>
+            <TextField
+              fullWidth
+              size="small"
+              type="tel"
+              label="Mobile number"
+              placeholder="Enter rider mobile number"
+              value={bookingForMobile}
+              onChange={(e) => setBookingForMobile(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <PhoneIphoneIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                inputMode: 'tel',
+              }}
+            />
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<ContactPageOutlinedIcon />}
+              onClick={handlePickContact}
+              sx={{ mt: 1 }}
+            >
+              Pick from contacts
+            </Button>
+          </Box>
+        )}
+        {/* Info note */}
+        <Box sx={{ mt: 2, p: 1.25, bgcolor: '#F5F6F8', borderRadius: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <InfoOutlinedIcon sx={{ color: 'text.secondary' }} />
+            <Typography variant="body2" color="text.secondary">Contact name won't be shared with captain</Typography>
+          </Box>
+        </Box>
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button
+          variant="contained"
+          fullWidth
+          sx={{ bgcolor: '#FF8A1F', color: '#fff', '&:hover': { bgcolor: '#E67600' } }}
+          onClick={() => setBookingForOpen(false)}
+        >
+          Done
+        </Button>
+      </DialogActions>
+    </Dialog>
 
       {/* Searching modal (Rapido-style popup) */}
       <Dialog open={lookingForRider} fullWidth maxWidth="xs">
@@ -1308,7 +1440,18 @@ export default function Booking() {
             </>
           ) : (
             <>
-              <Typography variant="h6" sx={{ mb: 2, color: '#1A1A1A', fontWeight: 700 }}>Rider App</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6" sx={{ color: '#1A1A1A', fontWeight: 700 }}>Rider App</Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setBookingForOpen(true)}
+                  endIcon={<KeyboardArrowDownIcon fontSize="small" />}
+                  sx={{ ml: 'auto', borderRadius: 999, bgcolor: '#fff', color: 'text.primary', px: 1.5, py: 0.5, height: 30, fontSize: '0.8rem', textTransform: 'none', fontWeight: 600, borderColor: '#E0E0E0', boxShadow: 'none', '&:hover': { bgcolor: '#fff' } }}
+                >
+                  {bookingFor === 'myself' ? 'For me' : 'For someone'}
+                </Button>
+              </Box>
 
               {/* ✅ Pickup Input with Suggestions */}
               <TextField
@@ -1336,14 +1479,19 @@ export default function Booking() {
                   ),
                 }}
               />
-              {pickupSuggestions.map((s, i) => (
-                <ListItemButton
-                  key={`m-pu-${i}`}
-                  onClick={() => handlePickupSelect(s.place_id, s.description)}
-                >
-                  {s.description}
-                </ListItemButton>
-              ))}
+              {/* Wrap pickup suggestions to avoid pushing layout on mobile */}
+              {pickupSuggestions.length > 0 && (
+                <Box className="suggestions-panel">
+                  {pickupSuggestions.map((s, i) => (
+                    <ListItemButton
+                      key={`m-pu-${i}`}
+                      onClick={() => handlePickupSelect(s.place_id, s.description)}
+                    >
+                      {s.description}
+                    </ListItemButton>
+                  ))}
+                </Box>
+              )}
 
               {/* ✅ Drop Input with Suggestions */}
               <TextField
@@ -1364,14 +1512,19 @@ export default function Booking() {
                   ),
                 }}
               />
-              {dropSuggestions.map((s, i) => (
-                <ListItemButton
-                  key={`m-dr-${i}`}
-                  onClick={() => handleDropSelect(s.place_id, s.description)}
-                >
-                  {s.description}
-                </ListItemButton>
-              ))}
+              {/* Wrap drop suggestions to avoid pushing layout on mobile */}
+              {dropSuggestions.length > 0 && (
+                <Box className="suggestions-panel">
+                  {dropSuggestions.map((s, i) => (
+                    <ListItemButton
+                      key={`m-dr-${i}`}
+                      onClick={() => handleDropSelect(s.place_id, s.description)}
+                    >
+                      {s.description}
+                    </ListItemButton>
+                  ))}
+                </Box>
+              )}
 
               {pickup && drop && distance ? (
                 <>
@@ -1388,26 +1541,30 @@ export default function Booking() {
 
                   {/* Service selection removed per request; defaulting to Bike */}
 
+                  {/* Hidden per Rapido-style single-page booking */}
                   <Button
                     className="booking-blue-btn"
                     fullWidth
                     variant="contained"
                     onClick={handleFindRiders}
-                    sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' } }}
+                    sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' }, display: 'none' }}
                   >
                     Find Driver
                   </Button>
                 </>
               ) : (
-                <Button
-                  className="booking-blue-btn"
-                  fullWidth
-                  variant="contained"
-                  onClick={handleFindRiders}
-                  sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' } }}
-                >
-                  Find Driver
-                </Button>
+                <>
+                  {/* Hidden per Rapido-style single-page booking */}
+                  <Button
+                    className="booking-blue-btn"
+                    fullWidth
+                    variant="contained"
+                    onClick={handleFindRiders}
+                    sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' }, display: 'none' }}
+                  >
+                    Find Driver
+                  </Button>
+                </>
               )}
             </>
           )}
@@ -1434,7 +1591,16 @@ export default function Booking() {
             setPickup={setPickup}
             setPickupAddress={setPickupAddress}
             drop={drop}
-            setDrop={setDrop}
+            setDrop={(pos) => {
+              try {
+                const dist = distanceKmBetween(pickup, pos);
+                if (pickup && Number.isFinite(dist) && dist > MAX_RIDE_DISTANCE_KM) {
+                  setServiceLimitOpen(true);
+                  return;
+                }
+              } catch {}
+              setDrop(pos);
+            }}
             setDropAddress={setDropAddress}
             riderLocation={riderLocation}
             availableRiders={availableRiders}
@@ -1448,14 +1614,345 @@ export default function Booking() {
             showRiderOnly={Boolean(assignedRider) && !mapOnlyView}
             // After OTP verification, keep map in started state
             rideStarted={createdRide?.status === "in_progress" || mapOnlyView}
-            vehicleType={assignedRider?.vehicleType || assignedRider?.vehicle?.type}
+            vehicleType={assignedRider?.vehicleType || assignedRider?.vehicle?.type || selectedRide}
             vehicleImage={assignedRider?.vehicle?.images?.[0] || assignedRider?.vehicleImage}
           />
         </Paper>
+        {/* Compact riders panel removed from UI per Rapido-style layout */}
+        {(!assignedRider && !mapOnlyView && false) && (
+          <Paper sx={{ mt: 2, p: 2, borderRadius: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: "bold", mb: 1 }}>
+              Find riders below
+            </Typography>
+            {Array.isArray(availableRiders) && availableRiders.length > 0 ? (
+              <Box>
+                {/* summarize by vehicle type */}
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+                  {['bike','auto','car','taxi'].map((t) => {
+                    const count = availableRiders.filter(r => {
+                      const vt = (r?.vehicleType || r?.vehicle?.type || '').toString().toLowerCase();
+                      return vt.includes(t);
+                    }).length;
+                    return (
+                      <Chip key={t} size="small" label={`${t.charAt(0).toUpperCase()+t.slice(1)}: ${count}`} />
+                    );
+                  })}
+                  <Chip size="small" color="primary" label={`Total: ${availableRiders.length}`} />
+                </Box>
+                {/* simple list of riders */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
+                  {availableRiders.slice(0, 8).map((r, idx) => {
+                    const vtRaw = (r?.vehicleType || r?.vehicle?.type || '').toString().toLowerCase();
+                    const vt = vtRaw.includes('bike') ? 'Bike' : vtRaw.includes('auto') ? 'Auto' : vtRaw.includes('car') ? 'Car' : vtRaw.includes('taxi') ? 'Taxi' : 'Rider';
+                    const coords = r?.coords || r?.location || r;
+                    const lat = coords?.lat ?? coords?.latitude;
+                    const lng = coords?.lng ?? coords?.longitude;
+                    return (
+                      <Box key={idx} sx={{ display: 'flex', alignItems: 'center', border: '1px solid #e0e0e0', borderRadius: 1, p: 1 }}>
+                        <Avatar sx={{ mr: 1 }}>
+                          {vt === 'Bike' ? '🏍️' : vt === 'Auto' ? '🛺' : vt === 'Car' ? '🚗' : '🚕'}
+                        </Avatar>
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{vt}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {lat != null && lng != null ? `Lat: ${Number(lat).toFixed(5)}, Lng: ${Number(lng).toFixed(5)}` : 'Location updating…'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+                {/* convenience action, reuses existing handler */}
+                <Box sx={{ mt: 2 }}>
+                  <Button variant="contained" onClick={handleFindRiders} className="booking-blue-btn"
+                    sx={{ bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' } }}>
+                    Find Driver
+                  </Button>
+                </Box>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">Waiting for nearby riders…</Typography>
+            )}
+          </Paper>
+        )}
+
+        {/* Inline ride selection panel – hidden once a ride is accepted */}
+        {(!mapOnlyView && !(createdRide?.status === 'accepted' || createdRide?.status === 'in_progress' || assignedRider)) && (
+          <Paper sx={{ mt: 2, p: 3, borderRadius: 2, gridColumn: { md: '1 / 2' } }}>
+            <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>Choose a ride</Typography>
+            {/* condition badges similar to reference image */}
+            <Box sx={{ mb: 2, display: "flex", gap: 2 }}>
+              {zoneFactors?.currentTraffic && zoneFactors.currentTraffic !== "light" && (
+                <Chip label="High Traffic" color="warning" icon={<span>⚡</span>} />
+              )}
+              {zoneFactors?.currentWeather && zoneFactors.currentWeather !== "clear" && (
+                <Chip label="Bad Weather" color="error" icon={<span>🌧</span>} />
+              )}
+            </Box>
+
+            {rideOptions.map((opt) => (
+              <Box key={opt.id} onClick={() => setSelectedRide(opt.id)} className="ride-option-card"
+                sx={{
+                  border: selectedRide === opt.id ? "2px solid black" : "1px solid #ccc",
+                  borderRadius: 2, p: { xs: 1.5, sm: 2 }, mb: { xs: 1.5, sm: 2 }, cursor: "pointer",
+                  display: "grid",
+                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0,1fr) auto' },
+                  alignItems: "center", columnGap: { xs: 1, sm: 2 }, rowGap: { xs: 0.5, sm: 0 }, overflow: 'visible'
+                }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body1" sx={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 1, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+                    {opt.icon ? `${opt.icon} ` : ""}{opt.name}
+                    {(opt.id === 'bike' || opt.id === 'auto' || opt.id === 'car') && (
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, ml: 1, px: 0.75, py: 0.25, borderRadius: 1, bgcolor: '#eef2ff', color: '#1E3A8A' }}>
+                        <PersonOutlineIcon sx={{ fontSize: '1rem' }} />
+                        <Typography component="span" variant="body2" sx={{ fontWeight: 700 }}>
+                          {availableRiders.filter(r => {
+                            const vt = (r?.vehicleType || r?.vehicle?.type || '').toString().toLowerCase();
+                            return vt.includes(opt.id);
+                          }).length}
+                        </Typography>
+                      </Box>
+                    )}
+                    {/* Mobile price pill */}
+                    <Box
+                      component="span"
+                      sx={{
+                        display: { xs: 'inline-flex', sm: 'none' },
+                        alignItems: 'center',
+                        ml: 1,
+                        px: 0.75,
+                        py: 0.25,
+                        borderRadius: 1,
+                        bgcolor: '#eef2ff',
+                        color: '#1E3A8A',
+                        fontWeight: 700,
+                        fontSize: '0.95rem',
+                      }}
+                    >
+                      {selectedRide === opt.id && createdRide?.finalPrice != null ? `₹${Number(createdRide.finalPrice).toFixed(2)}` : opt.price}
+                    </Box>
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Pickup ETA: {opt.eta} • Drop time: {duration || opt.meta?.duration || "—"}
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="h6"
+                  className="ride-price"
+                  sx={{
+                    fontWeight: "bold",
+                    color: "#1E3A8A",
+                    whiteSpace: { xs: 'normal', sm: 'nowrap' },
+                    textAlign: 'right',
+                    ml: { xs: 1, sm: 2 },
+                    mt: { xs: 0.5, sm: 0 },
+                    justifySelf: { xs: 'end', sm: 'unset' },
+                    flexShrink: 0,
+                    minWidth: { xs: 68, sm: 'auto' },
+                    fontSize: { xs: '1rem', sm: '1.25rem' },
+                    lineHeight: { xs: 1.25, sm: 1.4 },
+                    overflow: 'visible',
+                    visibility: 'visible',
+                    display: { xs: 'none', sm: 'block' },
+                  }}
+                  //className="text-indigo-800"
+                >
+                  {selectedRide === opt.id && createdRide?.finalPrice != null ? `₹${Number(createdRide.finalPrice).toFixed(2)}` : opt.price}
+                </Typography>
+              </Box>
+            ))}
+
+            {/* Payment Method Selection */}
+            <Box className="payment-section" sx={{ border: "1px solid #e0e0e0", borderRadius: 2, p: 2, mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>Payment Method</Typography>
+              <RadioGroup
+                row
+                value={paymentMethod}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setPaymentMethod(val);
+                  setShowDetailedPayments(val === "online");
+                  if (val !== "online") {
+                    setSelectedPaymentOption(null);
+                  }
+                }}
+              >
+                <FormControlLabel value="online" control={<Radio />} label="Online" />
+                <FormControlLabel value="cash" control={<Radio />} label="Cash (Pay at drop)" />
+              </RadioGroup>
+
+              {showDetailedPayments && (
+                <Box sx={{ mt: 1 }}>
+                  {/* Selected summary */}
+                  {selectedPaymentOption && (
+                    <Chip
+                      label={`Selected: ${(() => {
+                        const labels = {
+                          wallet: "Wallet",
+                          amazon_pay: "Amazon Pay",
+                          upi_gpay: "GPay",
+                          upi_phonepe: "PhonePe",
+                          upi_paytm: "Paytm",
+                          upi_any: "Any UPI app",
+                          paylater_phonepe: "PhonePe (Pay Later)",
+                          paylater_upi_any: "Any UPI app (Pay Later)",
+                          pay_at_drop: "Pay at drop",
+                          simpl: "Simpl",
+                        };
+                        return labels[selectedPaymentOption] || selectedPaymentOption;
+                      })()}`}
+                      variant="outlined"
+                      color="primary"
+                      sx={{ mb: 1 }}
+                    />
+                  )}
+
+                  {/* Wallets */}
+                  <Typography variant="subtitle2" sx={{ fontWeight: "bold", mt: 1 }}>Wallets</Typography>
+                  <Box sx={{ display: "flex", flexDirection: "column" }}>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "wallet"}
+                      onClick={() => setSelectedPaymentOption("wallet")}
+                    >
+                      Wallet
+                    </ListItemButton>
+                    <ListItemButton
+                      selected={selectedPaymentOption === "amazon_pay"}
+                      onClick={() => setSelectedPaymentOption("amazon_pay")}
+                    >
+                      Amazon Pay
+                    </ListItemButton>
+                  </Box>
+                  <Box sx={{ mb: 1 }}>
+                    <Chip label="UPI" color="default" variant="outlined" sx={{ mb: 0.5 }} />
+                    <Box sx={{ display: "flex", flexDirection: "column" }}>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "upi_gpay"}
+                        onClick={() => { setSelectedPaymentOption("upi_gpay"); setDetailedPaymentMethod("upi"); }}
+                      >
+                        GPay
+                      </ListItemButton>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "upi_phonepe"}
+                        onClick={() => { setSelectedPaymentOption("upi_phonepe"); setDetailedPaymentMethod("upi"); }}
+                      >
+                        PhonePe
+                      </ListItemButton>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "upi_paytm"}
+                        onClick={() => { setSelectedPaymentOption("upi_paytm"); setDetailedPaymentMethod("upi"); }}
+                      >
+                        Paytm
+                      </ListItemButton>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "upi_any"}
+                        onClick={() => { setSelectedPaymentOption("upi_any"); setDetailedPaymentMethod("upi"); }}
+                      >
+                        Pay by any UPI app
+                      </ListItemButton>
+                    </Box>
+                  </Box>
+
+                  {/* Cards */}
+                  <Box sx={{ mt: 1 }}>
+                    <Chip label="Cards" color="default" variant="outlined" sx={{ mb: 0.5 }} />
+                    <Box sx={{ display: "flex", flexDirection: "column" }}>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "card_any"}
+                        onClick={() => { setSelectedPaymentOption("card_any"); setDetailedPaymentMethod("card"); }}
+                      >
+                        Debit/Credit Card
+                      </ListItemButton>
+                    </Box>
+                  </Box>
+
+                  {/* Net Banking */}
+                  <Box sx={{ mt: 1 }}>
+                    <Chip label="Net Banking" color="default" variant="outlined" sx={{ mb: 0.5 }} />
+                    <Box sx={{ display: "flex", flexDirection: "column" }}>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "net_banking_any"}
+                        onClick={() => { setSelectedPaymentOption("net_banking_any"); setDetailedPaymentMethod(""); }}
+                      >
+                        Net Banking
+                      </ListItemButton>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ mt: 2 }}>
+                    <Chip label="Pay Later" color="default" variant="outlined" sx={{ mb: 0.5 }} />
+                    <Box sx={{ display: "flex", flexDirection: "column" }}>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "paylater_phonepe"}
+                        onClick={() => setSelectedPaymentOption("paylater_phonepe")}
+                      >
+                        PhonePe
+                      </ListItemButton>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "paylater_upi_any"}
+                        onClick={() => setSelectedPaymentOption("paylater_upi_any")}
+                      >
+                        Pay by any UPI app
+                      </ListItemButton>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "pay_at_drop"}
+                        onClick={() => setSelectedPaymentOption("pay_at_drop")}
+                      >
+                        Pay at drop (scan QR after ride)
+                      </ListItemButton>
+                      <ListItemButton
+                        selected={selectedPaymentOption === "simpl"}
+                        onClick={() => setSelectedPaymentOption("simpl")}
+                      >
+                        Simpl
+                      </ListItemButton>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+
+            {lookingForRider ? (
+              <></>
+            ) : (
+              <Button
+                variant="contained"
+                fullWidth
+                sx={{ mt: 2, bgcolor: '#FF8A1F', color: '#fff', '&:hover': { bgcolor: '#E67600' } }}
+                onClick={handleBookRide}
+                disabled={!selectedRide || showPaymentPrompt}
+                title={showPaymentPrompt ? 'Complete payment to book your next ride' : ''}
+              >
+                {selectedRide === "parcel" ? "Go to Parcel Page" : "Book Ride"}
+                {selectedRide !== "parcel" && (
+                  <Box
+                    component="span"
+                    sx={{
+                      display: { xs: 'inline-flex', sm: 'none' },
+                      alignItems: 'center',
+                      ml: 1,
+                      px: 0.75,
+                      py: 0.25,
+                      borderRadius: 1,
+                      bgcolor: '#eef2ff',
+                      color: '#1E3A8A',
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                    }}
+                  >
+                    {createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0
+                      ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
+                      : (rideOptions.find((r) => r.id === selectedRide)?.price || '—')}
+                  </Box>
+                )}
+              </Button>
+            )}
+          </Paper>
+        )}
       </Box>
 
       {/* Rider options drawer */}
-      <Drawer anchor="bottom" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+      <Drawer anchor="bottom" open={drawerOpen && !(createdRide?.status === 'accepted' || createdRide?.status === 'in_progress' || assignedRider)} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>Choose a ride</Typography>
           {/* condition badges similar to reference image */}
@@ -1468,21 +1965,62 @@ export default function Booking() {
             )}
           </Box>
           {rideOptions.map((opt) => (
-            <Box key={opt.id} onClick={() => setSelectedRide(opt.id)}
+            <Box key={opt.id} onClick={() => setSelectedRide(opt.id)} className="ride-option-card"
               sx={{
                 border: selectedRide === opt.id ? "2px solid black" : "1px solid #ccc",
-                borderRadius: 2, p: 2, mb: 2, cursor: "pointer",
-                display: "flex", justifyContent: "space-between", alignItems: "center"
+                borderRadius: 2, p: { xs: 1.5, sm: 2 }, mb: { xs: 1.5, sm: 2 }, cursor: "pointer",
+                display: "grid",
+                gridTemplateColumns: { xs: '1fr', sm: 'minmax(0,1fr) auto' },
+                alignItems: "center", columnGap: { xs: 1, sm: 2 }, rowGap: { xs: 0.5, sm: 0 }, overflow: 'visible'
               }}>
-              <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="body1" sx={{ fontWeight: "bold" }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body1" sx={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 1, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
                   {opt.icon ? `${opt.icon} ` : ""}{opt.name}
+                  {/* Mobile price pill */}
+                  <Box
+                    component="span"
+                    sx={{
+                      display: { xs: 'inline-flex', sm: 'none' },
+                      alignItems: 'center',
+                      ml: 1,
+                      px: 0.75,
+                      py: 0.25,
+                      borderRadius: 1,
+                      bgcolor: '#eef2ff',
+                      color: '#1E3A8A',
+                      fontWeight: 700,
+                      fontSize: '0.95rem',
+                    }}
+                  >
+                    {selectedRide === opt.id && createdRide?.finalPrice != null ? `₹${Number(createdRide.finalPrice).toFixed(2)}` : opt.price}
+                  </Box>
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Pickup ETA: {opt.eta} • Drop time: {duration || opt.meta?.duration || "—"}
                 </Typography>
               </Box>
-              <Typography variant="h6" sx={{ fontWeight: "bold", color: "#1E3A8A" }}>{selectedRide === opt.id && createdRide?.finalPrice != null ? `₹${Number(createdRide.finalPrice).toFixed(2)}` : opt.price}</Typography>
+              <Typography
+                variant="h6"
+                className="ride-price"
+                sx={{
+                  fontWeight: "bold",
+                  color: "#1E3A8A",
+                  whiteSpace: { xs: 'normal', sm: 'nowrap' },
+                  textAlign: 'right',
+                  ml: { xs: 1, sm: 2 },
+                  mt: { xs: 0.5, sm: 0 },
+                  justifySelf: { xs: 'end', sm: 'unset' },
+                  flexShrink: 0,
+                  minWidth: { xs: 68, sm: 'auto' },
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                  lineHeight: { xs: 1.25, sm: 1.4 },
+                  overflow: 'visible',
+                  visibility: 'visible',
+                  display: { xs: 'none', sm: 'block' },
+                }}
+              >
+                {selectedRide === opt.id && createdRide?.finalPrice != null ? `₹${Number(createdRide.finalPrice).toFixed(2)}` : opt.price}
+              </Typography>
             </Box>
           ))}
           {/* Price details based on traffic/weather conditions */}
@@ -1650,6 +2188,27 @@ export default function Booking() {
               title={showPaymentPrompt ? 'Complete payment to book your next ride' : ''}
             >
               {selectedRide === "parcel" ? "Go to Parcel Page" : "Book Ride"}
+              {selectedRide !== "parcel" && (
+                <Box
+                  component="span"
+                  sx={{
+                    display: { xs: 'inline-flex', sm: 'none' },
+                    alignItems: 'center',
+                    ml: 1,
+                    px: 0.75,
+                    py: 0.25,
+                    borderRadius: 1,
+                    bgcolor: '#eef2ff',
+                    color: '#1E3A8A',
+                    fontWeight: 700,
+                    fontSize: '0.95rem',
+                  }}
+                >
+                  {createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0
+                    ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
+                    : (rideOptions.find((r) => r.id === selectedRide)?.price || '—')}
+                </Box>
+              )}
             </Button>
           )}
         </Box>

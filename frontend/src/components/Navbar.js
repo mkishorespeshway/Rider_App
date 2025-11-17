@@ -27,11 +27,12 @@ export default function Navbar() {
   };
 
   return (
-    <AppBar position="static" sx={{ backgroundColor: "#00bfa6", px: 2 }}>
-      <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
+    <AppBar position="static" className="shadow-card-glow" sx={{ px: 2 }}>
+      <Toolbar className="text-white" sx={{ display: "flex", justifyContent: "space-between" }}>
         <Typography
           variant="h6"
           sx={{ fontWeight: "bold", cursor: "pointer" }}
+          className="hover-lift"
           onClick={() => {
             if (role === "rider") navigate("/rider-dashboard");
             else if (role === "user") navigate("/user-dashboard");

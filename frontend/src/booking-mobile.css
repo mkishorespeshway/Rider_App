@@ -26,9 +26,7 @@
 }
 
 /* Desktop/Default booking form on white background */
-.booking-form {
-  background: #ffffff !important;
-}
+.booking-form { background: #ffffff !important; }
 
 /* Primary Book button in Rapido yellow (legacy) */
 .rapido-book-btn {
@@ -64,3 +62,58 @@
 
 .booking-services { gap: 8px; }
 .booking-service-card { text-align: center; }
+
+/* Global small-screen hygiene for booking page */
+@media (max-width: 600px) {
+  /* Mobile container: proper max-width, centered, scrollable */
+  .booking-page { overflow-x: hidden; padding: 8px !important; width: 100%; max-width: 420px; margin: 0 auto; height: 100vh; overflow-y: auto; box-sizing: border-box; padding-bottom: 80px; }
+  .booking-page.MuiContainer-root { max-width: 420px !important; }
+  .booking-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
+  .booking-form { padding: 12px !important; margin: 8px !important; }
+  /* Responsive map height balanced against form */
+  .booking-map { height: calc(100vh - 280px) !important; min-height: 380px !important; }
+  /* Scrollable suggestions panel to avoid pushing layout */
+  .suggestions-panel { max-height: 220px; overflow-y: auto; -webkit-overflow-scrolling: touch; margin-bottom: 8px; border: 1px solid #eaeaea; border-radius: 8px; }
+  /* Ensure ride option layout and price are readable on small screens */
+  .ride-option-card { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; }
+  .ride-price { display: block !important; text-align: right !important; white-space: nowrap !important; min-width: 76px !important; font-size: 1.1rem !important; font-weight: 700 !important; line-height: 1.25 !important; color: #1E3A8A !important; }
+  /* Inputs & labels */
+  .booking-input .MuiOutlinedInput-root { height: 46px; margin-bottom: 6px; background: #fff; }
+  .booking-input .MuiInputBase-input { font-size: 13px; padding: 8px 10px; }
+  .booking-input .MuiInputLabel-root { font-size: 12px; }
+  /* Make pickup & drop look like complete boxes */
+.booking-input .MuiOutlinedInput-notchedOutline { border-color: #9aa3ad !important; border-width: 2px !important; border-radius: 12px !important; }
+  .booking-input .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline { border-color: #bfc6ce !important; }
+  .booking-input .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline { border-color: #1E3A8A !important; }
+  /* Ensure full-box look for non-outlined variants only (avoid double border) */
+.booking-input .MuiInputBase-root:not(.MuiOutlinedInput-root) { border: 2px solid #9aa3ad !important; border-radius: 12px !important; background: #fff !important; }
+  .booking-input .MuiInputBase-root.Mui-focused { border-color: #1E3A8A !important; }
+  /* Remove notch gap so top border appears solid like a full box */
+  .booking-input .MuiOutlinedInput-root legend { width: 0; }
+  /* Suggestion items */
+  .suggestions-panel { max-height: 140px; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; }
+  .suggestions-panel .MuiListItemButton-root { padding: 6px 8px; }
+  .suggestions-panel .MuiListItemButton-root { font-size: 12px; }
+  /* Payment section compact padding */
+  .payment-section { padding: 12px !important; }
+  .suggestions-panel .MuiListItemButton-root { font-size: 13px; }
+  /* Chips */
+  .booking-form .MuiChip-root { height: 24px; font-size: 12px; }
+  /* Payment radios and spacing */
+  .payment-section { padding: 10px !important; }
+  .payment-section .MuiTypography-subtitle2 { font-size: 0.95rem; }
+  .payment-section .MuiFormGroup-root { flex-wrap: wrap; gap: 4px 10px; }
+  .payment-section .MuiFormControlLabel-root { margin-right: 0; }
+  /* Buttons */
+  .booking-blue-btn, .rapido-book-btn { width: 100% !important; min-height: 40px !important; font-size: 15px !important; }
+  /* Drawer tweaks for ride options */
+  .booking-page .MuiDrawer-paper { border-radius: 16px 16px 0 0; padding-bottom: 12px; }
+  /* Typography and avatar compact sizes within booking form */
+  .booking-form .MuiTypography-caption { font-size: 12px; }
+  .booking-form .MuiTypography-body2 { font-size: 13px; }
+  .booking-form .MuiAvatar-root { width: 44px; height: 44px; }
+  /* Input adornment icons smaller on mobile */
+  .booking-form .MuiInputAdornment-root .MuiSvgIcon-root { font-size: 18px; }
+  /* Wallet/payment list items compact */
+  .payment-section .MuiListItemButton-root { padding: 8px 10px; font-size: 14px; }
+}

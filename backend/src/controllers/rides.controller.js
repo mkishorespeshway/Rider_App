@@ -120,7 +120,26 @@ exports.createRide = async (req, res) => {
         const io = req.app.get("io");
         const vType = String(mockRide.requestedVehicleType || "").trim().toLowerCase();
         if (vType) {
-          io.to(`vehicle:${vType}`).emit("rideRequest", mockRide);
+          try {
+            const store = req.app.get("riderAvailableLocations");
+            const MAX_NOTIFY_DISTANCE_KM = 1.5;
+            const targets = [];
+            if (store && typeof store.forEach === "function") {
+              store.forEach((entry, rid) => {
+                try {
+                  const vt = String(entry?.vehicleType || "").trim().toLowerCase();
+                  if (vt !== vType) return;
+                  const dist = haversineKm(mockRide.pickupCoords, entry?.coords);
+                  if (Number.isFinite(dist) && dist <= MAX_NOTIFY_DISTANCE_KM) {
+                    targets.push(String(rid));
+                  }
+                } catch {}
+              });
+            }
+            for (const rid of targets) {
+              io.to(rid).emit("rideRequest", mockRide);
+            }
+          } catch {}
         }
       } catch {}
       return res.status(201).json({ success: true, message: "Ride created (mock, DB offline)", ride: mockRide });
@@ -147,11 +166,36 @@ exports.createRide = async (req, res) => {
 
     await ride.save();
 
-     // 🔥 notify only riders of the requested vehicle type when set
+     // 🔥 Notify only riders of requested vehicle type within 1.5 km of pickup
     const io = req.app.get("io");
     const vType = String(ride.requestedVehicleType || "").trim().toLowerCase();
-    if (vType) {
-      io.to(`vehicle:${vType}`).emit("rideRequest", ride);
+    if (vType && io) {
+      try {
+        const store = req.app.get("riderAvailableLocations");
+        const MAX_NOTIFY_DISTANCE_KM = 1.5;
+        const targets = [];
+        if (store && typeof store.forEach === "function") {
+          store.forEach((entry, rid) => {
+            try {
+              const vt = String(entry?.vehicleType || "").trim().toLowerCase();
+              if (vt !== vType) return;
+              const dist = haversineKm(ride.pickupCoords, entry?.coords);
+              if (Number.isFinite(dist) && dist <= MAX_NOTIFY_DISTANCE_KM) {
+                targets.push(String(rid));
+              }
+            } catch {}
+          });
+        }
+        if (targets.length > 0) {
+          for (const rid of targets) {
+            io.to(rid).emit("rideRequest", ride);
+          }
+        } else {
+          console.log("ℹ️ No riders within", MAX_NOTIFY_DISTANCE_KM, "km for type", vType, "— rideRequest not broadcasted globally.");
+        }
+      } catch (e) {
+        console.warn("Proximity filter error:", e?.message || e);
+      }
     }
  
     res.json({ success: true, ride });

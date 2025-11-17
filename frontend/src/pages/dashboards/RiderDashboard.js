@@ -176,6 +176,17 @@ export default function RiderDashboard() {
     } catch (_) {}
   }, [selectedParcel?._id, selectedRide?._id, auth?.user?._id]);
 
+
+  // Keep map coords in sync with currently selected parcel to avoid mismatches
+  useEffect(() => {
+    const p = selectedParcel?.pickupCoords || selectedParcel?.pickup || null;
+    const d = selectedParcel?.dropCoords || selectedParcel?.drop || null;
+    if (p) setPickup(p);
+    if (d) setDrop(d);
+    if (selectedParcel?.pickupAddress) setPickupAddress(selectedParcel.pickupAddress);
+    if (selectedParcel?.dropAddress) setDropAddress(selectedParcel.dropAddress);
+  }, [selectedParcel]);
+
   // Restore last view after data loads and on login/refresh
   useEffect(() => {
     try {
@@ -1099,15 +1110,15 @@ export default function RiderDashboard() {
     // Subtle neutral background to keep dashboard professional and clean
     <Box className="min-h-screen" sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%)' }}>
       {/* Header with circular brand */}
-      <Box sx={{ height: '40vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Box sx={{ width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 32, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
+      <Box sx={{ height: { xs: '22vh', sm: '32vh', md: '40vh' }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Box sx={{ width: { xs: 72, sm: 88, md: 100 }, height: { xs: 72, sm: 88, md: 100 }, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: { xs: 24, sm: 28, md: 32 }, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
           R
         </Box>
       </Box>
 
       {/* White form/content card overlapping header */}
       <Box className="max-w-screen-md px-3 sm:px-6" sx={{ maxWidth: 980, mx: 'auto', px: 2 }}>
-        <Paper elevation={6} className="p-3 sm:p-4 rounded-2xl" sx={{ p: 3, borderRadius: 3, mt: '-80px', background: '#fff' }}>
+        <Paper elevation={6} className="p-3 sm:p-4 rounded-2xl" sx={{ p: 3, borderRadius: 3, mt: { xs: '-48px', sm: '-64px', md: '-80px' }, background: '#fff' }}>
           <Typography variant="h4" gutterBottom className="page-title" sx={{ fontWeight: 800 }}>
             Rider Dashboard
           </Typography>
@@ -1152,10 +1163,10 @@ export default function RiderDashboard() {
               <Typography>
                 <b>Phone:</b> {rideUserPhoneCache || getRideUserPhone(selectedRide)}
               </Typography>
-              <Typography>
+              <Typography sx={{ wordBreak: 'break-word' }}>
                 <b>Pickup:</b> {selectedRide.pickup}
               </Typography>
-              <Typography>
+              <Typography sx={{ wordBreak: 'break-word' }}>
                 <b>Drop:</b> {selectedRide.drop}
               </Typography>
               <Typography>
@@ -1229,9 +1240,9 @@ export default function RiderDashboard() {
                       const qrUpiUrl = `upi://pay?${qrParams.toString()}`;
                       const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrUpiUrl)}`;
                       return (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, border: '1px solid #eee', borderRadius: 2 }}>
-                          <img src={qrImg} alt="Admin UPI QR" style={{ width: 180, height: 180 }} />
-                          <Box>
+                        <Box className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-3 border border-gray-200 rounded-xl" sx={{ alignItems: { sm: 'center' } }}>
+                          <img src={qrImg} alt="Admin UPI QR" className="w-40 h-40 sm:w-44 sm:h-44 object-contain mx-auto sm:mx-0" />
+                          <Box className="mt-2 sm:mt-0">
                             <Typography variant="body2">Payee: {merchantName || 'Rider App'}</Typography>
                             <Typography variant="body2">UPI: {merchantVpa}</Typography>
                             <Typography variant="body2">Amount: ₹{amount.toFixed(2)}</Typography>
@@ -1255,7 +1266,7 @@ export default function RiderDashboard() {
                         {paymentMsg}
                       </Typography>
                     )}
-                    <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                    <Box className="flex flex-col sm:flex-row gap-2" sx={{ mt: 1 }}>
                       <Button
                         variant="contained"
                         color="primary"
@@ -1280,7 +1291,7 @@ export default function RiderDashboard() {
           </Card>
  
           {/*  Google Map */}
-          <Paper sx={{ p: 1, height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 360, md: 420 }, borderRadius: 2, overflow: 'hidden' }}>
+          <Paper sx={{ p: 1, height: { xs: '55vh', md: '70vh' }, minHeight: { xs: 320, md: 420 }, borderRadius: 2, overflow: 'hidden' }}>
             <Map
               apiKey="AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"
               pickup={pickup}
@@ -1325,21 +1336,21 @@ export default function RiderDashboard() {
             <CardContent sx={{ pt: 2 }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                  <Typography variant="body1" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                     <b>Sender:</b> {selectedParcel.senderName} ({selectedParcel.senderMobile})
                   </Typography>
-                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                  <Typography variant="body1" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                     <b>Receiver:</b> {selectedParcel.receiverName} ({selectedParcel.receiverMobile})
                   </Typography>
-                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                  <Typography variant="body1" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                     <b>Details:</b> {selectedParcel.parcelDetails}
                   </Typography>
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                  <Typography variant="body1" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                     <b>Pickup:</b> {selectedParcel.pickupAddress || selectedParcel?.pickup?.address || selectedParcel?.pickupCoords?.address || (selectedParcel?.pickup?.lat && selectedParcel?.pickup?.lng ? `${selectedParcel.pickup.lat}, ${selectedParcel.pickup.lng}` : (selectedParcel?.pickupCoords?.lat && selectedParcel?.pickupCoords?.lng ? `${selectedParcel.pickupCoords.lat}, ${selectedParcel.pickupCoords.lng}` : 'N/A'))}
                   </Typography>
-                  <Typography variant="body1" sx={{ mb: 0.5 }}>
+                  <Typography variant="body1" sx={{ mb: 0.5, wordBreak: 'break-word' }}>
                     <b>Drop:</b> {selectedParcel.dropAddress || selectedParcel?.drop?.address || selectedParcel?.dropCoords?.address || (selectedParcel?.drop?.lat && selectedParcel?.drop?.lng ? `${selectedParcel.drop.lat}, ${selectedParcel.drop.lng}` : (selectedParcel?.dropCoords?.lat && selectedParcel?.dropCoords?.lng ? `${selectedParcel.dropCoords.lat}, ${selectedParcel.dropCoords.lng}` : 'N/A'))}
                   </Typography>
                   {distance && (
@@ -1471,7 +1482,7 @@ export default function RiderDashboard() {
                     {paymentMsg}
                   </Typography>
                 )}
-                <Box sx={{ mt: 1, display: 'flex', gap: 1 }}>
+                <Box className="flex flex-col sm:flex-row gap-2" sx={{ mt: 1 }}>
                   <Button
                     variant="contained"
                     color="primary"
@@ -1494,7 +1505,7 @@ export default function RiderDashboard() {
           </CardContent>
           </Card>
 
-          <Paper sx={{ p: 1, height: { xs: '60vh', md: '70vh' }, minHeight: { xs: 360, md: 420 }, borderRadius: 2, overflow: 'hidden' }}>
+          <Paper sx={{ p: 1, height: { xs: '55vh', md: '70vh' }, minHeight: { xs: 320, md: 420 }, borderRadius: 2, overflow: 'hidden' }}>
             <Map
               apiKey="AIzaSyAWstISB_4yTFzsAolxk8SOMBZ_7_RaKQo"
               pickup={pickup}
@@ -1524,10 +1535,10 @@ export default function RiderDashboard() {
             displayedRides.map((ride) => (
               <Card key={ride._id} sx={{ mb: 2 }}>
                 <CardContent>
-                  <Typography>
+                  <Typography sx={{ wordBreak: 'break-word' }}>
                     <b>Pickup:</b> {ride.pickup}
                   </Typography>
-                  <Typography>
+                  <Typography sx={{ wordBreak: 'break-word' }}>
                     <b>Drop:</b> {ride.drop}
                   </Typography>
                   <Typography>Status: {ride.status}</Typography>
