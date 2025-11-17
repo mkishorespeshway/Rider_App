@@ -32,7 +32,7 @@ import "../theme.css";
 import "../booking-mobile.css";
 
 const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== "undefined" ? window.location.origin : "");
-  const API_URL = `${API_BASE}/api`;
+const API_URL = `${API_BASE}/api`;
   const MAX_RIDE_DISTANCE_KM = 25;
   const toRad = (d) => (d * Math.PI) / 180;
   const distanceKmBetween = (a, b) => {
@@ -60,7 +60,7 @@ export default function Booking() {
   const navigate = useNavigate();
   
   // Generate a unique tab ID for this browser tab instance
-  const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   
   // Check authentication and tab session on component mount
   useEffect(() => {
@@ -174,10 +174,10 @@ export default function Booking() {
   // Join the ride-specific room to scope chat messages for the user
   useEffect(() => {
     try {
-      const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
-      const activeId = localStorage.getItem(activeKey);
-      const rideId = (createdRide && createdRide._id) || activeId || null;
-      if (rideId) socket.emit("joinRideRoom", rideId);
+        const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
+        const activeId = localStorage.getItem(activeKey);
+        const rideId = (createdRide && createdRide._id) || activeId || null;
+          if (rideId) socket.emit("joinRideRoom", rideId);
     } catch (e) {
       console.warn("joinRideRoom emit warning (user):", e?.message || e);
     }
@@ -676,7 +676,7 @@ export default function Booking() {
           eta: currentEta,
           price: `₹${mkBreakdown(bikeBase).total.toFixed(2)}`,
           meta: { km: km.toFixed(2), normalEta, deltaText, breakdown: mkBreakdown(bikeBase) },
-          icon: "🏍️",
+          icon: "🏍",
         },
         {
           id: "auto",
@@ -887,7 +887,7 @@ export default function Booking() {
     // Persist the requested vehicle type and notify matching riders
     try {
       const res = await axios.post(
-       `${API_URL}/rides/${createdRide._id}/request-type`,
+        `${API_URL}/rides/${createdRide._id}/request-type`,
         { requestedVehicleType: selectedRide },
         { headers: { Authorization: `Bearer ${auth?.token}` } }
       );
@@ -991,7 +991,7 @@ export default function Booking() {
     socket.on("requestRideOtp", async ({ rideId, replyTo }) => {
       try {
         if (!rideId || !replyTo) return;
-        const otpKey = `rideOtp:${rideId}`;
+          const otpKey = `rideOtp:${rideId}`;
         let saved = localStorage.getItem(otpKey);
         if (!saved) {
           saved = Math.floor(1000 + Math.random() * 9000).toString();
@@ -1036,10 +1036,10 @@ export default function Booking() {
       // Persist map-only state for this active ride to survive refresh
       try {
         const activeKey = `activeRide:${auth?.user?._id || 'anon'}`;
-        const rideId = ride?._id || localStorage.getItem(activeKey);
-        if (rideId) {
+          const rideId = ride?._id || localStorage.getItem(activeKey);
+          if (rideId) {
           localStorage.setItem(`rideMapOnly:${rideId}`, 'true');
-        }
+          }
       } catch {}
       try {
         // Smoothly scroll map into view to focus on the route
@@ -1220,13 +1220,7 @@ export default function Booking() {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={() => setServiceLimitOpen(false)}
-            variant="contained"
-            sx={{ bgcolor: '#ffffff !important', color: '#1E3A8A !important', border: '1px solid #1E3A8A', fontWeight: 700 }}
-          >
-            OK
-          </Button>
+          <Button onClick={() => setServiceLimitOpen(false)} variant="contained">OK</Button>
         </DialogActions>
       </Dialog>
 
@@ -1339,7 +1333,7 @@ export default function Booking() {
 
       {/* ✅ Global payment prompt shown when ride is completed */}
       {showPaymentPrompt && (
-        <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: '#fff3e0', border: '1px solid #ffe0b2' }}>
+        <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: '#ecfdf5', border: '1px solid #d1fae5' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 'bold', color: '#000000' }}>
             Ride Completed — Proceed to Payment
           </Typography>
@@ -1503,8 +1497,8 @@ export default function Booking() {
               <TextField
                 className="booking-input"
                 fullWidth
-                label="Enter Drop Location"
-                value={dropAddress}
+                label="Enter Drop Location"
+value={dropAddress}
                 onChange={(e) => {
                   setDropAddress(e.target.value);
                   fetchSuggestions(e.target.value, setDropSuggestions, pickup);
@@ -1553,7 +1547,7 @@ export default function Booking() {
                     fullWidth
                     variant="contained"
                     onClick={handleFindRiders}
-                    sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' }, display: 'none' }}
+                    sx={{ mt: 1, bgcolor: '#16A34A', color: '#fff', border: '1px solid #0b3d1c', '&:hover': { bgcolor: '#15803D' }, display: 'none' }}
                   >
                     Find Driver
                   </Button>
@@ -1566,7 +1560,7 @@ export default function Booking() {
                     fullWidth
                     variant="contained"
                     onClick={handleFindRiders}
-                    sx={{ mt: 1, bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' }, display: 'none' }}
+                    sx={{ mt: 1, bgcolor: '#16A34A', color: '#fff', border: '1px solid #0b3d1c', '&:hover': { bgcolor: '#15803D' }, display: 'none' }}
                   >
                     Find Driver
                   </Button>
@@ -1656,7 +1650,7 @@ export default function Booking() {
                     return (
                       <Box key={idx} sx={{ display: 'flex', alignItems: 'center', border: '1px solid #e0e0e0', borderRadius: 1, p: 1 }}>
                         <Avatar sx={{ mr: 1 }}>
-                          {vt === 'Bike' ? '🏍️' : vt === 'Auto' ? '🛺' : vt === 'Car' ? '🚗' : '🚕'}
+                          {vt === 'Bike' ? '🏍' : vt === 'Auto' ? '🛺' : vt === 'Car' ? '🚗' : '🚕'}
                         </Avatar>
                         <Box sx={{ flexGrow: 1 }}>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>{vt}</Typography>
@@ -1671,7 +1665,7 @@ export default function Booking() {
                 {/* convenience action, reuses existing handler */}
                 <Box sx={{ mt: 2 }}>
                   <Button variant="contained" onClick={handleFindRiders} className="booking-blue-btn"
-                    sx={{ bgcolor: '#1E3A8A', color: '#fff', border: '1px solid #000', '&:hover': { bgcolor: '#0B2A6E' } }}>
+                    sx={{ bgcolor: '#16A34A', color: '#fff', border: '1px solid #0b3d1c', '&:hover': { bgcolor: '#15803D' } }}>
                     Find Driver
                   </Button>
                 </Box>
@@ -1709,7 +1703,7 @@ export default function Booking() {
                   <Typography variant="body1" sx={{ fontWeight: "bold", display: 'flex', alignItems: 'center', gap: 1, flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
                     {opt.icon ? `${opt.icon} ` : ""}{opt.name}
                     {(opt.id === 'bike' || opt.id === 'auto' || opt.id === 'car') && (
-                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, ml: 1, px: 0.75, py: 0.25, borderRadius: 1, bgcolor: '#eef2ff', color: '#1E3A8A' }}>
+                      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, ml: 1, px: 0.75, py: 0.25, borderRadius: 1, bgcolor: '#ecfdf5', color: '#16A34A' }}>
                         <PersonOutlineIcon sx={{ fontSize: '1rem' }} />
                         <Typography component="span" variant="body2" sx={{ fontWeight: 700 }}>
                           {availableRiders.filter(r => {
@@ -1729,8 +1723,8 @@ export default function Booking() {
                         px: 0.75,
                         py: 0.25,
                         borderRadius: 1,
-                        bgcolor: '#eef2ff',
-                        color: '#1E3A8A',
+                        bgcolor: '#ecfdf5',
+                        color: '#16A34A',
                         fontWeight: 700,
                         fontSize: '0.95rem',
                       }}
@@ -1747,7 +1741,7 @@ export default function Booking() {
                   className="ride-price"
                   sx={{
                     fontWeight: "bold",
-                    color: "#1E3A8A",
+                    color: "#16A34A",
                     whiteSpace: { xs: 'normal', sm: 'nowrap' },
                     textAlign: 'right',
                     ml: { xs: 1, sm: 2 },
@@ -1940,13 +1934,13 @@ export default function Booking() {
                       px: 0.75,
                       py: 0.25,
                       borderRadius: 1,
-                      bgcolor: '#eef2ff',
-                      color: '#1E3A8A',
+                      bgcolor: '#ecfdf5',
+                      color: '#16A34A',
                       fontWeight: 700,
                       fontSize: '0.95rem',
                     }}
                   >
-                    {createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0
+                  {createdRide?.finalPrice != null && Number(createdRide.finalPrice) > 0
                       ? `₹${Number(createdRide.finalPrice).toFixed(2)}`
                       : (rideOptions.find((r) => r.id === selectedRide)?.price || '—')}
                   </Box>
@@ -1992,8 +1986,8 @@ export default function Booking() {
                       px: 0.75,
                       py: 0.25,
                       borderRadius: 1,
-                      bgcolor: '#eef2ff',
-                      color: '#1E3A8A',
+                      bgcolor: '#ecfdf5',
+                      color: '#16A34A',
                       fontWeight: 700,
                       fontSize: '0.95rem',
                     }}
@@ -2010,7 +2004,7 @@ export default function Booking() {
                 className="ride-price"
                 sx={{
                   fontWeight: "bold",
-                  color: "#1E3A8A",
+                  color: "#16A34A",
                   whiteSpace: { xs: 'normal', sm: 'nowrap' },
                   textAlign: 'right',
                   ml: { xs: 1, sm: 2 },
@@ -2204,8 +2198,8 @@ export default function Booking() {
                     px: 0.75,
                     py: 0.25,
                     borderRadius: 1,
-                    bgcolor: '#eef2ff',
-                    color: '#1E3A8A',
+                    bgcolor: '#ecfdf5',
+                    color: '#16A34A',
                     fontWeight: 700,
                     fontSize: '0.95rem',
                   }}
@@ -2295,7 +2289,7 @@ export default function Booking() {
               {/* OTP Display */}
               <Box sx={{ mt: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 2, textAlign: 'center' }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>Your OTP Code</Typography>
-                <Typography variant="h4" sx={{ letterSpacing: 2, fontWeight: 'bold', color: 'var(--text-blue)' }}>
+                <Typography variant="h4" sx={{ letterSpacing: 2, fontWeight: 'bold', color: '#16A34A' }}>
                   {otp}
                 </Typography>
                 <Typography variant="caption">Share this code with your rider to start the trip</Typography>
@@ -2367,5 +2361,5 @@ export default function Booking() {
         try { setUserLiveCoords(coords); } catch {}
       }} />
     </Container>
-  );
+  );
 }

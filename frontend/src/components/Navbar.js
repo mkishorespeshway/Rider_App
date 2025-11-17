@@ -1,9 +1,8 @@
-// src/components/Navbar.js
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { AppBar, Toolbar, Typography, IconButton, Menu, MenuItem, Avatar } from "@mui/material";
 import { useAuth } from "../contexts/AuthContext";
-
+ 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -11,21 +10,21 @@ export default function Navbar() {
   const { token, roles } = auth || {};
   const role = roles[0] || null;
   const [anchorEl, setAnchorEl] = useState(null);
-
+ 
   const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
   const handleMenuClose = () => setAnchorEl(null);
-
+ 
   const handleLogout = () => {
     const currentRole = role; // ✅ capture before logout
     logout();
-
+ 
     if (currentRole === "admin") navigate("/admin");
     else if (currentRole === "rider") navigate("/rider-login");
     else navigate("/login");
-
+ 
     handleMenuClose();
   };
-
+ 
   return (
     <AppBar position="static" className="shadow-card-glow" sx={{ px: 2 }}>
       <Toolbar className="text-white" sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -44,7 +43,7 @@ export default function Navbar() {
             ? "Rider Dashboard"
             : "Rider App"}
         </Typography>
-
+ 
         {token && (
           <>
             <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
@@ -52,7 +51,7 @@ export default function Navbar() {
                 {role === "rider" ? "R" : role === "user" ? "U" : "A"}
               </Avatar>
             </IconButton>
-
+ 
             <Menu
               anchorEl={anchorEl}
               open={Boolean(anchorEl)}
@@ -67,7 +66,7 @@ export default function Navbar() {
                   <MenuItem onClick={handleLogout} sx={{ color: "red" }}>Logout</MenuItem>
                 </>
               )}
-
+ 
               {role === "user" && (
                 <>
                   <MenuItem onClick={() => { navigate("/booking"); handleMenuClose(); }}>Booking</MenuItem>
@@ -77,7 +76,7 @@ export default function Navbar() {
                   <MenuItem onClick={handleLogout} sx={{ color: "red" }}>Logout</MenuItem>
                 </>
               )}
-
+ 
               {role === "rider" && (
                 <>
                   <MenuItem onClick={() => { navigate("/rider-wallet"); handleMenuClose(); }}>Wallet</MenuItem>

@@ -1,20 +1,20 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
-    "./src/**/*.{js,jsx,ts,tsx}", // important for React
+    "./src//*.{js,jsx,ts,tsx}", // important for React
   ],
   theme: {
     extend: {
       colors: {
         brand: {
           primary: "#16A34A", // Green 600
-          accent: "#22C55E",  // Green 500
+          accent: "#16A34A",  // Match primary
           surface: "#FFFFFF", // White
-          ui: "#E8F3EA",      // Soft green-ish grey
-          text: "#0F172A",    // Slate 900 for readability
+          ui: "#ECEFF1",      // Soft Grey
+          text: "#1A1A1A",    // Dark Black
         },
         do: {
-          // Keep dark palette tokens (unused for green theme but safe)
+          // Dark-Orange palette inspired by references
           bg: "#0B0B0F",
           surface: "#121317",
           muted: "#2A2B31",
@@ -53,5 +53,5 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [],
 };

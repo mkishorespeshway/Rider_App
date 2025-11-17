@@ -10,4 +10,4 @@ const appTheme = createTheme({
   },
 });
 
-export default appTheme;
+export default appTheme;

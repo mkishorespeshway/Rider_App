@@ -234,7 +234,7 @@ export default function Map({
   };
   let riderLabelText =
     normalizedType === "bike"
-      ? "🏍️"
+      ? "🏍"
       : normalizedType === "auto"
       ? "🛺"
       : normalizedType === "car"
@@ -999,7 +999,7 @@ export default function Map({
 
           {/* Center ETA pill (MUI Chip) */}
           <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: 18, zIndex: 6 }}>
-            <Chip color="warning" icon={<AccessTimeIcon />} label={navDurationMins ? `${navDurationMins} min` : (routeEtaText || "ETA") } sx={{ bgcolor: "#fff", fontWeight: 800, fontSize: 16, px: 1.75, borderRadius: 999 }} />
+            <Chip color="success" icon={<AccessTimeIcon />} label={navDurationMins ? `${navDurationMins} min` : (routeEtaText || "ETA") } sx={{ bgcolor: "#16A34A", color: "#fff", fontWeight: 800, fontSize: 16, px: 1.75, borderRadius: 999 }} />
           </div>
 
           {/* Right controls (MUI Buttons) */}
@@ -1124,4 +1124,3 @@ async function getAddressFromCoords(lat, lng, setter) {
     console.warn("Reverse geocoding failed:", e.message);
   }
 }
- 

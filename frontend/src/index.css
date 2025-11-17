@@ -4,11 +4,11 @@
 
 /* Global Tailwind base: restyle native elements without touching logic */
 @layer base {
-  body { background: var(--bw-bg) !important; @apply text-black antialiased; }
+  body { @apply bg-white text-black antialiased; }
   h1 { @apply text-2xl font-bold tracking-tight; }
   h2 { @apply text-xl font-semibold; }
   h3 { @apply text-lg font-semibold; }
-  a { @apply text-blue-600 hover:underline; }
+  a { @apply text-green-600 hover:underline; }
   label { @apply text-sm font-medium text-gray-700; }
   /* Global button color switch to violet */
   button { @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold transition active:scale-[0.98]; }
@@ -20,19 +20,19 @@
 
 /* Black & White theme (mobile-first) */
 :root {
-  --bw-bg: #16A34A;
+  --bw-bg: #ffffff;
   --bw-fg: #000000;
   --bw-muted: #666666;
   --bw-border: #1a1a1a;
 
   /* Brand palette (single professional tone) */
   --brand-primary: #16A34A; /* Green 600 */
-  --brand-accent: #22C55E;  /* Green 500 */
+  --brand-accent: #16A34A;  /* Align accent to primary */
   --brand-surface: #FFFFFF; /* White */
   --brand-ui: #ECEFF1;      /* Soft Grey */
   --brand-text: #1A1A1A;    /* Dark Black */
   /* Global text highlight color */
-  --text-blue: #2196F3;     /* Material Blue for readability */
+  --text-blue: #16A34A;     /* Green for highlights */
 }
 
 /* Dark–Orange theme tokens */
@@ -85,7 +85,6 @@
 /* Apply theme to body and root */
 .bw-theme, .bw-theme body {
   background: var(--bw-bg);
-  background-attachment: fixed;
   color: var(--bw-fg);
 }
 
@@ -166,10 +165,9 @@
 @layer components {
   .section {
     @apply min-h-screen px-4 sm:px-6 py-6;
-    background: var(--bw-bg) !important;
+    background: linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%);
     color: var(--brand-text);
   }
-  .app-main { background: var(--bw-bg) !important; }
   .card {
     @apply rounded-xl shadow-card-glow ring-1 ring-do-border;
     background: #ffffff;
@@ -182,10 +180,10 @@
     @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold border border-green-600 text-green-600 hover:bg-green-600 hover:text-white transition;
   }
   .field-shell {
-    @apply w-full rounded-lg bg-do-muted text-do-text placeholder-do-subtext border border-do-border focus:border-do-orange focus:ring-1 focus:ring-do-orange/50 transition;
+    @apply w-full rounded-lg bg-do-muted text-do-text placeholder-do-subtext border border-do-border focus:border-green-600 focus:ring-1 focus:ring-green-500/50 transition;
   }
   .img-thumb {
-    @apply rounded-lg ring-1 ring-do-border shadow-md hover:shadow-orange-soft transition;
+    @apply rounded-lg ring-1 ring-do-border shadow-md hover:shadow-lg transition;
   }
   .hover-lift { @apply transition-transform duration-300 hover:-translate-y-0.5; }
   .pulse-glow { @apply animate-glow; }
@@ -250,8 +248,8 @@
   .rapido-card { @apply rounded-2xl bg-white ring-1 ring-black/5 shadow-xl; }
   .rapido-cta { @apply text-white font-bold rounded-full px-5 py-3 shadow-md active:scale-[0.98]; }
   .rapido-cta { background-color: var(--brand-primary); }
-  .rapido-input { @apply rounded-xl border-2 border-black/10 px-3 py-2 focus:outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-300; }
-  .rapido-pill { @apply rounded-full px-3 py-1 bg-black text-white; }
+  .rapido-input { @apply rounded-xl border-2 border-black/10 px-3 py-2 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-400; }
+  .rapido-pill { @apply rounded-full px-3 py-1 bg-green-600 text-white; }
 }
 
 /* Paper: white surface + black text */
@@ -292,17 +290,24 @@
   background-color: #15803D !important; /* darker green */
 }
 .bw-theme .status-offline-btn {
-  background-color: #DC2626 !important; /* red */
-  color: #000000 !important;
+  background-color: #15803D !important; /* darker green */
+  color: #ffffff !important;
 }
 .bw-theme .status-offline-btn:hover {
-  background-color: #B91C1C !important; /* darker red */
+  background-color: #14532D !important; /* deepest green */
 }
 
 /* Chips: black text, black border on white surface */
 .bw-theme .MuiChip-root {
   color: #000000 !important;
   border-color: #000000 !important;
+}
+
+/* Force filled chips to green across the app */
+.bw-theme .MuiChip-root.MuiChip-filled,
+.rapido-ui .MuiChip-root.MuiChip-filled {
+  background-color: var(--brand-primary) !important;
+  color: #ffffff !important;
 }
 
 /* Inputs */
