@@ -48,7 +48,7 @@ export default function Navbar() {
         {token && (
           <>
             <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
-              <Avatar sx={{ bgcolor: "orangered" }}>
+              <Avatar sx={{ bgcolor: "#16A34A" }}>
                 {role === "rider" ? "R" : role === "user" ? "U" : "A"}
               </Avatar>
             </IconButton>

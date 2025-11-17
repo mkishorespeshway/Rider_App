@@ -1,12 +1,12 @@
 /* Global UI tokens and mobile bottom-sheet layout */
 .app-ui {
-  /* Dark–Orange palette to match Tailwind tokens */
-  --app-bg: #0B0B0F;        /* App background */
-  --app-text: #F4F4F7;      /* Primary text */
-  --app-muted: #B9BBC4;     /* Muted text */
-  --app-black: #0B0B0F;     /* Deep black */
-  --app-accent: #FF6A00;    /* Accent orange */
-  --app-primary: #FF6A00;   /* Primary orange */
+  /* Green palette (Rapido/Uber-inspired) */
+  --app-bg: #0F172A;        /* Slate 900 backdrop */
+  --app-text: #F8FAFC;      /* Light text */
+  --app-muted: #CBD5E1;     /* Muted text */
+  --app-black: #0B0F0B;     /* Deep black */
+  --app-accent: #22C55E;    /* Accent green */
+  --app-primary: #16A34A;   /* Primary green */
 }
 
 .app-ui header, .app-ui .Navbar-root { background: var(--app-bg); color: var(--app-text); }
@@ -18,4 +18,4 @@
 }
 
 /* Primary button color (kept minimal; Tailwind overrides handle most styling) */
-.MuiButton-contained { background: var(--app-primary) !important; color: #0B0B0F !important; }
+.MuiButton-contained { background: var(--app-primary) !important; color: #ffffff !important; }

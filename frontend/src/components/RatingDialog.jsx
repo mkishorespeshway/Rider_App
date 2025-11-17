@@ -42,8 +42,14 @@ export default function RatingDialog({ open, onClose, onSubmit, ride, submitting
         </div>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Later</Button>
-        <Button variant="contained" type="button" onClick={handleSubmit} disabled={submitting}>
+        <Button onClick={onClose} sx={{ color: '#1A1A1A' }}>Later</Button>
+        <Button
+          variant="contained"
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitting}
+          sx={{ color: '#1E3A8A !important' }}
+        >
           {submitting ? "Submitting..." : "Submit"}
         </Button>
       </DialogActions>

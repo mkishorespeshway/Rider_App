@@ -4,7 +4,7 @@
 
 /* Global Tailwind base: restyle native elements without touching logic */
 @layer base {
-  body { @apply bg-white text-black antialiased; }
+  body { background: var(--bw-bg) !important; @apply text-black antialiased; }
   h1 { @apply text-2xl font-bold tracking-tight; }
   h2 { @apply text-xl font-semibold; }
   h3 { @apply text-lg font-semibold; }
@@ -20,14 +20,14 @@
 
 /* Black & White theme (mobile-first) */
 :root {
-  --bw-bg: #ffffff;
+  --bw-bg: #16A34A;
   --bw-fg: #000000;
   --bw-muted: #666666;
   --bw-border: #1a1a1a;
 
   /* Brand palette (single professional tone) */
-  --brand-primary: #2563EB; /* Blue 600 */
-  --brand-accent: #2563EB;  /* Align accent to primary */
+  --brand-primary: #16A34A; /* Green 600 */
+  --brand-accent: #22C55E;  /* Green 500 */
   --brand-surface: #FFFFFF; /* White */
   --brand-ui: #ECEFF1;      /* Soft Grey */
   --brand-text: #1A1A1A;    /* Dark Black */
@@ -57,7 +57,7 @@
 }
 
 /* Additional brand token */
-:root { --brand-primary-hover: #1D4ED8; }
+:root { --brand-primary-hover: #15803D; }
 
 /* ============================= */
 /* Global black text across pages */
@@ -85,6 +85,7 @@
 /* Apply theme to body and root */
 .bw-theme, .bw-theme body {
   background: var(--bw-bg);
+  background-attachment: fixed;
   color: var(--bw-fg);
 }
 
@@ -165,19 +166,20 @@
 @layer components {
   .section {
     @apply min-h-screen px-4 sm:px-6 py-6;
-    background: linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%);
+    background: var(--bw-bg) !important;
     color: var(--brand-text);
   }
+  .app-main { background: var(--bw-bg) !important; }
   .card {
     @apply rounded-xl shadow-card-glow ring-1 ring-do-border;
     background: #ffffff;
     color: var(--brand-text);
   }
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold bg-violet-600 text-white shadow-md hover:bg-violet-700 active:scale-[0.98] transition;
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold bg-green-600 text-white shadow-md hover:bg-green-700 active:scale-[0.98] transition;
   }
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold border border-violet-600 text-violet-600 hover:bg-violet-600 hover:text-white transition;
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-semibold border border-green-600 text-green-600 hover:bg-green-600 hover:text-white transition;
   }
   .field-shell {
     @apply w-full rounded-lg bg-do-muted text-do-text placeholder-do-subtext border border-do-border focus:border-do-orange focus:ring-1 focus:ring-do-orange/50 transition;

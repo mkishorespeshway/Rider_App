@@ -216,13 +216,13 @@ export default function UserLogin() {
       className="min-h-screen"
       sx={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%)",
+        background: "#16A34A",
       }}
     >
       {/* Brand Header Section */}
       <Box
         sx={{
-          background: "#ffffff",
+          background: "#16A34A",
           height: "40vh",
           display: "flex",
           alignItems: "center",

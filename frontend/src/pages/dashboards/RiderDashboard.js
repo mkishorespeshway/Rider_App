@@ -1107,8 +1107,7 @@ export default function RiderDashboard() {
   };
 
   return (
-    // Subtle neutral background to keep dashboard professional and clean
-    <Box className="min-h-screen" sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f0f4f8 0%, #f9fafb 100%)' }}>
+    <Box className="min-h-screen" sx={{ minHeight: '100vh', background: '#16A34A' }}>
       {/* Header with circular brand */}
       <Box sx={{ height: { xs: '22vh', sm: '32vh', md: '40vh' }, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Box sx={{ width: { xs: 72, sm: 88, md: 100 }, height: { xs: 72, sm: 88, md: 100 }, borderRadius: '50%', background: 'rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: { xs: 24, sm: 28, md: 32 }, boxShadow: '0 8px 24px rgba(0,0,0,0.25)' }}>
@@ -1203,6 +1202,7 @@ export default function RiderDashboard() {
                     variant="contained"
                     color="primary"
                     onClick={openOtpDialog}
+                    sx={{ bgcolor: '#ffffff !important', color: '#1E3A8A !important', border: '1px solid #1E3A8A', fontWeight: 700 }}
                   >
                     Verify OTP 
                   </Button>
@@ -1669,6 +1669,7 @@ export default function RiderDashboard() {
       variant="contained"
       color="primary"
       disabled={verifyingOtp || (otp || "").length !== 4}
+      sx={{ bgcolor: '#ffffff !important', color: '#1E3A8A !important', border: '1px solid #1E3A8A', fontWeight: 700 }}
     >
       {verifyingOtp ? <CircularProgress size={24} /> : "Verify & Start Ride"}
     </Button>
@@ -1702,6 +1703,7 @@ export default function RiderDashboard() {
       variant="contained"
       color="primary"
       disabled={verifyingParcelOtp || (parcelOtp || "").length !== 4}
+      sx={{ bgcolor: '#ffffff !important', color: '#1E3A8A !important', border: '1px solid #1E3A8A', fontWeight: 700 }}
     >
       {verifyingParcelOtp ? <CircularProgress size={24} /> : "Verify & Start Parcel"}
     </Button>

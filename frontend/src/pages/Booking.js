@@ -1220,7 +1220,13 @@ export default function Booking() {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setServiceLimitOpen(false)} variant="contained">OK</Button>
+          <Button
+            onClick={() => setServiceLimitOpen(false)}
+            variant="contained"
+            sx={{ bgcolor: '#ffffff !important', color: '#1E3A8A !important', border: '1px solid #1E3A8A', fontWeight: 700 }}
+          >
+            OK
+          </Button>
         </DialogActions>
       </Dialog>
 

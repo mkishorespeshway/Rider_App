@@ -29,11 +29,11 @@ export default function UserRegister() {
   };
 
   return (
-    <Box className="min-h-screen bg-gray-50" sx={{ minHeight: "100vh", background: "#f8fafc" }}>
+    <Box className="min-h-screen" sx={{ minHeight: "100vh", background: "#16A34A" }}>
       {/* Brand Header Section */}
       <Box
         sx={{
-          background: "linear-gradient(135deg, #007C91 0%, #00B8D4 100%)",
+          background: "#16A34A",
           height: "40vh",
           display: "flex",
           alignItems: "center",

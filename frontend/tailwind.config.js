@@ -7,14 +7,14 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          primary: "#007C91", // Teal (legacy)
-          accent: "#00E5FF",  // Cyan (legacy)
+          primary: "#16A34A", // Green 600
+          accent: "#22C55E",  // Green 500
           surface: "#FFFFFF", // White
-          ui: "#ECEFF1",      // Soft Grey
-          text: "#1A1A1A",    // Dark Black
+          ui: "#E8F3EA",      // Soft green-ish grey
+          text: "#0F172A",    // Slate 900 for readability
         },
         do: {
-          // Dark-Orange palette inspired by references
+          // Keep dark palette tokens (unused for green theme but safe)
           bg: "#0B0B0F",
           surface: "#121317",
           muted: "#2A2B31",
