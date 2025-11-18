@@ -49,9 +49,9 @@ export default function App() {
   return (
     <ThemeProvider theme={appTheme}>
       <CssBaseline />
-      <div className="bw-theme app-ui rapido-ui">
+      <div className="bw-theme app-ui rapido-ui min-h-screen">
         <Navbar />
-        <main className="app-main section">
+        <main className="app-main section max-w-md mx-auto pt-16 pb-20 px-3">
           <Routes>
             {/* Root */}
             <Route

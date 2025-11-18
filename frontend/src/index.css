@@ -210,14 +210,14 @@
 
   /* Rapido-style global overrides (yellow + black, rounded + bold) */
   .rapido-ui .MuiAppBar-root {
-    background-color: var(--brand-primary) !important;
-    color: #ffffff !important;
+    background-color: var(--rap-yellow) !important;
+    color: var(--rap-black) !important;
     border-bottom: none;
   }
   .rapido-ui .MuiToolbar-root, 
   .rapido-ui .MuiAppBar-root .MuiTypography-root, 
   .rapido-ui .MuiAppBar-root .MuiIconButton-root {
-    color: #ffffff !important;
+    color: var(--rap-black) !important;
   }
   .rapido-ui .MuiPaper-root {
     @apply rounded-2xl shadow-xl;
@@ -231,9 +231,9 @@
     letter-spacing: 0.2px;
     min-height: 42px;
   }
-  .rapido-ui .MuiButton-contained { background-color: var(--brand-primary) !important; color: #ffffff !important; }
-  .rapido-ui .MuiButton-contained:hover { background-color: var(--brand-primary-hover) !important; }
-  .rapido-ui .MuiButton-outlined { color: var(--brand-primary) !important; border-color: var(--brand-primary) !important; }
+  .rapido-ui .MuiButton-contained { background-color: var(--rap-yellow) !important; color: var(--rap-black) !important; }
+  .rapido-ui .MuiButton-contained:hover { background-color: var(--rap-yellow-strong) !important; }
+  .rapido-ui .MuiButton-outlined { color: var(--rap-black) !important; border-color: var(--rap-black) !important; }
   .rapido-ui .MuiChip-root {
     border-color: var(--rap-black) !important;
     color: var(--rap-black) !important;
@@ -246,10 +246,11 @@
 
   /* Tailwind utilities for Rapido look */
   .rapido-card { @apply rounded-2xl bg-white ring-1 ring-black/5 shadow-xl; }
-  .rapido-cta { @apply text-white font-bold rounded-full px-5 py-3 shadow-md active:scale-[0.98]; }
-  .rapido-cta { background-color: var(--brand-primary); }
-  .rapido-input { @apply rounded-xl border-2 border-black/10 px-3 py-2 focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-400; }
-  .rapido-pill { @apply rounded-full px-3 py-1 bg-green-600 text-white; }
+  .rapido-cta { @apply font-bold rounded-full px-5 py-3 shadow-md active:scale-[0.98]; }
+  .rapido-cta { background-color: var(--rap-yellow); color: var(--rap-black); }
+  .rapido-input { @apply rounded-xl border-2 border-black/10 px-3 py-2 focus:outline-none focus:border-black focus:ring-2 focus:ring-black/30; }
+  .rapido-pill { @apply rounded-full px-3 py-1; }
+  .rapido-pill { background-color: var(--rap-yellow); color: var(--rap-black); }
 }
 
 /* Paper: white surface + black text */
@@ -290,11 +291,11 @@
   background-color: #15803D !important; /* darker green */
 }
 .bw-theme .status-offline-btn {
-  background-color: #15803D !important; /* darker green */
+  background-color: #DC2626 !important; /* red-600 */
   color: #ffffff !important;
 }
 .bw-theme .status-offline-btn:hover {
-  background-color: #14532D !important; /* deepest green */
+  background-color: #B91C1C !important; /* red-700 */
 }
 
 /* Chips: black text, black border on white surface */
@@ -345,7 +346,12 @@
 }
 
 /* Rapido action bar */
-.rapido-ui .action-bar { background: var(--brand-primary); color: #ffffff; }
+  .rapido-ui .action-bar { background: var(--brand-primary); color: #ffffff; }
+
+  .rapido-ui .app-main.section {
+    background: #16A34A !important;
+    color: #ffffff !important;
+  }
 
 /* Global mobile responsiveness */
 @media (max-width: 900px) {

@@ -55,9 +55,10 @@ export default function ChatDialog({ open, onClose, rideId, otherName }) {
           sx={{ mt: 1 }}
         />
       </DialogContent>
+
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-        <Button onClick={send} variant="contained">Send</Button>
+        <Button onClick={onClose} sx={{ color: '#1976d2 !important' }}>Close</Button>
+        <Button onClick={send} variant="contained" sx={{ color: '#1976d2 !important' }}>Send</Button>
       </DialogActions>
     </Dialog>
   );

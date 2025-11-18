@@ -1068,6 +1068,7 @@ export default function Map({
               variant="contained"
               color="primary"
               startIcon={<NavigationIcon />}
+              sx={{ color: '#1976d2 !important', fontWeight: 700 }}
               onClick={() => {
                 try {
                   const o = normalizeLatLng(pickup) || pickup;
@@ -1093,6 +1094,7 @@ export default function Map({
               variant="contained"
               color="primary"
               startIcon={<NavigationIcon />}
+              sx={{ color: '#1976d2 !important', fontWeight: 700 }}
               onClick={() => {
                 try {
                   const o = normalizeLatLng(pickup) || pickup;

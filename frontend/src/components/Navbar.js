@@ -26,7 +26,7 @@ export default function Navbar() {
   };
  
   return (
-    <AppBar position="static" className="shadow-card-glow" sx={{ px: 2 }}>
+    <AppBar position="sticky" className="shadow-card-glow" sx={{ px: 2, top: 0 }}>
       <Toolbar className="text-white" sx={{ display: "flex", justifyContent: "space-between" }}>
         <Typography
           variant="h6"
@@ -47,7 +47,7 @@ export default function Navbar() {
         {token && (
           <>
             <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
-              <Avatar sx={{ bgcolor: "#16A34A" }}>
+              <Avatar sx={{ bgcolor: "#111111" }}>
                 {role === "rider" ? "R" : role === "user" ? "U" : "A"}
               </Avatar>
             </IconButton>

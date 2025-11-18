@@ -1220,7 +1220,7 @@ const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).s
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setServiceLimitOpen(false)} variant="contained">OK</Button>
+          <Button onClick={() => setServiceLimitOpen(false)} variant="text" sx={{ color: '#1976d2 !important', fontWeight: 700 }}>OK</Button>
         </DialogActions>
       </Dialog>
 
@@ -1299,7 +1299,7 @@ const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).s
         <Button
           variant="contained"
           fullWidth
-          sx={{ bgcolor: '#FF8A1F', color: '#fff', '&:hover': { bgcolor: '#E67600' } }}
+          sx={{ bgcolor: '#FF8A1F', color: '#1976d2 !important', fontWeight: 700, '&:hover': { bgcolor: '#E67600' } }}
           onClick={() => setBookingForOpen(false)}
         >
           Done
@@ -1453,7 +1453,8 @@ const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).s
                 </Button>
               </Box>
 
-              {/* ✅ Pickup Input with Suggestions */}
+              {/* ✅ Pickup Input with Suggestions (overlay for mobile) */}
+              <Box sx={{ position: 'relative' }}>
               <TextField
                 className="booking-input"
                 fullWidth
@@ -1464,6 +1465,7 @@ const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).s
                   fetchSuggestions(e.target.value, setPickupSuggestions, pickup);
                 }}
                 sx={{ mb: 1 }}
+                InputLabelProps={{ sx: { fontSize: '1rem' } }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1481,7 +1483,7 @@ const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).s
               />
               {/* Wrap pickup suggestions to avoid pushing layout on mobile */}
               {pickupSuggestions.length > 0 && (
-                <Box className="suggestions-panel">
+                <Box className="rapido-card" sx={{ position: 'absolute', left: 0, right: 0, top: 40, maxHeight: 180, overflowY: 'auto', zIndex: 10 }}>
                   {pickupSuggestions.map((s, i) => (
                     <ListItemButton
                       key={`m-pu-${i}`}
@@ -1492,8 +1494,10 @@ const [tabId] = useState(() => `tab_${Date.now()}_${Math.random().toString(36).s
                   ))}
                 </Box>
               )}
+              </Box>
 
-              {/* ✅ Drop Input with Suggestions */}
+              {/* ✅ Drop Input with Suggestions (overlay for mobile) */}
+              <Box sx={{ position: 'relative' }}>
               <TextField
                 className="booking-input"
                 fullWidth
@@ -1504,6 +1508,7 @@ value={dropAddress}
                   fetchSuggestions(e.target.value, setDropSuggestions, pickup);
                 }}
                 sx={{ mb: 1 }}
+                InputLabelProps={{ sx: { fontSize: '1rem' } }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1514,7 +1519,7 @@ value={dropAddress}
               />
               {/* Wrap drop suggestions to avoid pushing layout on mobile */}
               {dropSuggestions.length > 0 && (
-                <Box className="suggestions-panel">
+                <Box className="rapido-card" sx={{ position: 'absolute', left: 0, right: 0, top: 40, maxHeight: 180, overflowY: 'auto', zIndex: 10 }}>
                   {dropSuggestions.map((s, i) => (
                     <ListItemButton
                       key={`m-dr-${i}`}
@@ -1525,17 +1530,18 @@ value={dropAddress}
                   ))}
                 </Box>
               )}
+              </Box>
 
               {pickup && drop && distance ? (
                 <>
-                  <Paper variant="outlined" sx={{ p: 1.5, mb: 1.5, borderRadius: 2 }}>
+                  <Paper variant="outlined" className="rapido-card p-3 space-y-2" sx={{ p: 0, mb: 1.5, borderRadius: 2 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <LocationOnIcon fontSize="small" color="error" />
-                      <Typography variant="body2" noWrap>{pickupAddress}</Typography>
+                      <Typography variant="body2" sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{pickupAddress}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
                       <FlagIcon fontSize="small" color="success" />
-                      <Typography variant="body2" noWrap>{dropAddress}</Typography>
+                      <Typography variant="body2" sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{dropAddress}</Typography>
                     </Box>
                   </Paper>
 
